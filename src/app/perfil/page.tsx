@@ -39,7 +39,6 @@ export default function PerfilPage() {
   if (!user) return null;
 
   const displayName = profile?.full_name || user.user_metadata?.full_name || "Sin nombre";
-  const memberDate = profile?.created_at || user.created_at;
 
   return (
     <div className="min-h-screen bg-background pt-28 pb-16 px-5">
@@ -85,6 +84,15 @@ export default function PerfilPage() {
 
               <div className="flex items-center justify-between py-3 border-b border-on-surface/5">
                 <span className="font-[family-name:var(--font-label-sm)] text-on-surface-variant uppercase tracking-wider text-[12px]">
+                  Teléfono
+                </span>
+                <span className="font-[family-name:var(--font-body-md)] text-[16px] text-on-surface">
+                  {profile?.phone || "—"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-3 border-b border-on-surface/5">
+                <span className="font-[family-name:var(--font-label-sm)] text-on-surface-variant uppercase tracking-wider text-[12px]">
                   Cuenta verificada
                 </span>
                 <span className={`font-[family-name:var(--font-body-md)] text-[16px] ${user.email_confirmed_at ? "text-green-400" : "text-yellow-400"}`}>
@@ -97,7 +105,7 @@ export default function PerfilPage() {
                   Miembro desde
                 </span>
                 <span className="font-[family-name:var(--font-body-md)] text-[16px] text-on-surface">
-                  {new Date(memberDate).toLocaleDateString("es-CL", { year: "numeric", month: "long", day: "numeric" })}
+                  {new Date(profile?.created_at || user.created_at).toLocaleDateString("es-CL", { year: "numeric", month: "long", day: "numeric" })}
                 </span>
               </div>
             </div>

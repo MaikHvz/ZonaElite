@@ -1,0 +1,143 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import DataTable from "@/components/admin/DataTable";
+import FormModal from "@/components/admin/FormModal";
+import DeleteConfirm from "@/components/admin/DeleteConfirm";
+import StatusBadge from "@/components/admin/StatusBadge";
+
+interface Event {
+  id: string;
+  type: string;
+  title: string;
+  description: string | null;
+  image: string | null;
+  location_name: string | null;
+  event_date: string;
+  extra: Record<string, unknown>;
+  created_at: string;
+}
+
+const emptyForm = { type: "torneo", title: "", description: "", image: "", location_name: "", event_date: "" };
+
+export default function AdminEventosPage() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Event | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Event | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = async () => {
+    const supabase = createClient();
+    const { data } = await supabase.from("events").select("*").order("event_date", { ascending: false });
+    setEvents((data as Event[]) || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const openCreate = () => { setEditing(null); setForm(emptyForm); setModalOpen(true); };
+  const openEdit = (e: Event) => { setEditing(e); setForm({ type: e.type, title: e.title, description: e.description || "", image: e.image || "", location_name: e.location_name || "", event_date: e.event_date }); setModalOpen(true); };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const supabase = createClient();
+    const payload = { ...form, description: form.description || null, image: form.image || null, location_name: form.location_name || null };
+    if (editing) {
+      await supabase.from("events").update(payload).eq("id", editing.id);
+    } else {
+      await supabase.from("events").insert(payload);
+    }
+    setModalOpen(false);
+    setSaving(false);
+    await load();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const supabase = createClient();
+    await supabase.from("events").delete().eq("id", deleteTarget.id);
+    setDeleting(false);
+    setDeleteTarget(null);
+    await load();
+  };
+
+  const typeLabel = (t: string) => ({ torneo: "Torneo", graduacion: "Ceremonia", seminario: "Seminario", clase_especial: "Clase Especial" }[t] || t);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] text-on-surface uppercase tracking-tighter">
+          Eventos
+        </h1>
+        <button onClick={openCreate} className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] px-5 py-2.5 rounded-lg uppercase tracking-wider hover:opacity-90 transition-opacity cursor-pointer">
+          <span className="material-symbols-outlined text-[18px]">add</span>
+          Nuevo Evento
+        </button>
+      </div>
+
+      <DataTable
+        columns={[
+          { key: "title", label: "Título" },
+          { key: "type", label: "Tipo", render: (e) => typeLabel(e.type) },
+          { key: "event_date", label: "Fecha", render: (e) => new Date(e.event_date + "T00:00:00").toLocaleDateString("es-CL") },
+          { key: "location_name", label: "Lugar", render: (e) => e.location_name || "—" },
+        ]}
+        data={events}
+        loading={loading}
+        searchKey="title"
+        searchPlaceholder="Buscar evento..."
+        onEdit={openEdit}
+        onDelete={setDeleteTarget}
+        emptyMessage="No hay eventos creados"
+      />
+
+      <FormModal open={modalOpen} title={editing ? "Editar Evento" : "Nuevo Evento"} onClose={() => setModalOpen(false)}>
+        <div className="space-y-4">
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Tipo *</label>
+            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 cursor-pointer">
+              <option value="torneo">Torneo</option>
+              <option value="graduacion">Ceremonia</option>
+              <option value="seminario">Seminario</option>
+              <option value="clase_especial">Clase Especial</option>
+            </select>
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Título *</label>
+            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Descripción</label>
+            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 resize-none" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Fecha *</label>
+              <input type="date" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Lugar</label>
+              <input value={form.location_name} onChange={(e) => setForm({ ...form, location_name: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+            </div>
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">URL de imagen</label>
+            <input value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-on-surface/5">
+            <button onClick={() => setModalOpen(false)} className="px-4 py-2.5 rounded-lg border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[14px] cursor-pointer">Cancelar</button>
+            <button onClick={handleSave} disabled={!form.title || !form.event_date || saving} className="px-4 py-2.5 rounded-lg btn-primary-gradient text-white text-[14px] disabled:opacity-50 cursor-pointer">{saving ? "Guardando..." : editing ? "Guardar Cambios" : "Crear Evento"}</button>
+          </div>
+        </div>
+      </FormModal>
+
+      <DeleteConfirm open={!!deleteTarget} title="Eliminar Evento" message={`¿Estás seguro de eliminar "${deleteTarget?.title}"? Esta acción no se puede deshacer.`} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} loading={deleting} />
+    </div>
+  );
+}

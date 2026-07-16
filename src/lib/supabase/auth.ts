@@ -6,8 +6,6 @@ function friendlyError(error: AuthError | unknown): string {
   const msg = (error as AuthError).message ?? String(error);
   const code = (error as AuthError).code ?? "";
 
-  console.log("Supabase error:", { message: msg, code, status: (error as AuthError).status });
-
   if (msg.includes("Invalid login")) return "Correo o contraseña incorrectos.";
   if (msg.includes("Email not confirmed")) return "Cuenta no confirmada. Revisa tu correo.";
   if (msg.includes("User already registered")) return "Este correo ya está registrado.";
@@ -22,19 +20,13 @@ function friendlyError(error: AuthError | unknown): string {
 }
 
 export async function signUp(email: string, password: string, name: string) {
-  console.log("signUp called:", { email, name });
   const supabase = createClient();
-  console.log("supabase client created");
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: { data: { full_name: name } },
   });
-  console.log("signUp result:", { error: error?.message, userId: data?.user?.id });
-  if (error) {
-    console.error("signUp error:", error);
-    throw new Error(friendlyError(error));
-  }
+  if (error) throw new Error(friendlyError(error));
   return data;
 }
 

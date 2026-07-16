@@ -11,7 +11,8 @@ const navLinks = [
   { href: "/#disciplinas", label: "Disciplinas" },
   { href: "/horarios", label: "Horarios" },
   { href: "/#membresias", label: "Membresías" },
-  { href: "#galeria", label: "Galería" },
+  { href: "/productos", label: "Tienda" },
+  { href: "/eventos", label: "Eventos" },
 ];
 
 const logoUrl = "/logo.png";
