@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
-import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import ContactModal from "@/components/ContactModal";
-import FadeUpObserver from "@/components/FadeUpObserver";
 import PageCTA from "@/components/PageCTA";
 
 export const metadata: Metadata = {
@@ -162,9 +159,6 @@ const faqJsonLd = {
 export default function NosotrosPage() {
   return (
     <>
-      <FadeUpObserver />
-      <Navbar />
-
       <main className="pt-20">
         <script
           type="application/ld+json"
@@ -383,7 +377,6 @@ export default function NosotrosPage() {
       </main>
 
       <Footer />
-      <ContactModal />
     </>
   );
 }

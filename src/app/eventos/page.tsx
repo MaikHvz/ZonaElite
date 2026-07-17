@@ -34,7 +34,7 @@ export default function EventosPage() {
   return (
     <div className="min-h-screen bg-background pt-28 pb-16 px-5">
       <div className="max-w-[1280px] mx-auto">
-        <div className="text-center mb-12 fade-up">
+        <div className="text-center mb-12">
           <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[48px] text-on-surface uppercase tracking-tighter mb-2">
             Eventos <span className="text-primary">ZonaElite</span>
           </h1>

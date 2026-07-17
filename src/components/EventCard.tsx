@@ -26,7 +26,7 @@ export default function EventCard({ event }: { event: EventData }) {
     event.type === "torneo" ? "emoji_events" : "military_tech";
 
   return (
-    <article className="relative rounded-2xl overflow-hidden border border-on-surface/5 bg-surface-container-lowest group hover:border-primary/30 transition-colors fade-up">
+    <article className="relative rounded-2xl overflow-hidden border border-on-surface/5 bg-surface-container-lowest group hover:border-primary/30 transition-colors">
       <div className="relative h-[200px] bg-surface-container flex items-center justify-center overflow-hidden">
         {event.image ? (
           <img

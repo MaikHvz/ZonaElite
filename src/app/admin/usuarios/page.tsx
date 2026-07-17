@@ -14,9 +14,15 @@ interface UserRow {
   role_id: number;
   active: boolean;
   created_at: string;
+  _isDependent?: boolean;
+  _tutorName?: string;
+  _tutorId?: string;
+  _birthDate?: string;
+  _category?: string;
 }
 
 interface Role { id: number; name: string; }
+interface Dependent { id: string; full_name: string; tutor_id: string; birth_date: string; category: string; }
 
 const ROLE_LABELS: Record<number, string> = { 1: "Administrador", 2: "Instructor", 3: "Recepción", 4: "Alumno" };
 
@@ -31,18 +37,52 @@ export default function AdminUsuariosPage() {
 
   const load = async () => {
     const supabase = createClient();
-    const [uRes, rRes] = await Promise.all([
+    const [uRes, rRes, dRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("roles").select("*").order("id"),
+      supabase.from("dependents").select("id, full_name, tutor_id, birth_date, category"),
     ]);
-    setUsers((uRes.data as UserRow[]) || []);
+
+    const profiles = (uRes.data as UserRow[]) || [];
+    const deps = (dRes.data as Dependent[]) || [];
     setRoles((rRes.data as Role[]) || []);
+
+    const profileMap = new Map(profiles.map((p) => [p.id, p]));
+    const rows: UserRow[] = [];
+
+    for (const p of profiles) {
+      rows.push(p);
+      const userDeps = deps.filter((d) => d.tutor_id === p.id);
+      for (const d of userDeps) {
+        rows.push({
+          id: d.id,
+          full_name: d.full_name,
+          email: `—`,
+          phone: null,
+          role_id: 0,
+          active: true,
+          created_at: d.birth_date || p.created_at,
+          _isDependent: true,
+          _tutorName: p.full_name,
+          _tutorId: p.id,
+          _birthDate: d.birth_date,
+          _category: d.category,
+        });
+      }
+    }
+
+    setUsers(rows);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
-  const openEdit = (u: UserRow) => { setEditing(u); setForm({ role_id: u.role_id, active: u.active }); setModalOpen(true); };
+  const openEdit = (u: UserRow) => {
+    if (u._isDependent) return;
+    setEditing(u);
+    setForm({ role_id: u.role_id, active: u.active });
+    setModalOpen(true);
+  };
 
   const handleSave = async () => {
     if (!editing) return;
@@ -65,19 +105,31 @@ export default function AdminUsuariosPage() {
       <DataTable
         columns={[
           { key: "full_name", label: "Nombre", render: (u) => (
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center flex-shrink-0">
-                <span className="material-symbols-outlined text-primary text-[16px]">person</span>
+            <div className={`flex items-center gap-3 ${u._isDependent ? "pl-6" : ""}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${u._isDependent ? "bg-surface-container" : "bg-surface-container"}`}>
+                <span className={`material-symbols-outlined text-[16px] ${u._isDependent ? "text-on-surface-variant" : "text-primary"}`}>
+                  {u._isDependent ? "child_care" : "person"}
+                </span>
               </div>
               <div>
                 <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{u.full_name}</p>
-                <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant">{u.email}</p>
+                {u._isDependent ? (
+                  <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant">Carga de {u._tutorName}</p>
+                ) : (
+                  <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant">{u.email}</p>
+                )}
               </div>
             </div>
           )},
-          { key: "role_id", label: "Rol", render: (u) => ROLE_LABELS[u.role_id] || `Rol ${u.role_id}` },
-          { key: "phone", label: "Teléfono", render: (u) => u.phone || "—" },
-          { key: "active", label: "Estado", render: (u) => <StatusBadge status={u.active ? "activo" : "cancelado"} /> },
+          { key: "role_id", label: "Rol / Tipo", render: (u) => {
+            if (u._isDependent) return <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">{u._category === "nino" ? "Niño" : "Adulto"}</span>;
+            return ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`;
+          }},
+          { key: "phone", label: "Teléfono", render: (u) => u._isDependent ? "—" : (u.phone || "—") },
+          { key: "active", label: "Estado", render: (u) => {
+            if (u._isDependent) return <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">—</span>;
+            return <StatusBadge status={u.active ? "activo" : "cancelado"} />;
+          }},
           { key: "created_at", label: "Registro", render: (u) => new Date(u.created_at).toLocaleDateString("es-CL") },
         ]}
         data={users}

@@ -12,6 +12,7 @@ const sidebarLinks = [
   { href: "/admin/usuarios", label: "Usuarios", icon: "group" },
   { href: "/admin/membresias", label: "Membresías", icon: "card_membership" },
   { href: "/admin/blog", label: "Blog", icon: "article" },
+  { href: "/admin/notificaciones", label: "Notificaciones", icon: "notifications" },
   { href: "/admin/configuracion", label: "Configuración", icon: "settings" },
 ];
 

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession } from "@/providers/SessionProvider";
 import { signOut } from "@/lib/supabase/auth";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 const navLinks = [
   { href: "/nosotros", label: "Nosotros" },
@@ -13,6 +14,7 @@ const navLinks = [
   { href: "/#membresias", label: "Membresías" },
   { href: "/productos", label: "Tienda" },
   { href: "/eventos", label: "Eventos" },
+  { href: "/blog", label: "Blog" },
 ];
 
 const logoUrl = "/logo.png";
@@ -23,6 +25,16 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .then(({ count }) => setNotifCount(count || 0));
+  }, [user]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50);
@@ -80,13 +92,27 @@ export default function Navbar() {
 
           {!loading && (
             user ? (
-              <Link
-                href="/perfil"
-                className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-sm px-6 py-2 rounded-[0.25rem] hover:opacity-80 transition-opacity uppercase tracking-wider shadow-[0_0_20px_rgba(229,57,53,0.3)]"
-              >
-                <span className="material-symbols-outlined text-lg">person</span>
-                Perfil
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/perfil"
+                  className="relative text-on-surface-variant hover:text-primary transition-colors"
+                  title="Notificaciones"
+                >
+                  <span className="material-symbols-outlined text-[22px]">notifications</span>
+                  {notifCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                      {notifCount > 9 ? "9+" : notifCount}
+                    </span>
+                  )}
+                </Link>
+                <Link
+                  href="/perfil"
+                  className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-sm px-6 py-2 rounded-[0.25rem] hover:opacity-80 transition-opacity uppercase tracking-wider shadow-[0_0_20px_rgba(229,57,53,0.3)]"
+                >
+                  <span className="material-symbols-outlined text-lg">person</span>
+                  Perfil
+                </Link>
+              </div>
             ) : (
               <Link
                 href="/auth"

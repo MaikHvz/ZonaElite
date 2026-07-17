@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
-import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import ContactModal from "@/components/ContactModal";
-import FadeUpObserver from "@/components/FadeUpObserver";
 import PageCTA from "@/components/PageCTA";
 
 export const metadata: Metadata = {
@@ -323,8 +320,6 @@ function ClassCard({ cls }: { cls: ClassEntry }) {
 export default function HorariosPage() {
   return (
     <>
-      <FadeUpObserver />
-      <Navbar />
       <main className="min-h-screen bg-background">
       {/* Header */}
       <section className="pt-24 pb-8 px-5 md:px-6">
@@ -427,7 +422,6 @@ export default function HorariosPage() {
       </section>
       </main>
       <Footer />
-      <ContactModal />
     </>
   );
 }

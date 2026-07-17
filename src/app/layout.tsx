@@ -3,6 +3,9 @@ import { Anton, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 import { ContactModalProvider } from "@/components/ContactModalContext";
+import ContactModal from "@/components/ContactModal";
+import Navbar from "@/components/Navbar";
+import FadeUpObserver from "@/components/FadeUpObserver";
 import SessionProvider from "@/providers/SessionProvider";
 
 const anton = Anton({
@@ -26,6 +29,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL || "https://zonaelite.cl"
+  ),
   title: {
     default: "ZONAELITE | Academia de Kenpo, Kickboxing, MMA en La Serena",
     template: "%s | ZONAELITE",
@@ -67,7 +73,12 @@ export default function RootLayout({
         className={`${anton.variable} ${hankenGrotesk.variable} ${jetbrainsMono.variable}`}
       >
         <SessionProvider>
-          <ContactModalProvider>{children}</ContactModalProvider>
+          <ContactModalProvider>
+            <Navbar />
+            <FadeUpObserver />
+            {children}
+            <ContactModal />
+          </ContactModalProvider>
         </SessionProvider>
       </body>
     </html>

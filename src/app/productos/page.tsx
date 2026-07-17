@@ -39,7 +39,7 @@ export default function ProductosPage() {
   return (
     <div className="min-h-screen bg-background pt-28 pb-16 px-5">
       <div className="max-w-[1280px] mx-auto">
-        <div className="text-center mb-12 fade-up">
+        <div className="text-center mb-12">
           <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[48px] text-on-surface uppercase tracking-tighter mb-2">
             Tienda <span className="text-primary">ZonaElite</span>
           </h1>
@@ -84,7 +84,7 @@ export default function ProductosPage() {
               return (
                 <article
                   key={product.id}
-                  className="rounded-2xl border border-on-surface/5 bg-surface-container-lowest overflow-hidden hover:border-primary/30 transition-colors group fade-up"
+                  className="rounded-2xl border border-on-surface/5 bg-surface-container-lowest overflow-hidden hover:border-primary/30 transition-colors group"
                 >
                   <div className="h-[200px] bg-surface-container flex items-center justify-center overflow-hidden">
                     {img ? (

@@ -8,13 +8,16 @@ Esta carpeta existe para que la IA **no pierda contexto del proyecto** y **gaste
 
 ```
 project-context/
-├── brain.md              ← LEER PRIMERO. Contexto general y reglas.
-├── database.md           ← Schema de base de datos (cuando exista).
-├── requirements.md       ← Requerimientos funcionales y no funcionales.
-├── components.md         ← Mapa de componentes y su estado.
-├── routes.md             ← Mapa de rutas y qué hacen.
-├── design-tokens.md      ← Variables de diseño (colores, fuentes, spacing).
-└── changelog.md          ← Cambios importantes recientes.
+├── brain.md                  ← LEER PRIMERO. Contexto general y reglas.
+├── database.md               ← Schema de base de datos (Supabase).
+├── requirements-tasklist.md  ← Requerimientos funcionales y tasklist.
+├── requerimientos.md         ← Requerimientos detallados por módulo.
+├── components.md             ← Mapa de componentes y su estado.
+├── routes.md                 ← Mapa de rutas y qué hacen.
+├── design-tokens.md          ← Variables de diseño (colores, fuentes, spacing).
+├── sqlmodelcomplete.md       ← SQL completo ejecutado en Supabase.
+├── bdmodel.md                ← Diagrama ER de 22 entidades.
+└── changelog.md              ← Cambios importantes recientes.
 ```
 
 ### Reglas
@@ -39,17 +42,25 @@ Academia de artes marciales (Kenpo, Kickboxing, MMA) en La Serena, Chile.
 | TypeScript | ^5 | Tipado |
 | Tailwind CSS | v4 | Estilos (vía `@theme inline` en CSS) |
 | PostCSS | `@tailwindcss/postcss` | Procesamiento CSS |
+| Supabase | latest | BD, Auth, Storage |
+| Recharts | latest | Gráficos del dashboard admin |
+| @react-pdf/renderer | latest | Generación de PDF (recibos de membresía) |
 
 ### Convenciones
 
 - **App Router** con `src/app/`
-- **Componentes** en `src/components/`
+- **Componentes** en `src/components/` (landing) y `src/components/admin/` (admin)
+- **Librerías** en `src/lib/supabase/`
+- **Providers** en `src/providers/`
 - **Tailwind v4**: configuración via `@theme inline` en `globals.css` (NO existe `tailwind.config.js`)
-- **Fonts**: Anton, Hanken Grotesk, JetBrains Mono (via `next/font/google`)
+- **Fonts**: Anton (headlines), Hanken Grotesk (body), JetBrains Mono (labels) via `next/font/google`
 - **Iconos**: Material Symbols Outlined (via CDN link en layout.tsx)
 - **Cliente/Servidor**: Componentes con estado usan `"use client"`, el resto son Server Components
-- **Modal de contacto**: Usa `ContactModalContext` + `ContactLink` para abrir desde cualquier página
+- **Navbar + FadeUpObserver + ContactModal**: Globalmente en root layout (`layout.tsx`)
 - **Idioma**: Todo el contenido visible está en español
+- **Auth**: Supabase Auth con roles (administrador=1, instructor=2, recepcion=3, alumno=4)
+- **Admin Guard**: Solo `role_id === 1` accede a `/admin/*`
+- **SessionProvider**: Provee `user`, `profile`, `isAdmin`, `isStaff`, `refreshProfile()`
 
 ### Paleta de colores (Material Design 3)
 
@@ -65,6 +76,9 @@ Academia de artes marciales (Kenpo, Kickboxing, MMA) en La Serena, Chile.
 - `design-tokens.md` → Tokens de diseño completos
 - `routes.md` → Mapa de rutas
 - `components.md` → Estado de componentes
-- `requirements.md` → Requerimientos
-- `database.md` → Schema de BD (pendiente)
+- `requirements-tasklist.md` → Requerimientos y tasklist
+- `requerimientos.md` → Requerimientos detallados por módulo
+- `database.md` → Schema de BD (Supabase)
+- `sqlmodelcomplete.md` → SQL completo ejecutado
+- `bdmodel.md` → Diagrama ER
 - `changelog.md` → Cambios recientes

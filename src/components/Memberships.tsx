@@ -25,7 +25,10 @@ export default function Memberships() {
       .select("*")
       .eq("active", true)
       .order("price")
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Error loading membership plans:", error);
+        }
         setPlans((data as MembershipPlan[]) || []);
         setLoading(false);
       });
@@ -64,7 +67,7 @@ export default function Memberships() {
   return (
     <section
       id="membresias"
-      className="py-[64px] md:py-[96px] px-5 md:px-6 max-w-[1280px] mx-auto fade-up"
+      className="py-[64px] md:py-[96px] px-5 md:px-6 max-w-[1280px] mx-auto"
     >
       <div className="text-center mb-16">
         <h2 className="font-[family-name:var(--font-headline-lg)] text-[32px] leading-[36px] md:text-[48px] md:leading-[52px] md:tracking-[0.02em] text-on-surface uppercase tracking-tighter">
