@@ -28,7 +28,13 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  let user = null;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (!error) user = data.user;
+  } catch {
+    // getUser failed — treat as unauthenticated but don't crash
+  }
 
   const isProtected = protectedRoutes.some((r) => request.nextUrl.pathname.startsWith(r));
   const isAuth = authRoutes.some((r) => request.nextUrl.pathname.startsWith(r));

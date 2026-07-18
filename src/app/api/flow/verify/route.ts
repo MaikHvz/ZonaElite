@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { verifyFlowPayment } from "@/lib/flow";
 
 export async function GET(request: Request) {
@@ -21,8 +22,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    // Buscar el pago
-    const { data: payment } = await supabase
+    const admin = getAdminClient();
+
+    const { data: payment } = await admin
       .from("payments")
       .select("id, status, flow_token, commerce_order")
       .eq("flow_token", token)
@@ -30,8 +32,7 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     if (!payment) {
-      // Intentar por commerceOrder
-      const { data: payment2 } = await supabase
+      const { data: payment2 } = await admin
         .from("payments")
         .select("id, status, flow_token, commerce_order")
         .eq("user_id", user.id)
@@ -48,11 +49,10 @@ export async function GET(request: Request) {
         return NextResponse.json({ status: "pagado" });
       }
 
-      // Verificar con Flow
       try {
         const verification = await verifyFlowPayment(token);
         if (verification.status === 2) {
-          await supabase
+          await admin
             .from("payments")
             .update({
               status: "pagado",
@@ -62,8 +62,7 @@ export async function GET(request: Request) {
             })
             .eq("id", payment2.id);
 
-          // Crear membresía si no existe
-          await createMembership(supabase, payment2.id, user.id);
+          await createMembership(admin, payment2.id, user.id);
 
           return NextResponse.json({ status: "pagado" });
         }
@@ -78,11 +77,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ status: "pagado" });
     }
 
-    // Verificar con Flow API
     try {
       const verification = await verifyFlowPayment(token);
       if (verification.status === 2) {
-        await supabase
+        await admin
           .from("payments")
           .update({
             status: "pagado",
@@ -91,11 +89,11 @@ export async function GET(request: Request) {
           })
           .eq("id", payment.id);
 
-        await createMembership(supabase, payment.id, user.id);
+        await createMembership(admin, payment.id, user.id);
 
         return NextResponse.json({ status: "pagado" });
       } else if (verification.status === 4) {
-        await supabase
+        await admin
           .from("payments")
           .update({ status: "cancelado" })
           .eq("id", payment.id);

@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { verifyFlowPayment } from "@/lib/flow";
+
+interface PaymentRow {
+  id: string;
+  user_id: string;
+  commerce_order: string | null;
+  status: string;
+  amount: number;
+  concept: string | null;
+  flow_token: string | null;
+  flow_order: number | null;
+  membership_id: string | null;
+}
 
 export async function POST(request: Request) {
   try {
@@ -32,10 +44,9 @@ export async function POST(request: Request) {
       return new Response("OK", { status: 200 });
     }
 
-    const supabase = await createClient();
+    const supabase = getAdminClient();
 
-    // Buscar pago por flow_token O por commerceOrder
-    let payment = null;
+    let payment: PaymentRow | null = null;
 
     const { data: byToken } = await supabase
       .from("payments")
@@ -44,14 +55,14 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (byToken) {
-      payment = byToken;
+      payment = byToken as PaymentRow;
     } else if (verification.commerceOrder) {
       const { data: byCommerce } = await supabase
         .from("payments")
         .select("id, user_id, commerce_order, status, amount, concept, flow_token")
         .eq("commerce_order", verification.commerceOrder)
         .maybeSingle();
-      if (byCommerce) payment = byCommerce;
+      if (byCommerce) payment = byCommerce as PaymentRow;
     }
 
     if (!payment) {
@@ -63,7 +74,6 @@ export async function POST(request: Request) {
       return new Response("OK", { status: 200 });
     }
 
-    // Actualizar pago a pagado
     await supabase
       .from("payments")
       .update({
@@ -74,7 +84,6 @@ export async function POST(request: Request) {
       })
       .eq("id", payment.id);
 
-    // Buscar plan desde el concepto: "Membresía PlanName"
     const metadataMatch = payment.concept?.match(/^Membresía\s+(.+)$/);
     const planName = metadataMatch ? metadataMatch[1].trim() : null;
 
@@ -94,7 +103,6 @@ export async function POST(request: Request) {
       return new Response("OK", { status: 200 });
     }
 
-    // Verificar que no exista ya una membresía activa reciente para este usuario+plan
     const { data: existingMembership } = await supabase
       .from("memberships")
       .select("id")
@@ -108,7 +116,6 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (existingMembership) {
-      // Vincular membresía existente al pago
       await supabase
         .from("payments")
         .update({ membership_id: existingMembership.id })
@@ -116,7 +123,6 @@ export async function POST(request: Request) {
       return new Response("OK", { status: 200 });
     }
 
-    // Buscar beneficiario del usuario
     const { data: ownBeneficiary } = await supabase
       .from("beneficiaries")
       .select("id")
