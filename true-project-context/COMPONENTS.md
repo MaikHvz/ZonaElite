@@ -12,20 +12,24 @@
 | `Hero.tsx` | Server | — | Imagen fondo, CTAs, título animado |
 | `IntroSection.tsx` | Server | — | 2 columnas: Estilo de Vida + Seguridad |
 | `Disciplines.tsx` | Server | — | Bento grid 4 cards |
-| `Memberships.tsx` | Client | — | Planes desde Supabase |
+| `Memberships.tsx` | Client | — | Planes desde Supabase + botón Comprar → CheckoutModal |
 | `CTA.tsx` | Server | — | "¿Estás listo para comenzar?" |
 | `Footer.tsx` | Client | — | Links sociales, copyright |
 | `ContactModal.tsx` | Client | — | Global, formulario WhatsApp |
 | `FadeUpObserver.tsx` | Client | — | IntersectionObserver para fade-in |
 | `EventCard.tsx` | Server | `{ event: Event }` | Reutilizable para eventos |
 | `PageCTA.tsx` | Client | — | CTA reutilizable (usado en /nosotros, /horarios) |
+| `CheckoutModal.tsx` | Client | — | Modal selección beneficiario + pago Webpay Flow |
+| `PurchaseSuccessBanner.tsx` | Client | — | Banners de éxito/error post-pago |
+| `MedicalInfoCard.tsx` | Client | — | Ficha médica: enfermedades, lesiones, medicamentos, alergias (edit inline) |
+| `EmergencyContactCard.tsx` | Client | — | Contacto de emergencia: nombre y teléfono (edit inline) |
 
 ### Admin (`src/components/admin/`)
 
 | Archivo | Tipo | Props | Descripción |
 |---|---|---|---|
 | `AdminGuard.tsx` | Client | `{ children }` | Auth guard (role_id === 1) |
-| `AdminSidebar.tsx` | Client | — | 9 links de navegación admin |
+| `AdminSidebar.tsx` | Client | — | 10 links de navegación admin (incluye Asistencia) |
 | `DataTable.tsx` | Client | `{ data, columns, searchKey, renderRow }` | Genérica + paginación |
 | `FormModal.tsx` | Client | `{ open, onClose, title, children }` | Modal (escape + overlay click) |
 | `DeleteConfirm.tsx` | Client | `{ open, onClose, onConfirm, item }` | Confirmación de borrado |
@@ -38,6 +42,20 @@
 | `MembershipBreakdown.tsx` | Client | `{ data }` | Donut membresías por plan |
 | `MonthlyComparison.tsx` | Client | `{ data }` | Mes actual vs anterior |
 | `PaymentOverview.tsx` | Client | `{ data }` | Estado de pagos |
+
+### Dashboard (`src/components/dashboard/`)
+
+| Archivo | Tipo | Descripción |
+|---|---|---|
+| `DashboardNav.tsx` | Client | Navegación horizontal por 6 tabs (incluye Asistencia) |
+| `MembershipCard.tsx` | Client | Card con barra de progreso, estado, beneficios |
+| `QuickStats.tsx` | Server | 3 stat cards: membresías activas, pagos del mes, cargas |
+| `AlertBanner.tsx` | Server | Alertas de membresía por vencer/vencida/sin membresía |
+| `DashboardSkeleton.tsx` | Server | Loading states para cada sección |
+| `NotificationItem.tsx` | Server | Fila de notificación con icono por tipo |
+| `PaymentRow.tsx` | Server | Fila de pago con método, monto, estado |
+| `DependentCard.tsx` | Server | Card de dependiente con edad, membresía y link a ficha médica |
+| `AddDependentModal.tsx` | Client | Formulario para agregar nueva carga |
 
 ### Providers (`src/providers/`)
 
@@ -53,7 +71,14 @@
 | `server.ts` | Cliente server (createServerClient + cookies) |
 | `auth.ts` | Operaciones de autenticación |
 | `profile.ts` | Consulta/actualización de profiles |
+| `dashboard.ts` | Queries del dashboard: membresías, pagos, dependientes, notificaciones, ficha médica, asistencia |
 | `middleware.ts` | Refresh sesión + protección de rutas |
+
+### Flow (`src/lib/`)
+
+| Archivo | Descripción |
+|---|---|
+| `flow.ts` | Utilidades Flow.cl: signFlowParams (HMAC-SHA256), createFlowOrder, verifyFlowPayment |
 
 ---
 
@@ -84,6 +109,12 @@
 | Ruta | Archivo | Descripción |
 |---|---|---|
 | `/dashboard` | `src/app/dashboard/page.tsx` | Panel usuario |
+| `/dashboard/membresias` | `src/app/dashboard/membresias/page.tsx` | Membresías con filtros |
+| `/dashboard/pagos` | `src/app/dashboard/pagos/page.tsx` | Historial de pagos paginado |
+| `/dashboard/cargas` | `src/app/dashboard/cargas/page.tsx` | Lista de dependientes |
+| `/dashboard/cargas/[id]/medico` | `src/app/dashboard/cargas/[id]/medico/page.tsx` | Ficha médica del dependiente |
+| `/dashboard/notificaciones` | `src/app/dashboard/notificaciones/page.tsx` | Historial de notificaciones |
+| `/dashboard/asistencia` | `src/app/dashboard/asistencia/page.tsx` | Historial de asistencia del usuario |
 | `/perfil` | `src/app/perfil/page.tsx` | Perfil |
 
 ### Admin (requieren role_id = 1)
@@ -93,6 +124,7 @@
 | `/admin` | `src/app/admin/page.tsx` | Dashboard + Stats + 5 gráficos |
 | `/admin/usuarios` | `src/app/admin/usuarios/page.tsx` | Usuarios + cargas agrupadas |
 | `/admin/membresias` | `src/app/admin/membresias/page.tsx` | CRUD planes + asignar + PDF |
+| `/admin/asistencia` | `src/app/admin/asistencia/page.tsx` | Marcar asistencia por sesión de clase |
 | `/admin/productos` | `src/app/admin/productos/page.tsx` | CRUD productos |
 | `/admin/eventos` | `src/app/admin/eventos/page.tsx` | CRUD eventos |
 | `/admin/horarios` | `src/app/admin/horarios/page.tsx` | CRUD horarios |
@@ -107,6 +139,14 @@
 | `/torneos` | `/eventos` |
 | `/ceremonias` | `/eventos` |
 
+### API Routes
+
+| Ruta | Método | Archivo | Descripción |
+|---|---|---|---|
+| `/api/flow/create-order` | POST | `src/app/api/flow/create-order/route.ts` | Crea orden de pago Flow (previene duplicados) |
+| `/api/flow/confirmation` | POST | `src/app/api/flow/confirmation/route.ts` | Callback Flow: verifica pago, crea membresía |
+| `/api/flow/verify` | GET | `src/app/api/flow/verify/route.ts` | Verificación client-side del pago |
+
 ---
 
 ## Layouts
@@ -120,7 +160,7 @@
 
 ### Admin Layout (`src/app/admin/layout.tsx`)
 - Auth guard: AdminGuard
-- Sidebar: AdminSidebar
+- Sidebar: AdminSidebar (10 links)
 
 ---
 

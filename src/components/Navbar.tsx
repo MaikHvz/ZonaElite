@@ -94,7 +94,7 @@ export default function Navbar() {
             user ? (
               <div className="flex items-center gap-3">
                 <Link
-                  href="/perfil"
+                  href="/dashboard/notificaciones"
                   className="relative text-on-surface-variant hover:text-primary transition-colors"
                   title="Notificaciones"
                 >
@@ -104,6 +104,12 @@ export default function Navbar() {
                       {notifCount > 9 ? "9+" : notifCount}
                     </span>
                   )}
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="text-on-surface hover:text-primary transition-colors duration-300 font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider"
+                >
+                  Mi Panel
                 </Link>
                 <Link
                   href="/perfil"
@@ -170,6 +176,13 @@ export default function Navbar() {
         {!loading && (
           user ? (
             <>
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileOpen(false)}
+                className="text-on-surface hover:text-primary font-[family-name:var(--font-headline-md)] text-2xl uppercase"
+              >
+                Mi Panel
+              </Link>
               <Link
                 href="/perfil"
                 onClick={() => setMobileOpen(false)}

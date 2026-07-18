@@ -22,7 +22,7 @@
 
 ### Módulo 2 — Panel Admin
 - [x] AdminGuard — Auth guard verificando role_id === 1
-- [x] AdminLayout con AdminSidebar (9 links)
+- [x] AdminLayout con AdminSidebar (10 links)
 - [x] Dashboard admin — 5 stat cards + links rápidos
 - [x] CRUD Productos — con `inputMode="numeric"` para React 19
 - [x] CRUD Eventos — tipos: torneo, graduacion, seminario, clase_especial
@@ -51,19 +51,29 @@
 - [x] Tabla usuarios muestra cargas indentadas bajo tutor
 - [x] Cargas muestran "Carga de [tutor]"
 - [x] Búsqueda agrupada en AssignMembershipModal
+- [x] Usuario puede agregar cargas desde su panel (`/dashboard/cargas`)
 
 ### Módulo 3 — Pasarela de Pagos (Flow)
-- [ ] Integración con Flow SDK
-- [ ] Creación de checkout session
-- [ ] Webhook de confirmación de pago
-- [ ] Asignación automática de membresía tras pago exitoso
-- [ ] Historial de transacciones
+- [ ] Integración con Flow.cl (plan detallado: `true-project-context/FLOW-PAYMENTS-PLAN.md`)
+- [x] FASE 0: SQL schema + variables de entorno
+- [x] FASE 1: Librería Flow (`src/lib/flow.ts`)
+- [x] FASE 2: API Routes (create-order + confirmation)
+- [x] FASE 3: CheckoutModal
+- [x] FASE 4: Integración con landing Memberships
+- [x] FASE 5: Post-pago (banners de confirmación)
+- [x] `/api/flow/verify` — verificación client-side del pago al retornar de Flow
+- [x] Prevenir pagos duplicados en `create-order` (reutiliza token pendiente)
+- [x] Fallback por `commerceOrder` en `confirmation`
+- [x] RLS: `payments_user_insert_own` (solo method=flow), `payments_flow_update` (callback)
+- [ ] FASE 6: Dashboard integration (ya funciona con pagos existentes)
+- [ ] FASE 7: Admin integration (CRUD ya funciona)
+- [ ] FASE 8: Testing con credenciales de sandbox
 
-### Módulo 4 — Asistencia y Ficha Médica
-- [ ] Registro de asistencia por clase
-- [ ] Ficha médica de alumnos
-- [ ] Control de asistencia en admin
-- [ ] Reportes de asistencia
+### Módulo 4 — Asistencia y Ficha Médica ✅
+- [x] Registro de asistencia por clase (admin marca por sesión)
+- [x] Ficha médica de alumnos (`/dashboard/cargas/[id]/medico`)
+- [x] Control de asistencia en admin (`/admin/asistencia`)
+- [x] Historial de asistencia para usuario (`/dashboard/asistencia`)
 
 ### Módulo 5 — Blog y Notificaciones
 - [x] Blog feed-style (`/blog`)
@@ -71,6 +81,23 @@
 - [x] CRUD blog admin (borrador/programado/publicado)
 - [x] CRUD notificaciones admin
 - [x] Campana de notificaciones en Navbar (badge con contador)
+
+### Dashboard del Usuario
+- [x] Dashboard principal con resumen real (membresías, pagos, notificaciones)
+- [x] Navegación por tabs (Resumen, Membresías, Pagos, Cargas, Notificaciones, Asistencia)
+- [x] AlertBanner para membresías por vencer/vencida/sin membresía
+- [x] QuickStats (membresías activas, pagos del mes, cargas)
+- [x] MembershipCard con barra de progreso temporal
+- [x] Vista completa de membresías con filtros
+- [x] Historial de pagos paginado con resumen del mes
+- [x] Lista de dependientes con info de membresía
+- [x] Historial de notificaciones con filtros por tipo
+- [x] Loading skeletons para cada sección
+- [x] Manejo de errores con retry
+- [x] Empty states para cada sección
+- [x] Perfil editable (nombre, teléfono, nacimiento)
+- [x] Cambio de contraseña desde el perfil
+- [x] Link "Mi Panel" en Navbar
 
 ## Funcionalidades Transversales
 
@@ -110,10 +137,11 @@
 - [x] Tailwind CSS v4 (`@theme inline`)
 - [x] TypeScript sin errores
 - [x] Supabase connectado y funcionando
-- [x] Build exitoso (27 rutas)
+- [x] Build exitoso (35 rutas)
 
 ## Pendiente / Ideas Futuras
 
+- [ ] **RLS notifications** — Ejecutar SQL en Supabase para permitir lectura de notificaciones target='todos' (ver `project-context/sql-notifications-rls.sql`)
 - [ ] Sección Galería
 - [ ] Google Analytics / Tag Manager
 - [ ] Formulario de contacto funcional (backend)

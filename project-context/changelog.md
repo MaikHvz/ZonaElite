@@ -1,6 +1,93 @@
 # Changelog
 
+## 2026-07-17 (noche)
+
+### Flow Payments — Fixes
+- **`/api/flow/verify`** (GET) — Verificación client-side del pago al retornar de Flow
+- **`create-order`** — Previene pagos duplicados (reutiliza token si ya existe pago pendiente)
+- **`confirmation`** — Búsqueda por `commerceOrder` como fallback (además de `token`)
+- **`pagos/page.tsx`** — Verifica pago via `/api/flow/verify?token=XXX` al retornar de Flow
+- **RLS policies**: `payments_user_insert_own` (solo method=flow), `payments_flow_update` (para callback)
+
+## 2026-07-17 (tarde-noche)
+
+### Módulo 4 — Asistencia y Ficha Médica ✅
+- **Ficha Médica**: `/dashboard/cargas/[id]/medico` — ver/editar info médica por dependiente
+  - `MedicalInfoCard.tsx` — enfermedades, lesiones, medicamentos, alergias (edición inline)
+  - `EmergencyContactCard.tsx` — contacto de emergencia: nombre y teléfono (edición inline)
+  - `upsertMedicalRecord()` en dashboard.ts — upsert con onConflict
+  - `DependentCard.tsx` actualizado — botón "Ver ficha médica" con link
+- **Asistencia Admin**: `/admin/asistencia` — marcar asistencia por sesión de clase
+  - Lista de sesiones próximas con disciplina, hora, instructor
+  - Grid de asistencia: Presente / Ausente / Justificado por beneficiario
+  - Conteo resumen de presentes, ausentes, justificados
+  - `getUpcomingSessions()`, `getAttendanceForSession()`, `markAttendance()` en dashboard.ts
+  - AdminSidebar actualizado con link de Asistencia
+- **Historial Asistencia**: `/dashboard/asistencia` — usuario ve su historial
+  - Estadísticas: total, presentes, ausentes
+  - Lista cronológica con disciplina, beneficiario, estado
+  - `getUserAttendance()` en dashboard.ts
+  - DashboardNav actualizado con tab "Asistencia"
+- Build: 35 rutas, 0 errores TypeScript
+
+## 2026-07-17 (tarde)
+
+### Plan de Implementación Flow Payments
+- **`true-project-context/FLOW-PAYMENTS-PLAN.md`** — Plan completo en 8 fases para integrar Flow.cl
+- Incluye: modelo de datos, flujos de usuario, edge cases, testing checklist
+- Cubre: compra online (Flow Webpay) + asignación manual (admin) como sistema dual
+- **Medios de pago**: Solo Webpay para usuario online. Transferencia/efectivo solo para admin manual.
+
+### Flow Payments — Implementación (FASE 0-5)
+- **`src/lib/flow.ts`** — Utilidades: signFlowParams, createFlowOrder, verifyFlowPayment
+- **`src/app/api/flow/create-order/route.ts`** — POST: crea payment + orden Flow
+- **`src/app/api/flow/confirmation/route.ts`** — POST: callback Flow, verifica pago, crea membresía
+- **`src/components/CheckoutModal.tsx`** — Modal: selección beneficiario + resumen plan + botón Webpay
+- **`src/components/PurchaseSuccessBanner.tsx`** — Banners de éxito/error post-pago
+- **`src/components/Memberships.tsx`** — Botón "Comprar" (logueado) / "Seleccionar" (no logueado)
+- **`src/app/dashboard/pagos/page.tsx`** — Banner de estado post-pago (?status=success|failed)
+- **`project-context/sql-flow-payments.sql`** — ALTER TABLE para columnas de Flow
+- **`.env.local`** — Variables FLOW_API_KEY, FLOW_SECRET_KEY, FLOW_API_URL, NEXT_PUBLIC_BASE_URL
+
+### Bug Fixes
+- **FadeUpObserver**: Removido `fade-up` de páginas async-loaded (dashboard, sub-routes, perfil)
+- **DependentCard**: Fix `beneficiaries?.flatMap` → normalizar a array (Supabase retorna objeto)
+- **getUserMemberships**: Fix `d.beneficiaries?.[0]?.id` → manejar array u objeto
+- **AddDependentModal**: Nuevo componente para que usuarios agreguen sus propias cargas
+- **`/dashboard/cargas`**: Agregado botón "Agregar carga" + modal de formulario
+
 ## 2026-07-17
+
+### Dashboard del Usuario — Implementación Completa
+- **`/dashboard`** reescrito: resumen real con membresías, pagos, notificaciones desde Supabase
+- **`/dashboard/membresias`** — Vista completa con filtros (todas/activas/vencidas/canceladas)
+- **`/dashboard/pagos`** — Historial paginado con resumen del mes
+- **`/dashboard/cargas`** — Lista de dependientes con info de membresía
+- **`/dashboard/notificaciones`** — Historial de notificaciones con filtros por tipo
+- **`/perfil`** — Ahora editable: nombre, teléfono, nacimiento + cambio de contraseña
+
+### Componentes Dashboard (`src/components/dashboard/`)
+- `DashboardNav.tsx` — Navegación horizontal por tabs
+- `MembershipCard.tsx` — Card con barra de progreso, badge de estado, beneficios
+- `QuickStats.tsx` — 3 cards: membresías activas, pagos del mes, cargas
+- `AlertBanner.tsx` — Alertas de membresía por vencer/vencida/sin membresía
+- `DashboardSkeleton.tsx` — Loading states para cada sección
+- `NotificationItem.tsx` — Fila de notificación con icono por tipo
+- `PaymentRow.tsx` — Fila de pago con método, monto, estado, comprobante
+- `DependentCard.tsx` — Card de dependiente con edad y membresía
+
+### Queries (`src/lib/supabase/dashboard.ts`)
+- `safeQuery()` — Wrapper centralizado de manejo de errores
+- `getUserMemberships()` — Membresías propias + de cargas
+- `getUserPayments()` — Pagos paginados
+- `getUserDependents()` — Dependientes con membresía activa
+- `getUserNotifications()` — Notificaciones paginadas
+- `getDashboardSummary()` — Resumen para dashboard principal
+- `getProfileForEdit()` + `updateProfile()` — Edición de perfil
+
+### Navbar
+- Link "Mi Panel" agregado (desktop + mobile)
+- Campana de notificaciones ahora enlaza a `/dashboard/notificaciones`
 
 ### SEO — sitemap.xml y robots.txt
 - `sitemap.ts` generado dinámicamente: páginas estáticas + blog posts + eventos desde Supabase

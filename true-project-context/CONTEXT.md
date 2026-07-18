@@ -38,7 +38,7 @@
 - Iconos: Material Symbols Outlined (CDN en layout.tsx)
 - Navbar + FadeUpObserver + ContactModal son globales en root layout
 - Todo el contenido visible en español
-- Build exitoso: 25 rutas, 0 errores TypeScript
+- Build exitoso: 35 rutas, 0 errores TypeScript
 
 ---
 
@@ -108,8 +108,13 @@ Provee: `user`, `profile` (UserProfile), `isAdmin` (role_id===1), `isStaff` (rol
 ### Protegidas (requieren sesión)
 | Ruta | Archivo | Descripción |
 |---|---|---|
-| `/dashboard` | `src/app/dashboard/page.tsx` | Panel del usuario |
-| `/perfil` | `src/app/perfil/page.tsx` | Perfil del usuario |
+| `/dashboard` | `src/app/dashboard/page.tsx` | Dashboard: resumen membresías, pagos, alertas, accesos rápidos |
+| `/dashboard/membresias` | `src/app/dashboard/membresias/page.tsx` | Membresías con filtros |
+| `/dashboard/pagos` | `src/app/dashboard/pagos/page.tsx` | Historial de pagos paginado |
+| `/dashboard/cargas` | `src/app/dashboard/cargas/page.tsx` | Lista de dependientes |
+| `/dashboard/notificaciones` | `src/app/dashboard/notificaciones/page.tsx` | Historial de notificaciones |
+| `/dashboard/asistencia` | `src/app/dashboard/asistencia/page.tsx` | Historial de asistencia del usuario |
+| `/perfil` | `src/app/perfil/page.tsx` | Perfil editable + cambio contraseña |
 
 ### Admin (requieren role_id = 1)
 | Ruta | Archivo | Descripción |
@@ -117,6 +122,7 @@ Provee: `user`, `profile` (UserProfile), `isAdmin` (role_id===1), `isStaff` (rol
 | `/admin` | `src/app/admin/page.tsx` | Dashboard con métricas: RevenueChart, NewStudentsChart, MembershipBreakdown, MonthlyComparison, PaymentOverview, StatsCards |
 | `/admin/usuarios` | `src/app/admin/usuarios/page.tsx` | Usuarios + cargas agrupadas bajo tutor |
 | `/admin/membresias` | `src/app/admin/membresias/page.tsx` | CRUD planes + asignación manual + editar/cancelar membresías + PDF recibo |
+| `/admin/asistencia` | `src/app/admin/asistencia/page.tsx` | Marcar asistencia por sesión de clase |
 | `/admin/productos` | `src/app/admin/productos/page.tsx` | CRUD productos (inputMode="numeric") |
 | `/admin/eventos` | `src/app/admin/eventos/page.tsx` | CRUD eventos (torneo/graduacion/seminario/clase_especial) |
 | `/admin/horarios` | `src/app/admin/horarios/page.tsx` | CRUD horarios con selects disciplina/profesor |
@@ -139,19 +145,23 @@ Provee: `user`, `profile` (UserProfile), `isAdmin` (role_id===1), `isStaff` (rol
 | Hero | Server | Imagen de fondo, CTAs |
 | IntroSection | Server | 2 columnas: Estilo de Vida + Seguridad |
 | Disciplines | Server | Bento grid 4 cards |
-| Memberships | Client | Carga planes desde Supabase `membership_plans` |
+| Memberships | Client | Carga planes desde Supabase `membership_plans` + botón Comprar → CheckoutModal |
 | CTA | Server | "¿Estás listo para comenzar?" |
 | Footer | Client | Links |
 | ContactModal | Client | Global, modal de contacto |
 | FadeUpObserver | Client | Global, IntersectionObserver |
 | EventCard | Server | Reutilizable para torneos/ceremonias |
 | PageCTA | Client | CTA reutilizable (usado en /nosotros, /horarios) |
+| CheckoutModal | Client | Modal selección beneficiario + pago Webpay Flow |
+| PurchaseSuccessBanner | Client | Banners de éxito/error post-pago |
+| MedicalInfoCard | Client | Ficha médica: enfermedades, lesiones, medicamentos, alergias (edit inline) |
+| EmergencyContactCard | Client | Contacto de emergencia: nombre y teléfono (edit inline) |
 
 ### Admin (`src/components/admin/`)
 | Componente | Tipo | Descripción |
 |---|---|---|
 | AdminGuard | Client | Auth guard role_id === 1 |
-| AdminSidebar | Client | 9 links de navegación |
+| AdminSidebar | Client | 10 links de navegación (incluye Asistencia) |
 | DataTable | Client | Genérica con búsqueda + paginación |
 | FormModal | Client | Modal de formulario (escape + onMouseDown overlay) |
 | DeleteConfirm | Client | Confirmación de eliminación |
@@ -164,6 +174,19 @@ Provee: `user`, `profile` (UserProfile), `isAdmin` (role_id===1), `isStaff` (rol
 | MembershipBreakdown | Client | Donut membresías por plan |
 | MonthlyComparison | Client | Mes actual vs anterior (ingresos, usuarios, membresías, asignaciones) |
 | PaymentOverview | Client | Estado de pagos con barra de proporción |
+
+### Dashboard Usuario (`src/components/dashboard/`)
+| Componente | Tipo | Descripción |
+|---|---|---|
+| DashboardNav | Client | Navegación horizontal por 6 tabs (incluye Asistencia) |
+| MembershipCard | Client | Card con barra de progreso, estado, beneficios |
+| QuickStats | Server | 3 stat cards: membresías activas, pagos del mes, cargas |
+| AlertBanner | Server | Alertas de membresía por vencer/vencida/sin membresía |
+| DashboardSkeleton | Server | Loading states para cada sección |
+| NotificationItem | Server | Fila de notificación con icono por tipo |
+| PaymentRow | Server | Fila de pago con método, monto, estado, comprobante |
+| DependentCard | Server | Card de dependiente con edad, membresía y link a ficha médica |
+| AddDependentModal | Client | Formulario para agregar nueva carga |
 
 ---
 
@@ -231,6 +254,8 @@ academy_settings (autónoma, 1 row)
 - Staff: acceso a payments, class_sessions, attendance
 - Usuarios: solo ven/editan su propio perfil y beneficiarios
 - Públicos: membership_plans, products, events, schedules, disciplines (lectura)
+- `payments_user_insert_own`: usuarios solo insertan pagos propios (solo method=flow)
+- `payments_flow_update`: Flow callback puede actualizar pagos (update por token)
 
 ### Storage
 - Bucket `public` para comprobantes de pago
@@ -272,14 +297,24 @@ academy_settings (autónoma, 1 row)
 
 ## 9. Pendiente
 
-### Módulo 3 — Pasarela de Pagos (Flow)
-- Integración con Flow SDK
-- Checkout session, webhook, asignación automática
+### Módulo 3 — Pasarela de Pagos (Flow) ✅ (código listo, pendiente sandbox)
+- Integración con Flow.cl (Webpay)
+- `src/lib/flow.ts` — utilidades de firma y API
+- `/api/flow/create-order` — crea orden de pago (previene duplicados)
+- `/api/flow/confirmation` — callback de Flow, activa membresía (fallback por commerceOrder)
+- `/api/flow/verify` — verificación client-side del pago al retornar de Flow
+- `CheckoutModal.tsx` — selección de beneficiario + pago
+- `Memberships.tsx` — botón Comprar → modal
+- RLS: `payments_user_insert_own` (solo flow), `payments_flow_update` (callback)
+- Pendiente: credenciales de sandbox + testing
 
-### Módulo 4 — Asistencia y Ficha Médica
-- Registro de asistencia por clase
-- Ficha médica de alumnos
-- Reportes de asistencia
+### Módulo 4 — Asistencia y Ficha Médica ✅
+- **Ficha Médica**: `/dashboard/cargas/[id]/medico` — ver/editar info médica por dependiente
+- **Asistencia Admin**: `/admin/asistencia` — marcar asistencia por sesión de clase
+- **Historial Asistencia**: `/dashboard/asistencia` — usuario ve su historial
+- Components: MedicalInfoCard, EmergencyContactCard
+- Queries: getMedicalRecord, upsertMedicalRecord, getUpcomingSessions, getAttendanceForSession, markAttendance, getUserAttendance
+- AdminSidebar actualizado con link de Asistencia
 
 ### Galería
 - Grid de fotos/videos, categorías, lightbox
@@ -300,16 +335,23 @@ academy_settings (autónoma, 1 row)
 
 ### Layouts
 - `src/app/layout.tsx` → Root: fonts, metadata, Navbar, FadeUpObserver, ContactModal, SessionProvider
-- `src/app/admin/layout.tsx` → AdminGuard + AdminSidebar
+- `src/app/admin/layout.tsx` → AdminGuard + AdminSidebar (10 links)
 
-### Librerías (`src/lib/supabase/`)
+### Librerías
+#### Supabase (`src/lib/supabase/`)
 | Archivo | Uso |
 |---|---|
 | `client.ts` | Cliente browser (createBrowserClient) |
 | `server.ts` | Cliente server (createServerClient + cookies) |
 | `auth.ts` | Operaciones de auth |
 | `profile.ts` | Consulta/actualización de profiles |
+| `dashboard.ts` | Queries del dashboard: membresías, pagos, dependientes, notificaciones, ficha médica, asistencia |
 | `middleware.ts` | Refresh sesión + protección de rutas |
+
+#### Flow (`src/lib/`)
+| Archivo | Uso |
+|---|---|
+| `flow.ts` | Utilidades Flow.cl: signFlowParams (HMAC-SHA256), createFlowOrder, verifyFlowPayment |
 
 ### Providers
 - `src/providers/SessionProvider.tsx` → user, profile, isAdmin, isStaff, refreshProfile

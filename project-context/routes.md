@@ -29,8 +29,14 @@
 
 | Ruta | Archivo | Descripción |
 |---|---|---|
-| `/dashboard` | `src/app/dashboard/page.tsx` | Panel del usuario (alumno) |
-| `/perfil` | `src/app/perfil/page.tsx` | Perfil del usuario |
+| `/dashboard` | `src/app/dashboard/page.tsx` | Dashboard del usuario: resumen de membresías, pagos, alertas, accesos rápidos |
+| `/dashboard/membresias` | `src/app/dashboard/membresias/page.tsx` | Membresías con filtros (todas/activas/vencidas/canceladas) |
+| `/dashboard/pagos` | `src/app/dashboard/pagos/page.tsx` | Historial de pagos paginado |
+| `/dashboard/cargas` | `src/app/dashboard/cargas/page.tsx` | Lista de dependientes/cargas |
+| `/dashboard/cargas/[id]/medico` | `src/app/dashboard/cargas/[id]/medico/page.tsx` | Ficha médica del dependiente |
+| `/dashboard/notificaciones` | `src/app/dashboard/notificaciones/page.tsx` | Historial de notificaciones |
+| `/dashboard/asistencia` | `src/app/dashboard/asistencia/page.tsx` | Historial de asistencia del usuario |
+| `/perfil` | `src/app/perfil/page.tsx` | Perfil editable + cambio de contraseña |
 
 ## Rutas Admin (requieren role_id = 1)
 
@@ -42,6 +48,7 @@
 | `/admin/horarios` | `src/app/admin/horarios/page.tsx` | CRUD horarios con selects de disciplina/profesor |
 | `/admin/usuarios` | `src/app/admin/usuarios/page.tsx` | Ver usuarios + cargas agrupadas bajo tutor, cambiar roles, activar/desactivar |
 | `/admin/membresias` | `src/app/admin/membresias/page.tsx` | CRUD planes + asignación manual + editar/cancelar membresías + PDF recibo |
+| `/admin/asistencia` | `src/app/admin/asistencia/page.tsx` | Marcar asistencia por sesión de clase |
 | `/admin/blog` | `src/app/admin/blog/page.tsx` | CRUD publicaciones del blog (borrador/programado/publicado) |
 | `/admin/notificaciones` | `src/app/admin/notificaciones/page.tsx` | CRUD notificaciones (aviso/recordatorio/comunicado/correo_masivo) |
 | `/admin/configuracion` | `src/app/admin/configuracion/page.tsx` | Editar configuración de la academia |
@@ -52,6 +59,14 @@
 |---|---|---|
 | `/torneos` | `/eventos` | `src/app/torneos/page.tsx` |
 | `/ceremonias` | `/eventos` | `src/app/ceremonias/page.tsx` |
+
+## API Routes (server-side)
+
+| Ruta | Archivo | Descripción |
+|---|---|---|
+| `POST /api/flow/create-order` | `src/app/api/flow/create-order/route.ts` | Crea orden de pago Flow + payment en BD (previene duplicados) |
+| `POST /api/flow/confirmation` | `src/app/api/flow/confirmation/route.ts` | Callback de Flow: verifica pago, crea membresía (fallback por commerceOrder) |
+| `GET /api/flow/verify` | `src/app/api/flow/verify/route.ts` | Verificación client-side del pago al retornar de Flow |
 
 ## Navbar Links
 
@@ -65,8 +80,9 @@
 | Tienda | `/productos` | Link interno |
 | Eventos | `/eventos` | Link interno |
 | Blog | `/blog` | Link interno |
-| Campana (notificaciones) | — | Badge con contador (solo logueados) |
-| Únete Ahora | Abre modal contacto | ContactLink |
+| Campana (notificaciones) | `/dashboard/notificaciones` | Badge con contador (solo logueados) |
+| Mi Panel | `/dashboard` | Link (solo logueados) |
+| Perfil / Únete Ahora | `/perfil` o modal contacto | Botón CTA |
 
 ## Landing Page (`/`) - Orden de secciones
 

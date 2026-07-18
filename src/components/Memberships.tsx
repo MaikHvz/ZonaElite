@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useSession } from "@/providers/SessionProvider";
+import CheckoutModal from "@/components/CheckoutModal";
 
 interface MembershipPlan {
   id: string;
@@ -15,8 +17,10 @@ interface MembershipPlan {
 }
 
 export default function Memberships() {
+  const { user } = useSession();
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -142,20 +146,39 @@ export default function Memberships() {
                 </ul>
               </div>
 
-              <Link
-                href="/auth"
-                className={`w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[14px] leading-[18px] uppercase rounded-[0.25rem] transition-colors duration-200 ${
-                  featured
-                    ? "btn-primary-gradient text-white shadow-[0_0_20px_rgba(229,57,53,0.3)] hover:opacity-90"
-                    : "border border-on-surface/20 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/40"
-                }`}
-              >
-                Seleccionar
-              </Link>
+              {user ? (
+                <button
+                  onClick={() => setSelectedPlan(plan)}
+                  className={`w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[14px] leading-[18px] uppercase rounded-[0.25rem] transition-colors duration-200 cursor-pointer ${
+                    featured
+                      ? "btn-primary-gradient text-white shadow-[0_0_20px_rgba(229,57,53,0.3)] hover:opacity-90"
+                      : "border border-on-surface/20 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/40"
+                  }`}
+                >
+                  Comprar
+                </button>
+              ) : (
+                <Link
+                  href="/auth"
+                  className={`w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[14px] leading-[18px] uppercase rounded-[0.25rem] transition-colors duration-200 ${
+                    featured
+                      ? "btn-primary-gradient text-white shadow-[0_0_20px_rgba(229,57,53,0.3)] hover:opacity-90"
+                      : "border border-on-surface/20 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/40"
+                  }`}
+                >
+                  Seleccionar
+                </Link>
+              )}
             </article>
           );
         })}
       </div>
+
+      <CheckoutModal
+        open={!!selectedPlan}
+        onClose={() => setSelectedPlan(null)}
+        plan={selectedPlan}
+      />
     </section>
   );
 }

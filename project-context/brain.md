@@ -49,7 +49,7 @@ Academia de artes marciales (Kenpo, Kickboxing, MMA) en La Serena, Chile.
 ### Convenciones
 
 - **App Router** con `src/app/`
-- **Componentes** en `src/components/` (landing) y `src/components/admin/` (admin)
+- **Componentes** en `src/components/` (landing), `src/components/admin/` (admin), `src/components/dashboard/` (usuario)
 - **Librerías** en `src/lib/supabase/`
 - **Providers** en `src/providers/`
 - **Tailwind v4**: configuración via `@theme inline` en `globals.css` (NO existe `tailwind.config.js`)
@@ -82,3 +82,4 @@ Academia de artes marciales (Kenpo, Kickboxing, MMA) en La Serena, Chile.
 - `sqlmodelcomplete.md` → SQL completo ejecutado
 - `bdmodel.md` → Diagrama ER
 - `changelog.md` → Cambios recientes
+- `true-project-context/FLOW-PAYMENTS-PLAN.md` → Plan de implementación Flow (8 fases)
