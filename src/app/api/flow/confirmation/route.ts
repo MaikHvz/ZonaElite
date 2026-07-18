@@ -12,6 +12,7 @@ interface PaymentRow {
   flow_token: string | null;
   flow_order: number | null;
   membership_id: string | null;
+  beneficiary_id: string | null;
 }
 
 export async function POST(request: Request) {
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
 
     const { data: byToken } = await supabase
       .from("payments")
-      .select("id, user_id, commerce_order, status, amount, concept, flow_token")
+      .select("id, user_id, commerce_order, status, amount, concept, flow_token, beneficiary_id")
       .eq("flow_token", token)
       .maybeSingle();
 
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     } else if (verification.commerceOrder) {
       const { data: byCommerce } = await supabase
         .from("payments")
-        .select("id, user_id, commerce_order, status, amount, concept, flow_token")
+        .select("id, user_id, commerce_order, status, amount, concept, flow_token, beneficiary_id")
         .eq("commerce_order", verification.commerceOrder)
         .maybeSingle();
       if (byCommerce) payment = byCommerce as PaymentRow;
@@ -103,10 +104,42 @@ export async function POST(request: Request) {
       return new Response("OK", { status: 200 });
     }
 
+    // 1. Determinar Beneficiario
+    let targetBeneficiaryId = payment.beneficiary_id;
+
+    // Fallback 1: Si no está en el pago local, buscar en metadata (campo 'optional') de Flow
+    if (!targetBeneficiaryId && (verification as any).optional) {
+      try {
+        const meta = typeof (verification as any).optional === "string" 
+          ? JSON.parse((verification as any).optional) 
+          : (verification as any).optional;
+        targetBeneficiaryId = meta.beneficiaryId || meta.beneficiary_id;
+      } catch (e) {
+        console.error("Flow callback: error parsing optional metadata", e);
+      }
+    }
+
+    // Fallback 2: Asignar al beneficiario propio del usuario (titular)
+    if (!targetBeneficiaryId) {
+      const { data: ownBeneficiary } = await supabase
+        .from("beneficiaries")
+        .select("id")
+        .eq("profile_id", payment.user_id)
+        .maybeSingle();
+      if (ownBeneficiary) {
+        targetBeneficiaryId = ownBeneficiary.id;
+      }
+    }
+
+    if (!targetBeneficiaryId) {
+      console.error("Flow callback: no beneficiary found for user:", payment.user_id);
+      return new Response("OK", { status: 200 });
+    }
+
     const { data: existingMembership } = await supabase
       .from("memberships")
       .select("id")
-      .eq("purchased_by", payment.user_id)
+      .eq("beneficiary_id", targetBeneficiaryId)
       .eq("plan_id", plan.id)
       .eq("status", "activa")
       .gte(
@@ -123,17 +156,6 @@ export async function POST(request: Request) {
       return new Response("OK", { status: 200 });
     }
 
-    const { data: ownBeneficiary } = await supabase
-      .from("beneficiaries")
-      .select("id")
-      .eq("profile_id", payment.user_id)
-      .maybeSingle();
-
-    if (!ownBeneficiary) {
-      console.error("Flow callback: no beneficiary found for user:", payment.user_id);
-      return new Response("OK", { status: 200 });
-    }
-
     const today = new Date().toISOString().split("T")[0];
     const endDate = new Date(Date.now() + plan.duration_days * 86400000)
       .toISOString()
@@ -142,7 +164,7 @@ export async function POST(request: Request) {
     const { data: membership } = await supabase
       .from("memberships")
       .insert({
-        beneficiary_id: ownBeneficiary.id,
+        beneficiary_id: targetBeneficiaryId,
         plan_id: plan.id,
         purchased_by: payment.user_id,
         start_date: today,

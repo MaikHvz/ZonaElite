@@ -124,6 +124,7 @@ export async function POST(request: Request) {
       .from("payments")
       .insert({
         user_id: user.id,
+        beneficiary_id: beneficiary.id,
         commerce_order: commerceOrder,
         concept: `Membresía ${plan.name}`,
         amount: plan.price,

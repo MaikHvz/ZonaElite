@@ -50,7 +50,7 @@ export async function createFlowOrder(
   };
 
   if (params.metadata) {
-    signParams.metadata = JSON.stringify(params.metadata);
+    signParams.optional = JSON.stringify(params.metadata);
   }
 
   const s = signFlowParams(signParams);
