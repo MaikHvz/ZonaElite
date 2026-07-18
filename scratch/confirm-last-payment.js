@@ -34,8 +34,8 @@ function signFlowParams(params) {
 }
 
 async function main() {
-  const paymentId = "c0b51a47-e942-4cdd-9aa7-cce97d1f0a82";
-  const token = "8E39044CFE259E26CBA590E061996468B0EEB7DH";
+  const paymentId = "ff70e384-b2aa-416d-9936-61a620798ae8";
+  const token = "2ADFF6ADABEB4FA5573C25493EC6109964BCFF8M";
   const userId = "8b509706-3f5d-4fe4-8002-2d9da964a266";
 
   // Verify with Flow API
@@ -54,7 +54,6 @@ async function main() {
 
   console.log("Payment IS approved in Flow! Updating DB...");
 
-  // Update payment
   const { error: updateErr } = await supabase
     .from("payments")
     .update({
@@ -70,21 +69,33 @@ async function main() {
   }
   console.log("Payment updated to pagado");
 
-  // Find beneficiary
-  const { data: beneficiary, error: benErr } = await supabase
-    .from("beneficiaries")
-    .select("id")
-    .eq("profile_id", userId)
-    .maybeSingle();
+  // Check if payment already has a beneficiary
+  const { data: payRow } = await supabase
+    .from("payments")
+    .select("beneficiary_id")
+    .eq("id", paymentId)
+    .single();
 
-  if (benErr || !beneficiary) {
-    console.error("No beneficiary found:", benErr);
+  let beneficiaryId = payRow?.beneficiary_id;
+
+  if (!beneficiaryId) {
+    // Find own beneficiary
+    const { data: beneficiary } = await supabase
+      .from("beneficiaries")
+      .select("id")
+      .eq("profile_id", userId)
+      .maybeSingle();
+    beneficiaryId = beneficiary?.id;
+  }
+
+  if (!beneficiaryId) {
+    console.error("No beneficiary found for user:", userId);
     return;
   }
-  console.log("Beneficiary:", beneficiary.id);
+  console.log("Beneficiary:", beneficiaryId);
 
   // Find plan
-  const { data: plan, error: planErr } = await supabase
+  const { data: plan } = await supabase
     .from("membership_plans")
     .select("id, duration_days, name")
     .eq("active", true)
@@ -92,13 +103,12 @@ async function main() {
     .limit(1)
     .single();
 
-  if (planErr || !plan) {
-    console.error("Plan not found:", planErr);
+  if (!plan) {
+    console.error("No active plan found");
     return;
   }
-  console.log("Plan:", plan.name, "-", plan.duration_days, "days");
 
-  // Check for existing active membership (avoid duplicates)
+  // Check existing membership
   const { data: existing } = await supabase
     .from("memberships")
     .select("id")
@@ -108,25 +118,19 @@ async function main() {
     .maybeSingle();
 
   if (existing) {
-    console.log("Active membership already exists:", existing.id);
-    await supabase
-      .from("payments")
-      .update({ membership_id: existing.id })
-      .eq("id", paymentId);
+    console.log("Active membership exists:", existing.id);
+    await supabase.from("payments").update({ membership_id: existing.id }).eq("id", paymentId);
     console.log("Payment linked to existing membership");
     return;
   }
 
-  // Create membership
   const today = new Date().toISOString().split("T")[0];
-  const endDate = new Date(Date.now() + plan.duration_days * 86400000)
-    .toISOString()
-    .split("T")[0];
+  const endDate = new Date(Date.now() + plan.duration_days * 86400000).toISOString().split("T")[0];
 
   const { data: membership, error: memErr } = await supabase
     .from("memberships")
     .insert({
-      beneficiary_id: beneficiary.id,
+      beneficiary_id: beneficiaryId,
       plan_id: plan.id,
       purchased_by: userId,
       start_date: today,
@@ -140,13 +144,9 @@ async function main() {
     console.error("Membership error:", memErr);
     return;
   }
-  console.log("Membership created:", membership.id);
 
-  await supabase
-    .from("payments")
-    .update({ membership_id: membership.id })
-    .eq("id", paymentId);
-  console.log("Done! Payment linked to membership.");
+  await supabase.from("payments").update({ membership_id: membership.id }).eq("id", paymentId);
+  console.log("Done! Membership created:", membership.id);
 }
 
 main().catch(console.error);
