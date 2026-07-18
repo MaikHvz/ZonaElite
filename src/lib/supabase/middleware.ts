@@ -36,19 +36,25 @@ export async function updateSession(request: NextRequest) {
     // getUser failed — treat as unauthenticated but don't crash
   }
 
-  const isProtected = protectedRoutes.some((r) => request.nextUrl.pathname.startsWith(r));
-  const isAuth = authRoutes.some((r) => request.nextUrl.pathname.startsWith(r));
+  const pathname = request.nextUrl.pathname;
+  const isProtected = protectedRoutes.some((r) => pathname.startsWith(r));
+  const isAuth = authRoutes.some((r) => pathname.startsWith(r));
 
-  if (isProtected && !user) {
+  // Allow unauthenticated access to /dashboard/pagos when returning from Flow
+  const isFlowReturn =
+    pathname === "/dashboard/pagos" &&
+    request.nextUrl.searchParams.has("token");
+
+  if (isProtected && !user && !isFlowReturn) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(url, 303);
   }
 
   if (isAuth && user) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(url, 303);
   }
 
   return supabaseResponse;

@@ -2,7 +2,7 @@
 
 import { useSession } from "@/providers/SessionProvider";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import DashboardNav from "@/components/dashboard/DashboardNav";
 
 export default function DashboardLayout({
@@ -12,10 +12,15 @@ export default function DashboardLayout({
 }) {
   const { user, loading } = useSession();
   const router = useRouter();
+  const [isFlowReturn, setIsFlowReturn] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) router.push("/auth");
-  }, [user, loading, router]);
+    setIsFlowReturn(new URLSearchParams(window.location.search).has("token"));
+  }, []);
+
+  useEffect(() => {
+    if (!loading && !user && !isFlowReturn) router.push("/auth");
+  }, [user, loading, router, isFlowReturn]);
 
   if (loading) {
     return (
@@ -25,7 +30,7 @@ export default function DashboardLayout({
     );
   }
 
-  if (!user) return null;
+  if (!user && !isFlowReturn) return null;
 
   return (
     <div className="min-h-screen bg-background pt-28 pb-16 px-5">
