@@ -13,6 +13,8 @@ import PurchaseSuccessBanner, {
   PurchaseFailedBanner,
 } from "@/components/PurchaseSuccessBanner";
 
+const FLOW_TOKEN_KEY = "flow_pending_token";
+
 export default function PagosPage() {
   const { user } = useSession();
   const searchParams = useSearchParams();
@@ -41,12 +43,22 @@ export default function PagosPage() {
     fetchPayments();
   }, [fetchPayments]);
 
+  // Guardar token de Flow en sessionStorage cuando la URL lo trae
+  useEffect(() => {
+    if (flowToken) {
+      sessionStorage.setItem(FLOW_TOKEN_KEY, flowToken);
+    }
+  }, [flowToken]);
+
   // Verificar pago cuando el usuario vuelve de Flow con token
   useEffect(() => {
-    if (!flowToken || !user || verifying) return;
+    const tokenToVerify = flowToken || sessionStorage.getItem(FLOW_TOKEN_KEY);
+    if (!tokenToVerify || !user || verifying) return;
+
+    sessionStorage.removeItem(FLOW_TOKEN_KEY);
 
     setVerifying(true);
-    fetch(`/api/flow/verify?token=${encodeURIComponent(flowToken)}`)
+    fetch(`/api/flow/verify?token=${encodeURIComponent(tokenToVerify)}`)
       .then((r) => r.json())
       .then((result) => {
         if (result.status === "pagado") {
@@ -54,9 +66,7 @@ export default function PagosPage() {
         } else {
           setVerified("failed");
         }
-        // Limpiar URL params
         router.replace("/dashboard/pagos");
-        // Recargar pagos
         fetchPayments();
       })
       .catch(() => {
@@ -80,11 +90,26 @@ export default function PagosPage() {
     })
     .reduce((s, p) => s + Number(p.amount), 0);
 
+  const pendingFlowToken = !user && (flowToken || sessionStorage.getItem(FLOW_TOKEN_KEY));
+
   return (
     <div className="space-y-6">
       <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[40px] text-on-surface uppercase tracking-tighter">
         Mis <span className="text-primary">Pagos</span>
       </h1>
+
+      {pendingFlowToken && !loading && (
+        <div className="glass-panel rounded-xl p-4 border-l-4 border-amber-500 flex items-center gap-3">
+          <span className="material-symbols-outlined text-amber-500 text-xl">info</span>
+          <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">
+            Se detectó un pago pendiente.{" "}
+            <a href="/auth" className="text-primary hover:underline font-semibold">
+              Inicia sesión
+            </a>{" "}
+            para confirmarlo.
+          </p>
+        </div>
+      )}
 
       {verifying && (
         <div className="glass-panel rounded-xl p-4 border-l-4 border-primary flex items-center gap-3">

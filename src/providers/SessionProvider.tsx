@@ -1,8 +1,11 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+
+const FLOW_TOKEN_KEY = "flow_pending_token";
 
 export interface UserProfile {
   id: string;
@@ -45,6 +48,7 @@ export default function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   const user = session?.user ?? null;
   const isAdmin = profile?.role_id === 1;
@@ -73,15 +77,22 @@ export default function SessionProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       if (session?.user) await fetchProfile(session.user);
       else setProfile(null);
       setLoading(false);
+
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+        const pendingToken = sessionStorage.getItem(FLOW_TOKEN_KEY);
+        if (pendingToken && window.location.pathname !== "/dashboard/pagos") {
+          router.push(`/dashboard/pagos?token=${encodeURIComponent(pendingToken)}`);
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [router]);
 
   return (
     <SessionContext.Provider value={{ session, user, profile, loading, isAdmin, isStaff, refreshProfile }}>
