@@ -40,7 +40,6 @@ export async function updateSession(request: NextRequest) {
   const isProtected = protectedRoutes.some((r) => pathname.startsWith(r));
   const isAuth = authRoutes.some((r) => pathname.startsWith(r));
 
-  // Allow unauthenticated access to /dashboard/pagos when returning from Flow
   const isFlowReturn =
     pathname === "/dashboard/pagos" &&
     request.nextUrl.searchParams.has("token");
