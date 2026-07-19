@@ -627,6 +627,8 @@ export async function getUserAttendance(userId: string, limit = 50) {
         session:class_sessions(
           session_date,
           schedule:schedules(
+            start_time,
+            end_time,
             discipline:disciplines(name)
           )
         )

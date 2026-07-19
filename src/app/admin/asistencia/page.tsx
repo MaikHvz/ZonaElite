@@ -180,21 +180,24 @@ export default function AdminAsistenciaPage() {
     if (query.length < 2) { setSearchResults([]); return; }
     setSearching(true);
 
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .ilike("full_name", `%${query}%`)
-      .limit(10);
+    const today = new Date().toISOString().split("T")[0];
 
-    if (!profiles || profiles.length === 0) {
-      setSearchResults([]);
-      setSearching(false);
-      return;
-    }
+    const [profilesRes, depsRes] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, full_name")
+        .ilike("full_name", `%${query}%`)
+        .limit(10),
+      supabase
+        .from("dependents")
+        .select("id, full_name, category, tutor_id")
+        .ilike("full_name", `%${query}%`)
+        .limit(10),
+    ]);
 
     const results: EnrollableBeneficiary[] = [];
 
-    for (const p of profiles) {
+    for (const p of profilesRes.data || []) {
       const { data: ben } = await supabase
         .from("beneficiaries")
         .select("id")
@@ -208,7 +211,7 @@ export default function AdminAsistenciaPage() {
         .select("plan_id, membership_plans(name)")
         .eq("beneficiary_id", ben.id)
         .eq("status", "activa")
-        .gte("end_date", new Date().toISOString().split("T")[0])
+        .gte("end_date", today)
         .maybeSingle();
 
       results.push({
@@ -220,40 +223,39 @@ export default function AdminAsistenciaPage() {
       });
     }
 
-    for (const p of profiles) {
-      const { data: deps } = await supabase
-        .from("dependents")
-        .select("id, full_name, category")
-        .eq("tutor_id", p.id)
-        .ilike("full_name", `%${query}%`);
+    for (const d of depsRes.data || []) {
+      const { data: ben } = await supabase
+        .from("beneficiaries")
+        .select("id")
+        .eq("dependent_id", d.id)
+        .maybeSingle();
 
-      if (!deps) continue;
+      if (!ben) continue;
 
-      for (const d of deps) {
-        const { data: ben } = await supabase
-          .from("beneficiaries")
-          .select("id")
-          .eq("dependent_id", d.id)
-          .maybeSingle();
+      const alreadyFound = results.some((r) => r.beneficiary_id === ben.id);
+      if (alreadyFound) continue;
 
-        if (!ben) continue;
+      const { data: membership } = await supabase
+        .from("memberships")
+        .select("plan_id, membership_plans(name)")
+        .eq("beneficiary_id", ben.id)
+        .eq("status", "activa")
+        .gte("end_date", today)
+        .maybeSingle();
 
-        const { data: membership } = await supabase
-          .from("memberships")
-          .select("plan_id, membership_plans(name)")
-          .eq("beneficiary_id", ben.id)
-          .eq("status", "activa")
-          .gte("end_date", new Date().toISOString().split("T")[0])
-          .maybeSingle();
+      const { data: tutor } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", d.tutor_id)
+        .maybeSingle();
 
-        results.push({
-          id: p.id,
-          full_name: d.full_name,
-          category: d.category,
-          beneficiary_id: ben.id,
-          activePlan: membership?.plan_id || null,
-        });
-      }
+      results.push({
+        id: d.tutor_id,
+        full_name: d.full_name,
+        category: d.category,
+        beneficiary_id: ben.id,
+        activePlan: membership?.plan_id || null,
+      });
     }
 
     setSearchResults(results);

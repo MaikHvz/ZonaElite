@@ -11,15 +11,18 @@ interface AttendanceRow extends AttendanceRecord {
   beneficiary_name: string;
   session: {
     session_date: string;
-    schedule: { discipline: { name: string } | null };
+    schedule: { start_time: string; end_time: string; discipline: { name: string } | null };
   };
 }
 
 const STATUS_CONFIG = {
-  presente: { label: "Presente", color: "text-green-400", bg: "bg-green-500/10 border-green-500/20" },
-  ausente: { label: "Ausente", color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
-  justificado: { label: "Justificado", color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20" },
+  presente: { label: "Presente", color: "text-green-400", bg: "bg-green-500/10 border-green-500/20", icon: "check_circle" },
+  ausente: { label: "Ausente", color: "text-red-400", bg: "bg-red-500/10 border-red-500/20", icon: "cancel" },
+  justificado: { label: "Justificado", color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20", icon: "info" },
 } as const;
+
+const MONTH_ABBR = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
 export default function AsistenciaPage() {
   const { user } = useSession();
@@ -37,16 +40,28 @@ export default function AsistenciaPage() {
     fetchAttendance();
   }, [fetchAttendance]);
 
-  const formatDate = (d: string) =>
-    new Date(d + "T12:00:00").toLocaleDateString("es-CL", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-    });
-
   const presentCount = records.filter((r) => r.status === "presente").length;
   const absentCount = records.filter((r) => r.status === "ausente").length;
+  const justifiedCount = records.filter((r) => r.status === "justificado").length;
   const total = records.length;
+
+  const groupedByDate: Record<string, AttendanceRow[]> = {};
+  for (const r of records) {
+    const date = r.session?.session_date;
+    if (!date) continue;
+    if (!groupedByDate[date]) groupedByDate[date] = [];
+    groupedByDate[date].push(r);
+  }
+
+  const formatDate = (d: string) => {
+    const dt = new Date(d + "T12:00:00");
+    const dayName = DAY_NAMES[dt.getDay()];
+    const dayNum = dt.getDate();
+    const month = MONTH_ABBR[dt.getMonth()];
+    return `${dayName} ${dayNum} ${month}`;
+  };
+
+  const formatTime = (t: string) => t?.slice(0, 5) || "";
 
   return (
     <div className="space-y-6">
@@ -61,14 +76,6 @@ export default function AsistenciaPage() {
 
       {total > 0 && (
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-surface-container border border-on-surface/5 rounded-xl p-3 text-center">
-            <span className="font-[family-name:var(--font-headline-md)] text-[24px] text-on-surface">
-              {total}
-            </span>
-            <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">
-              Total
-            </p>
-          </div>
           <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
             <span className="font-[family-name:var(--font-headline-md)] text-[24px] text-green-400">
               {presentCount}
@@ -83,6 +90,14 @@ export default function AsistenciaPage() {
             </span>
             <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-red-400/70">
               Ausente
+            </p>
+          </div>
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 text-center">
+            <span className="font-[family-name:var(--font-headline-md)] text-[24px] text-yellow-400">
+              {justifiedCount}
+            </span>
+            <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-yellow-400/70">
+              Justificado
             </p>
           </div>
         </div>
@@ -107,43 +122,54 @@ export default function AsistenciaPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {records.map((r) => {
-            const cfg = STATUS_CONFIG[r.status as keyof typeof STATUS_CONFIG];
-            return (
-              <div
-                key={r.id}
-                className="bg-surface-container border border-on-surface/5 rounded-xl px-4 py-3 flex items-center justify-between gap-3"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-primary-container/10 border border-primary-container/20 flex flex-col items-center justify-center shrink-0">
-                    <span className="font-[family-name:var(--font-headline-md)] text-[13px] text-primary leading-none">
-                      {new Date(r.session.session_date + "T12:00:00").getDate()}
-                    </span>
-                    <span className="font-[family-name:var(--font-label-sm)] text-[8px] uppercase text-primary/70 leading-none mt-0.5">
-                      {new Date(r.session.session_date + "T12:00:00")
-                        .toLocaleDateString("es-CL", { month: "short" })
-                        .toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">
-                      {r.session.schedule?.discipline?.name || "Clase"}
-                    </p>
-                    <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant">
-                      {r.beneficiary_name}
-                    </p>
-                  </div>
-                </div>
+        <div className="space-y-6">
+          {Object.entries(groupedByDate)
+            .sort(([a], [b]) => b.localeCompare(a))
+            .map(([date, dateRecords]) => (
+              <div key={date}>
+                <h3 className="font-[family-name:var(--font-headline-md)] text-[13px] text-on-surface-variant uppercase mb-3">
+                  {formatDate(date)}
+                </h3>
+                <div className="space-y-2">
+                  {dateRecords.map((r) => {
+                    const cfg = STATUS_CONFIG[r.status as keyof typeof STATUS_CONFIG];
+                    const discipline = r.session?.schedule?.discipline?.name || "Clase";
+                    const startTime = formatTime(r.session?.schedule?.start_time);
+                    const endTime = formatTime(r.session?.schedule?.end_time);
 
-                <span
-                  className={`shrink-0 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider border px-3 py-1 rounded-full ${cfg?.bg || ""} ${cfg?.color || ""}`}
-                >
-                  {cfg?.label || r.status}
-                </span>
+                    return (
+                      <div
+                        key={r.id}
+                        className="bg-surface-container border border-on-surface/5 rounded-xl px-4 py-3 flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-full btn-primary-gradient flex items-center justify-center shrink-0">
+                            <span className="material-symbols-outlined text-white text-[16px]">
+                              {cfg?.icon || "person"}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">
+                              {discipline}
+                            </p>
+                            <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant">
+                              {startTime && endTime ? `${startTime} - ${endTime}` : ""}
+                              {r.beneficiary_name !== "Yo" ? ` · ${r.beneficiary_name}` : ""}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`shrink-0 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider border px-3 py-1 rounded-full ${cfg?.bg || ""} ${cfg?.color || ""}`}
+                        >
+                          {cfg?.label || r.status}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            );
-          })}
+            ))}
         </div>
       )}
     </div>
