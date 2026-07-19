@@ -9,6 +9,7 @@ import {
   updateProfile,
 } from "@/lib/supabase/dashboard";
 import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
 
 export default function PerfilPage() {
   const { user, loading, refreshProfile } = useSession();
@@ -93,73 +94,105 @@ export default function PerfilPage() {
 
   const displayName =
     user.user_metadata?.full_name || fullName || "Sin nombre";
+  const initials = displayName
+    .split(" ")
+    .slice(0, 2)
+    .map((w: string) => w.charAt(0).toUpperCase())
+    .join("");
 
   return (
-    <div className="min-h-screen bg-background pt-28 pb-16 px-5">
-      <div className="max-w-[700px] mx-auto space-y-6">
-        <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[40px] text-on-surface uppercase tracking-tighter">
-          Mi <span className="text-primary">Perfil</span>
-        </h1>
+    <div className="min-h-screen bg-background pt-24 md:pt-28 pb-16 px-4 md:px-6">
+      {/* Subtle decorative gradient */}
+      <div className="fixed top-0 left-0 w-full h-[300px] pointer-events-none z-0 opacity-40 bg-gradient-to-b from-primary-container/5 via-transparent to-transparent" />
 
-        <div className="bg-surface-container border border-on-surface/5 rounded-2xl p-6">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-14 h-14 rounded-full btn-primary-gradient flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-white text-[28px]">
-                person
+      <div className="max-w-[640px] mx-auto space-y-5 md:space-y-6 relative z-10">
+        {/* Back link */}
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-1.5 font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant hover:text-primary transition-colors"
+        >
+          <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+          Volver al panel
+        </Link>
+
+        {/* Profile Header */}
+        <div className="glass-card bg-gradient-to-br from-primary-container/8 via-transparent to-transparent p-6 md:p-8 relative overflow-hidden">
+          {/* Decorative glow */}
+          <div className="absolute -top-16 -right-16 w-32 h-32 bg-primary-container/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 md:gap-5 relative z-10 text-center sm:text-left">
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl btn-primary-gradient flex items-center justify-center shrink-0 shadow-[0_0_30px_rgba(255,84,76,0.3)]">
+              <span className="font-[family-name:var(--font-headline-lg)] text-white text-[28px] md:text-[32px]">
+                {initials}
               </span>
             </div>
-            <div>
-              <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase">
+            <div className="pt-1">
+              <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] md:text-[36px] text-on-surface uppercase tracking-tighter leading-tight">
                 {displayName}
-              </h2>
-              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
+              </h1>
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] md:text-[14px] text-on-surface-variant mt-1">
                 {user.email}
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Personal Info Card */}
+        <div className="glass-card p-5 md:p-6">
+          <div className="flex items-center gap-2.5 mb-5">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary text-[18px]">
+                badge
+              </span>
+            </div>
+            <h2 className="font-[family-name:var(--font-headline-md)] text-[17px] md:text-[18px] text-on-surface uppercase">
+              Información Personal
+            </h2>
+          </div>
 
           <div className="space-y-4">
             <div>
-              <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+              <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
                 Nombre completo
               </label>
               <input
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full bg-background border border-on-surface/10 rounded-lg px-4 py-2.5 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface focus:border-primary focus:outline-none transition-colors"
+                className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface input-glow transition-all duration-300"
               />
             </div>
 
-            <div>
-              <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
-                Teléfono
-              </label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+56 9 0000 0000"
-                className="w-full bg-background border border-on-surface/10 rounded-lg px-4 py-2.5 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 focus:border-primary focus:outline-none transition-colors"
-              />
-            </div>
-
-            <div>
-              <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
-                Fecha de nacimiento
-              </label>
-              <input
-                type="date"
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-                className="w-full bg-background border border-on-surface/10 rounded-lg px-4 py-2.5 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface focus:border-primary focus:outline-none transition-colors"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Teléfono
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+56 9 0000 0000"
+                  className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
+                />
+              </div>
+              <div>
+                <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Fecha de nacimiento
+                </label>
+                <input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface input-glow transition-all duration-300"
+                />
+              </div>
             </div>
 
             <button
               onClick={handleSave}
               disabled={saving}
-              className="w-full btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[14px] py-3 rounded-lg uppercase tracking-wider disabled:opacity-50 cursor-pointer"
+              className="w-full btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[14px] py-3.5 rounded-xl uppercase tracking-wider disabled:opacity-50 cursor-pointer shadow-[0_0_16px_rgba(255,84,76,0.2)] hover:shadow-[0_0_24px_rgba(255,84,76,0.3)] transition-shadow"
             >
               {saving ? "Guardando..." : "Guardar cambios"}
             </button>
@@ -176,23 +209,32 @@ export default function PerfilPage() {
           </div>
         </div>
 
-        <div className="bg-surface-container border border-on-surface/5 rounded-2xl p-6">
-          <h3 className="font-[family-name:var(--font-headline-md)] text-[18px] text-on-surface uppercase mb-4">
-            Seguridad
-          </h3>
+        {/* Security Card */}
+        <div className="glass-card p-5 md:p-6">
+          <div className="flex items-center gap-2.5 mb-5">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-blue-400 text-[18px]">
+                shield
+              </span>
+            </div>
+            <h2 className="font-[family-name:var(--font-headline-md)] text-[17px] md:text-[18px] text-on-surface uppercase">
+              Seguridad
+            </h2>
+          </div>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <span className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface block">
+            {/* Email status */}
+            <div className="flex items-center justify-between py-3 px-4 rounded-xl bg-background/50 border border-on-surface/5">
+              <div className="min-w-0">
+                <span className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-0.5">
                   Email
                 </span>
-                <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
+                <span className="font-[family-name:var(--font-body-md)] text-[13px] md:text-[14px] text-on-surface truncate block">
                   {user.email}
                 </span>
               </div>
               <span
-                className={`font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                className={`shrink-0 ml-3 font-[family-name:var(--font-label-sm)] text-[9px] md:text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full border ${
                   user.email_confirmed_at
                     ? "bg-green-500/10 text-green-400 border-green-500/20"
                     : "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
@@ -202,8 +244,9 @@ export default function PerfilPage() {
               </span>
             </div>
 
-            <div className="border-t border-on-surface/5 pt-4">
-              <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+            {/* Password change */}
+            <div className="pt-2">
+              <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
                 Nueva contraseña
               </label>
               <div className="flex gap-2">
@@ -212,19 +255,19 @@ export default function PerfilPage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Mínimo 6 caracteres"
-                  className="flex-1 bg-background border border-on-surface/10 rounded-lg px-4 py-2.5 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 focus:border-primary focus:outline-none transition-colors"
+                  className="flex-1 bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
                 />
                 <button
                   onClick={handleChangePassword}
                   disabled={changingPassword || !newPassword}
-                  className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary border border-primary/30 px-4 py-2 rounded-lg hover:bg-primary/10 transition-colors disabled:opacity-30 cursor-pointer whitespace-nowrap"
+                  className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-primary border border-primary/30 px-4 py-3 rounded-xl hover:bg-primary/10 transition-colors disabled:opacity-30 cursor-pointer whitespace-nowrap"
                 >
                   {changingPassword ? "..." : "Cambiar"}
                 </button>
               </div>
               {passwordMsg && (
                 <p
-                  className={`font-[family-name:var(--font-body-md)] text-[12px] mt-1.5 ${
+                  className={`font-[family-name:var(--font-body-md)] text-[12px] mt-2 ${
                     passwordMsg.includes("Error") || passwordMsg.includes("debe")
                       ? "text-red-400"
                       : "text-green-400"
@@ -237,13 +280,29 @@ export default function PerfilPage() {
           </div>
         </div>
 
-        <button
-          onClick={handleLogout}
-          disabled={loggingOut}
-          className="w-full border border-red-500/30 text-red-400 font-[family-name:var(--font-headline-md)] text-[14px] py-3 rounded-lg uppercase tracking-wider hover:bg-red-500/10 transition-colors disabled:opacity-50 cursor-pointer"
-        >
-          {loggingOut ? "Cerrando sesión..." : "Cerrar Sesión"}
-        </button>
+        {/* Session Card */}
+        <div className="glass-card p-5 md:p-6">
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-red-400 text-[18px]">
+                logout
+              </span>
+            </div>
+            <h2 className="font-[family-name:var(--font-headline-md)] text-[17px] md:text-[18px] text-on-surface uppercase">
+              Sesión
+            </h2>
+          </div>
+          <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mb-4">
+            Cerrar sesión en este dispositivo. Deberás iniciar sesión nuevamente para acceder a tu cuenta.
+          </p>
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="w-full border border-red-500/30 text-red-400 font-[family-name:var(--font-headline-md)] text-[14px] py-3.5 rounded-xl uppercase tracking-wider hover:bg-red-500/10 transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            {loggingOut ? "Cerrando sesión..." : "Cerrar Sesión"}
+          </button>
+        </div>
       </div>
     </div>
   );

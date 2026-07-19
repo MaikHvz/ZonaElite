@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 const navLinks = [
+  { href: "/", label: "Inicio" },
   { href: "/nosotros", label: "Nosotros" },
   { href: "/#disciplinas", label: "Disciplinas" },
   { href: "/horarios", label: "Horarios" },

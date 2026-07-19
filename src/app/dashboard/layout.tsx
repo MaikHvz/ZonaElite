@@ -33,10 +33,15 @@ export default function DashboardLayout({
   if (!user && !isFlowReturn) return null;
 
   return (
-    <div className="min-h-screen bg-background pt-28 pb-16 px-5">
-      <div className="max-w-[1000px] mx-auto">
-        <DashboardNav />
-        <div className="mt-6">{children}</div>
+    <div className="min-h-screen bg-background pt-24 md:pt-28 pb-28 md:pb-16 px-4 md:px-6">
+      {/* Subtle decorative gradient */}
+      <div className="fixed top-0 left-0 w-full h-[300px] pointer-events-none z-0 opacity-40 bg-gradient-to-b from-primary-container/5 via-transparent to-transparent" />
+
+      <div className="max-w-[1200px] mx-auto relative z-10">
+        <div className="flex gap-6">
+          <DashboardNav />
+          <main className="flex-1 min-w-0">{children}</main>
+        </div>
       </div>
     </div>
   );

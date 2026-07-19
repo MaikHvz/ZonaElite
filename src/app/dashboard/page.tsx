@@ -17,6 +17,7 @@ import {
   MembershipCardSkeleton,
   PaymentRowSkeleton,
   NotificationSkeleton,
+  HeroSkeleton,
 } from "@/components/dashboard/DashboardSkeleton";
 import { getUserNotifications, type NotificationData } from "@/lib/supabase/dashboard";
 
@@ -43,24 +44,44 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  const firstName = (
+  const fullName =
     user.user_metadata?.full_name ||
     user.email?.split("@")[0] ||
-    "Atleta"
-  )
-    .split(" ")[0]
-    .toUpperCase();
+    "Atleta";
+  const firstName = fullName.split(" ")[0].toUpperCase();
+  const initials = fullName
+    .split(" ")
+    .slice(0, 2)
+    .map((w: string) => w.charAt(0).toUpperCase())
+    .join("");
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[40px] text-on-surface uppercase tracking-tighter mb-1">
-          Bienvenido, <span className="text-primary">{firstName}</span>
-        </h1>
-        <p className="font-[family-name:var(--font-body-md)] text-[15px] text-on-surface-variant">
-          Tu zona de entrenamiento
-        </p>
-      </div>
+    <div className="space-y-6 md:space-y-8">
+      {/* Hero Greeting */}
+      {loading ? (
+        <HeroSkeleton />
+      ) : (
+        <div className="glass-card bg-gradient-to-br from-primary-container/8 via-transparent to-transparent p-5 md:p-7 relative overflow-hidden">
+          {/* Decorative glow */}
+          <div className="absolute -top-20 -right-20 w-40 h-40 bg-primary-container/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex items-center gap-4 md:gap-5 relative z-10">
+            <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl btn-primary-gradient flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(255,84,76,0.25)]">
+              <span className="font-[family-name:var(--font-headline-md)] text-white text-[20px] md:text-[22px]">
+                {initials}
+              </span>
+            </div>
+            <div>
+              <h1 className="font-[family-name:var(--font-headline-lg)] text-[26px] md:text-[34px] text-on-surface uppercase tracking-tighter leading-tight">
+                Hola, <span className="text-primary">{firstName}</span>
+              </h1>
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] md:text-[14px] text-on-surface-variant mt-0.5">
+                Tu zona de entrenamiento
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <>
@@ -69,7 +90,7 @@ export default function DashboardPage() {
           <PaymentRowSkeleton />
         </>
       ) : error ? (
-        <div className="glass-panel rounded-xl p-6 text-center">
+        <div className="glass-card p-6 text-center">
           <span className="material-symbols-outlined text-red-400 text-[32px] mb-3 block">
             error_outline
           </span>
@@ -96,17 +117,17 @@ export default function DashboardPage() {
           {summary.activeMemberships.length > 0 && (
             <section>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase">
+                <h2 className="font-[family-name:var(--font-headline-md)] text-[18px] md:text-[20px] text-on-surface uppercase">
                   Mis Membresías
                 </h2>
                 <Link
                   href="/dashboard/membresias"
-                  className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary hover:text-on-surface transition-colors"
+                  className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-primary hover:text-on-surface transition-colors"
                 >
                   Ver todas →
                 </Link>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {summary.activeMemberships.slice(0, 2).map((m) => (
                   <MembershipCard key={m.id} membership={m} />
                 ))}
@@ -117,17 +138,17 @@ export default function DashboardPage() {
           {summary.recentPayments.length > 0 && (
             <section>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase">
+                <h2 className="font-[family-name:var(--font-headline-md)] text-[18px] md:text-[20px] text-on-surface uppercase">
                   Últimos Pagos
                 </h2>
                 <Link
                   href="/dashboard/pagos"
-                  className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary hover:text-on-surface transition-colors"
+                  className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-primary hover:text-on-surface transition-colors"
                 >
                   Ver historial →
                 </Link>
               </div>
-              <div className="bg-surface-container border border-on-surface/5 rounded-2xl px-5">
+              <div className="glass-card px-4 md:px-5">
                 {summary.recentPayments.map((p) => (
                   <PaymentRow key={p.id} payment={p} />
                 ))}
@@ -135,6 +156,7 @@ export default function DashboardPage() {
             </section>
           )}
 
+          {/* Quick Access Grid */}
           <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { href: "/horarios", icon: "calendar_month", label: "Horarios" },
@@ -145,12 +167,14 @@ export default function DashboardPage() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="bg-surface-container border border-on-surface/5 rounded-xl p-4 flex flex-col items-center gap-2 hover:border-primary/30 transition-colors group"
+                className="glass-card !rounded-xl p-4 flex flex-col items-center gap-2.5 group hover:scale-[1.03] transition-all duration-300"
               >
-                <span className="material-symbols-outlined text-primary text-[24px] group-hover:scale-110 transition-transform">
-                  {item.icon}
-                </span>
-                <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant group-hover:text-on-surface transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+                  <span className="material-symbols-outlined text-primary text-[22px] group-hover:scale-110 transition-transform duration-300">
+                    {item.icon}
+                  </span>
+                </div>
+                <span className="font-[family-name:var(--font-body-md)] text-[12px] md:text-[13px] text-on-surface-variant group-hover:text-on-surface transition-colors">
                   {item.label}
                 </span>
               </Link>
@@ -160,17 +184,17 @@ export default function DashboardPage() {
           {notifications.length > 0 && (
             <section>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase">
+                <h2 className="font-[family-name:var(--font-headline-md)] text-[18px] md:text-[20px] text-on-surface uppercase">
                   Últimas Notificaciones
                 </h2>
                 <Link
                   href="/dashboard/notificaciones"
-                  className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary hover:text-on-surface transition-colors"
+                  className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-primary hover:text-on-surface transition-colors"
                 >
                   Ver todas →
                 </Link>
               </div>
-              <div className="bg-surface-container border border-on-surface/5 rounded-2xl px-5">
+              <div className="glass-card px-4 md:px-5">
                 {notifications.map((n) => (
                   <NotificationItem key={n.id} notification={n} />
                 ))}
