@@ -9,6 +9,7 @@ const sidebarLinks = [
   { href: "/admin/productos", label: "Productos", icon: "inventory_2" },
   { href: "/admin/eventos", label: "Eventos", icon: "emoji_events" },
   { href: "/admin/horarios", label: "Horarios", icon: "calendar_month" },
+  { href: "/admin/tipos-clase", label: "Tipos de Clase", icon: "category" },
   { href: "/admin/asistencia", label: "Asistencia", icon: "fact_check" },
   { href: "/admin/usuarios", label: "Usuarios", icon: "group" },
   { href: "/admin/membresias", label: "Membresías", icon: "card_membership" },

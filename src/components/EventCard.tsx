@@ -7,6 +7,7 @@ export interface EventData {
   description: string | null;
   image: string | null;
   location_name: string | null;
+  location_url: string | null;
   event_date: string;
   extra: Record<string, unknown>;
 }
@@ -21,12 +22,32 @@ function formatDate(dateStr: string): string {
   });
 }
 
-export default function EventCard({ event }: { event: EventData }) {
-  const icon =
-    event.type === "torneo" ? "emoji_events" : "military_tech";
+function typeLabel(t: string) {
+  const map: Record<string, string> = {
+    torneo: "Torneo",
+    graduacion: "Ceremonia",
+    seminario: "Seminario",
+    clase_especial: "Clase Especial",
+  };
+  return map[t] || t;
+}
 
+function typeIcon(t: string) {
+  const map: Record<string, string> = {
+    torneo: "emoji_events",
+    graduacion: "military_tech",
+    seminario: "school",
+    clase_especial: "fitness_center",
+  };
+  return map[t] || "event";
+}
+
+export default function EventCard({ event }: { event: EventData }) {
   return (
-    <article className="relative rounded-2xl overflow-hidden border border-on-surface/5 bg-surface-container-lowest group hover:border-primary/30 transition-colors">
+    <Link
+      href={`/eventos/${event.id}`}
+      className="block relative rounded-2xl overflow-hidden border border-on-surface/5 bg-surface-container-lowest group hover:border-primary/30 transition-colors"
+    >
       <div className="relative h-[200px] bg-surface-container flex items-center justify-center overflow-hidden">
         {event.image ? (
           <img
@@ -36,12 +57,12 @@ export default function EventCard({ event }: { event: EventData }) {
           />
         ) : (
           <span className="material-symbols-outlined text-on-surface/20 text-7xl">
-            {icon}
+            {typeIcon(event.type)}
           </span>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
         <div className="absolute top-4 left-4 btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[11px] uppercase py-1.5 px-4 rounded-full tracking-wider">
-          {event.type === "torneo" ? "Torneo" : "Ceremonia"}
+          {typeLabel(event.type)}
         </div>
       </div>
 
@@ -78,13 +99,10 @@ export default function EventCard({ event }: { event: EventData }) {
           </p>
         )}
 
-        <Link
-          href={`/auth`}
-          className="inline-block font-[family-name:var(--font-headline-md)] text-[13px] text-primary uppercase tracking-wider hover:text-on-surface transition-colors"
-        >
-          Inscribirse &rarr;
-        </Link>
+        <span className="inline-block font-[family-name:var(--font-headline-md)] text-[13px] text-primary uppercase tracking-wider group-hover:text-on-surface transition-colors">
+          Ver detalles &rarr;
+        </span>
       </div>
-    </article>
+    </Link>
   );
 }

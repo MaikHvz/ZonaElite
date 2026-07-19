@@ -15,12 +15,27 @@ interface Event {
   description: string | null;
   image: string | null;
   location_name: string | null;
+  location_url: string | null;
   event_date: string;
   extra: Record<string, unknown>;
   created_at: string;
 }
 
-const emptyForm = { type: "torneo", title: "", description: "", image: "", location_name: "", event_date: "" };
+const emptyForm = { type: "torneo", title: "", description: "", image: "", location_name: "", location_url: "", event_date: "" };
+
+function extractGoogleMapsEmbed(url: string): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+
+  if (trimmed.includes("goo.gl/maps") || trimmed.includes("google.com/maps")) {
+    return `https://maps.google.com/maps?q=${encodeURIComponent(trimmed)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+  }
+
+  if (trimmed.includes("google.com/maps/embed")) return trimmed;
+  if (trimmed.includes("maps.google.com")) return `https://maps.google.com/maps?q=${encodeURIComponent(trimmed)}&output=embed`;
+
+  return `https://maps.google.com/maps?q=${encodeURIComponent(trimmed)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+}
 
 export default function AdminEventosPage() {
   const [events, setEvents] = useState<Event[]>([]);
@@ -42,12 +57,30 @@ export default function AdminEventosPage() {
   useEffect(() => { load(); }, []);
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setModalOpen(true); };
-  const openEdit = (e: Event) => { setEditing(e); setForm({ type: e.type, title: e.title, description: e.description || "", image: e.image || "", location_name: e.location_name || "", event_date: e.event_date }); setModalOpen(true); };
+  const openEdit = (e: Event) => {
+    setEditing(e);
+    setForm({
+      type: e.type,
+      title: e.title,
+      description: e.description || "",
+      image: e.image || "",
+      location_name: e.location_name || "",
+      location_url: e.location_url || "",
+      event_date: e.event_date,
+    });
+    setModalOpen(true);
+  };
 
   const handleSave = async () => {
     setSaving(true);
     const supabase = createClient();
-    const payload = { ...form, description: form.description || null, image: form.image || null, location_name: form.location_name || null };
+    const payload = {
+      ...form,
+      description: form.description || null,
+      image: form.image || null,
+      location_name: form.location_name || null,
+      location_url: form.location_url || null,
+    };
     if (editing) {
       await supabase.from("events").update(payload).eq("id", editing.id);
     } else {
@@ -69,6 +102,8 @@ export default function AdminEventosPage() {
   };
 
   const typeLabel = (t: string) => ({ torneo: "Torneo", graduacion: "Ceremonia", seminario: "Seminario", clase_especial: "Clase Especial" }[t] || t);
+
+  const previewEmbed = form.location_url ? extractGoogleMapsEmbed(form.location_url) : null;
 
   return (
     <div>
@@ -118,15 +153,37 @@ export default function AdminEventosPage() {
             <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Descripción</label>
             <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 resize-none" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Fecha *</label>
-              <input type="date" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
-            </div>
-            <div>
-              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Lugar</label>
-              <input value={form.location_name} onChange={(e) => setForm({ ...form, location_name: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
-            </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Fecha *</label>
+            <input type="date" value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Lugar</label>
+            <input value={form.location_name} onChange={(e) => setForm({ ...form, location_name: e.target.value })} placeholder="Nombre del recinto" className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50" />
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Ubicación Google Maps</label>
+            <input
+              value={form.location_url}
+              onChange={(e) => setForm({ ...form, location_url: e.target.value })}
+              placeholder="https://maps.google.com/... o buscar dirección"
+              className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+            />
+            <p className="text-[11px] text-on-surface-variant/50 mt-1">Pegá el link de Google Maps o escribí una dirección</p>
+            {previewEmbed && (
+              <div className="mt-3 rounded-lg overflow-hidden border border-on-surface/10">
+                <iframe
+                  src={previewEmbed}
+                  width="100%"
+                  height="200"
+                  style={{ border: 0 }}
+                  allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="w-full"
+                />
+              </div>
+            )}
           </div>
           <div>
             <ImageUpload
