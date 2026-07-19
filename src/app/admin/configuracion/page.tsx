@@ -69,7 +69,7 @@ export default function AdminConfiguracionPage() {
     const supabase = createClient();
     const { data } = await supabase
       .from("gallery_images")
-      .insert({ url, alt: newImageAlt, position: gallery.length })
+      .insert({ url, alt: newImageAlt, position: gallery.length, active: true })
       .select()
       .single();
     if (data) {
