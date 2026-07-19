@@ -86,6 +86,7 @@ export default function SessionProvider({ children }: { children: ReactNode }) {
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
         const pendingToken = sessionStorage.getItem(FLOW_TOKEN_KEY);
         if (pendingToken && window.location.pathname !== "/dashboard/pagos") {
+          sessionStorage.removeItem(FLOW_TOKEN_KEY);
           router.push(`/dashboard/pagos?token=${encodeURIComponent(pendingToken)}`);
         }
       }

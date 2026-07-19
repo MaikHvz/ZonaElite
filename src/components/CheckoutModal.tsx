@@ -152,7 +152,9 @@ export default function CheckoutModal({
         return;
       }
 
-      window.location.href = `${data.url}?token=${data.token}`;
+      const flowUrl = new URL(data.url);
+      flowUrl.searchParams.set("token", data.token);
+      window.location.href = flowUrl.toString();
     } catch {
       setError("Error de conexión. Intenta de nuevo.");
       setProcessing(false);
@@ -304,7 +306,7 @@ export default function CheckoutModal({
                 <span className="material-symbols-outlined text-[18px]">
                   credit_card
                 </span>
-                Pagar con Webpay
+                Pagar con Flow
               </>
             )}
           </button>

@@ -1,21 +1,23 @@
 import { getAdminClient } from "@/lib/supabase/admin";
+import {
+  verifyFlowCallbackSignature,
+  verifyFlowPayment,
+  FLOW_LOG_PREFIX,
+} from "@/lib/flow";
+import {
+  confirmAndCreateMembership,
+  markPaymentAsPaid,
+  findPaymentByToken,
+} from "@/lib/flow-helpers";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
 
-interface PaymentRow {
-  id: string;
-  user_id: string;
-  commerce_order: string | null;
-  status: string;
-  concept: string | null;
-  flow_token: string | null;
-  flow_order: number | null;
-  beneficiary_id: string | null;
-}
+const CONFIRM_LOG = `${FLOW_LOG_PREFIX}/confirmation`;
 
 export async function POST(request: Request) {
   let token: string | null = null;
+  let signatureBody: Record<string, string> | null = null;
 
   try {
     const contentType = request.headers.get("content-type") || "";
@@ -24,23 +26,47 @@ export async function POST(request: Request) {
       const text = await request.text();
       const params = new URLSearchParams(text);
       token = params.get("token");
+      signatureBody = {};
+      params.forEach((value, key) => {
+        signatureBody![key] = value;
+      });
     } else if (contentType.includes("application/json")) {
       const body = await request.json();
       token = body.token;
+      signatureBody = body;
     }
-  } catch {
+  } catch (err) {
+    console.error(CONFIRM_LOG, "Failed to parse request body:", err);
     return new Response("OK", { status: 200 });
   }
 
   if (!token) {
-    console.log("[flow-confirm] No token in request body");
+    console.warn(CONFIRM_LOG, "No token in request body");
     return new Response("OK", { status: 200 });
   }
 
-  console.log("[flow-confirm] Received token:", token);
+  if (signatureBody && signatureBody.s) {
+    try {
+      const isValid = verifyFlowCallbackSignature(
+        signatureBody,
+        signatureBody.s
+      );
+      if (!isValid) {
+        console.warn(CONFIRM_LOG, "Invalid HMAC signature on callback!");
+      } else {
+        console.log(CONFIRM_LOG, "HMAC signature verified OK");
+      }
+    } catch (err) {
+      console.error(CONFIRM_LOG, "HMAC verification error:", err);
+    }
+  } else {
+    console.warn(CONFIRM_LOG, "No signature (s) in callback body");
+  }
+
+  console.log(CONFIRM_LOG, "Received confirmation for token:", token);
 
   processInBackground(token).catch((err) => {
-    console.error("[flow-confirm] Background processing error:", err);
+    console.error(CONFIRM_LOG, "Background processing failed:", err);
   });
 
   return new Response("OK", { status: 200 });
@@ -49,116 +75,66 @@ export async function POST(request: Request) {
 async function processInBackground(token: string) {
   const supabase = getAdminClient();
 
-  let payment: PaymentRow | null = null;
-
-  const { data: byToken } = await supabase
-    .from("payments")
-    .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id")
-    .eq("flow_token", token)
-    .maybeSingle();
-
-  if (byToken) {
-    payment = byToken as PaymentRow;
-  }
+  const payment = await findPaymentByToken(supabase, token);
 
   if (!payment) {
-    console.error("[flow-confirm] Payment not found for token:", token);
+    console.error(CONFIRM_LOG, "Payment not found for token:", token);
     return;
   }
 
   if (payment.status === "pagado") {
-    console.log("[flow-confirm] Payment already pagado:", payment.id);
+    console.log(CONFIRM_LOG, "Payment already pagado:", payment.id);
     return;
   }
 
-  await supabase
-    .from("payments")
-    .update({
-      status: "pagado",
-      paid_at: new Date().toISOString(),
-      flow_token: payment.flow_token || token,
-    })
-    .eq("id", payment.id);
+  let flowVerified = false;
+  let flowOrder: number | undefined;
 
-  console.log("[flow-confirm] Payment marked pagado:", payment.id);
-
-  const metadataMatch = payment.concept?.match(/^Membresía\s+(.+)$/);
-  const planName = metadataMatch ? metadataMatch[1].trim() : null;
-  if (!planName) {
-    console.error("[flow-confirm] Could not extract plan name from:", payment.concept);
-    return;
-  }
-
-  const { data: plan } = await supabase
-    .from("membership_plans")
-    .select("id, duration_days")
-    .ilike("name", planName)
-    .single();
-
-  if (!plan) {
-    console.error("[flow-confirm] Plan not found:", planName);
-    return;
-  }
-
-  let targetBeneficiaryId = payment.beneficiary_id;
-
-  if (!targetBeneficiaryId) {
-    const { data: ownBeneficiary } = await supabase
-      .from("beneficiaries")
-      .select("id")
-      .eq("profile_id", payment.user_id)
-      .maybeSingle();
-    if (ownBeneficiary) {
-      targetBeneficiaryId = ownBeneficiary.id;
+  try {
+    const verification = await verifyFlowPayment(token);
+    if (verification.status === 2) {
+      flowVerified = true;
+      flowOrder = verification.flowOrder;
+    } else {
+      console.warn(
+        CONFIRM_LOG,
+        "Flow says payment is NOT approved. Status:",
+        verification.status,
+        "Payment ID:",
+        payment.id
+      );
+      const statusMap: Record<number, string> = {
+        3: "rechazado",
+        4: "cancelado",
+        5: "expirado",
+      };
+      const newStatus = statusMap[verification.status] || payment.status;
+      await supabase
+        .from("payments")
+        .update({ status: newStatus })
+        .eq("id", payment.id);
+      return;
     }
+  } catch (err) {
+    console.error(CONFIRM_LOG, "Flow verification failed, proceeding with local data:", err);
   }
 
-  if (!targetBeneficiaryId) {
-    console.error("[flow-confirm] No beneficiary found for user:", payment.user_id);
-    return;
+  if (!flowVerified) {
+    console.warn(
+      CONFIRM_LOG,
+      "Could not verify with Flow API, marking as pagado based on callback"
+    );
   }
 
-  const { data: existingMembership } = await supabase
-    .from("memberships")
-    .select("id")
-    .eq("beneficiary_id", targetBeneficiaryId)
-    .eq("plan_id", plan.id)
-    .eq("status", "activa")
-    .gte("created_at", new Date(Date.now() - 10 * 60 * 1000).toISOString())
-    .maybeSingle();
+  await markPaymentAsPaid(supabase, payment.id, token, flowOrder);
 
-  if (existingMembership) {
-    await supabase
-      .from("payments")
-      .update({ membership_id: existingMembership.id })
-      .eq("id", payment.id);
-    console.log("[flow-confirm] Linked to existing membership:", existingMembership.id);
-    return;
-  }
+  const result = await confirmAndCreateMembership(
+    supabase,
+    payment.id,
+    payment.user_id
+  );
 
-  const today = new Date().toISOString().split("T")[0];
-  const endDate = new Date(Date.now() + plan.duration_days * 86400000)
-    .toISOString()
-    .split("T")[0];
-
-  const { data: membership } = await supabase
-    .from("memberships")
-    .insert({
-      beneficiary_id: targetBeneficiaryId,
-      plan_id: plan.id,
-      purchased_by: payment.user_id,
-      start_date: today,
-      end_date: endDate,
-      status: "activa",
-    })
-    .select("id")
-    .single();
-
-  if (membership) {
-    await supabase
-      .from("payments")
-      .update({ membership_id: membership.id })
-      .eq("id", payment.id);
-    console.log("[flow-confirm] Created membership:", membership.id);
+  if (!result.success) {
+    console.error(CONFIRM_LOG, "Failed to create membership:", result.error);
   }
 }

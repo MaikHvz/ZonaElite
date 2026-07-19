@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
-import { createFlowOrder, verifyFlowPayment } from "@/lib/flow";
+import { createFlowOrder, verifyFlowPayment, FLOW_LOG_PREFIX } from "@/lib/flow";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 10;
+
+const ROUTE_LOG = `${FLOW_LOG_PREFIX}/create-order`;
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +17,7 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
+      console.warn(ROUTE_LOG, "Unauthorized request:", authError?.message);
       return NextResponse.json(
         { error: "Inicia sesión para continuar" },
         { status: 401 }
@@ -35,6 +41,7 @@ export async function POST(request: Request) {
       .single();
 
     if (planError || !plan) {
+      console.warn(ROUTE_LOG, "Plan not found:", planId, planError?.message);
       return NextResponse.json(
         { error: "Plan no encontrado" },
         { status: 400 }
@@ -55,6 +62,7 @@ export async function POST(request: Request) {
       .single();
 
     if (benError || !beneficiary) {
+      console.warn(ROUTE_LOG, "Beneficiary not found:", beneficiaryId, benError?.message);
       return NextResponse.json(
         { error: "Beneficiario no válido" },
         { status: 400 }
@@ -91,7 +99,6 @@ export async function POST(request: Request) {
 
     const commerceOrder = crypto.randomUUID();
 
-    // Prevenir pagos duplicados: si ya hay un pago pendiente reciente para este plan/beneficiario
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const { data: existingPending } = await supabase
       .from("payments")
@@ -102,19 +109,23 @@ export async function POST(request: Request) {
       .gte("created_at", fiveMinAgo)
       .maybeSingle();
 
-    // Si existe un pago pendiente con flow_token, redirigir a Flow con ese token
     if (existingPending?.flow_token) {
-      const verifyRes = await verifyFlowPayment(existingPending.flow_token);
-      if (verifyRes.status === 2) {
-        // Ya fue confirmado, limpiar el pendiente
-        await supabase
-          .from("payments")
-          .update({ status: "pagado", paid_at: new Date().toISOString() })
-          .eq("id", existingPending.id);
+      console.log(ROUTE_LOG, "Reusing existing pending payment:", existingPending.id);
+
+      try {
+        const verifyRes = await verifyFlowPayment(existingPending.flow_token);
+        if (verifyRes.status === 2) {
+          await supabase
+            .from("payments")
+            .update({ status: "pagado", paid_at: new Date().toISOString() })
+            .eq("id", existingPending.id);
+        }
+      } catch (verifyErr) {
+        console.warn(ROUTE_LOG, "Verify on reuse failed (continuing):", verifyErr);
       }
-      // Retornar el token existente para reutilizar
+
       return NextResponse.json({
-        url: `https://sandbox.flow.cl/aplicacion/index.php?token=${existingPending.flow_token}`,
+        url: existingPending.flow_token,
         token: existingPending.flow_token,
         reused: true,
       });
@@ -135,22 +146,26 @@ export async function POST(request: Request) {
       .single();
 
     if (paymentError || !payment) {
-      console.error("Payment insert error:", paymentError);
+      console.error(ROUTE_LOG, "Payment insert error:", paymentError);
       return NextResponse.json(
         { error: "Error al procesar pago" },
         { status: 500 }
       );
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://zona-elite-six.vercel.app";
+    console.log(ROUTE_LOG, "Payment created:", {
+      paymentId: payment.id,
+      userId: user.id,
+      planName: plan.name,
+      amount: plan.price,
+      beneficiaryId: beneficiary.id,
+    });
 
     const flowResponse = await createFlowOrder({
       commerceOrder,
       subject: `Membresía ${plan.name} - ZONAELITE`,
       amount: plan.price,
       email: user.email || "",
-      urlConfirmation: `${baseUrl}/api/flow/confirmation`,
-      urlReturn: `${baseUrl}/dashboard/pagos`,
       metadata: {
         paymentId: payment.id,
         planId: plan.id,
@@ -166,12 +181,17 @@ export async function POST(request: Request) {
       })
       .eq("id", payment.id);
 
+    console.log(ROUTE_LOG, "Order created in Flow:", {
+      paymentId: payment.id,
+      flowOrder: flowResponse.flowOrder,
+    });
+
     return NextResponse.json({
       url: flowResponse.url,
       token: flowResponse.token,
     });
   } catch (error) {
-    console.error("Create order error:", error);
+    console.error(ROUTE_LOG, "Unexpected error:", error);
     return NextResponse.json(
       { error: "Error al procesar pago. Intenta de nuevo." },
       { status: 500 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "@/providers/SessionProvider";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   getUserPayments,
@@ -27,6 +27,7 @@ export default function PagosPage() {
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState<"success" | "failed" | null>(null);
+  const verifyingRef = useRef(false);
   const pageSize = 20;
   const totalPages = Math.ceil(total / pageSize);
 
@@ -50,31 +51,38 @@ export default function PagosPage() {
     }
   }, [flowToken]);
 
-  // Verificar pago cuando el usuario vuelve de Flow con token
   useEffect(() => {
     const tokenToVerify = flowToken || sessionStorage.getItem(FLOW_TOKEN_KEY);
-    if (!tokenToVerify || !user || verifying) return;
+    if (!tokenToVerify || !user || verifying || verifyingRef.current) return;
 
     sessionStorage.removeItem(FLOW_TOKEN_KEY);
+    verifyingRef.current = true;
 
     setVerifying(true);
     fetch(`/api/flow/verify?token=${encodeURIComponent(tokenToVerify)}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((result) => {
         if (result.status === "pagado") {
           setVerified("success");
+        } else if (result.status === "not_found") {
+          setVerified("failed");
         } else {
           setVerified("failed");
         }
         router.replace("/dashboard/pagos");
         fetchPayments();
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("[flow-verify] Client verification error:", err);
         setVerified("failed");
         router.replace("/dashboard/pagos");
       })
       .finally(() => {
         setVerifying(false);
+        verifyingRef.current = false;
       });
   }, [flowToken, user, verifying, router, fetchPayments]);
 
