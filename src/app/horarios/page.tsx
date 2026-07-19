@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import Footer from "@/components/Footer";
 import PageCTA from "@/components/PageCTA";
+import EnrollModal from "@/components/EnrollModal";
 
 interface Schedule {
   id: string;
@@ -27,22 +28,37 @@ interface ScheduleCell {
   schedule: Schedule;
   enrolled: number;
   userEnrolled: boolean;
-  userBeneficiaryId: string | null;
+}
+
+interface Toast {
+  id: number;
+  message: string;
+  type: "success" | "error";
 }
 
 const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+let toastId = 0;
 
 export default function HorariosPage() {
   const [grid, setGrid] = useState<Record<string, Record<string, ScheduleCell>>>({});
   const [times, setTimes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<{ id: string; beneficiaryId: string | null; activePlan: string | null; category: string | null } | null>(null);
-  const [enrolling, setEnrolling] = useState<string | null>(null);
-  const [showOverlay, setShowOverlay] = useState(false);
-  const [overlayMessage, setOverlayMessage] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
+  const [selectedEnrolledCount, setSelectedEnrolledCount] = useState(0);
 
   const supabase = createClient();
+
+  const addToast = (message: string, type: "success" | "error" = "success") => {
+    const id = ++toastId;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+  };
 
   const loadSchedule = useCallback(async () => {
     const { data: schedules } = await supabase
@@ -64,14 +80,13 @@ export default function HorariosPage() {
       const { count } = await supabase
         .from("class_enrollments")
         .select("*", { count: "exact", head: true })
-        .eq("session_id", s.id);
+        .eq("schedule_id", s.id);
 
       if (!enriched[time]) enriched[time] = {};
       enriched[time][day] = {
         schedule: s,
         enrolled: count || 0,
         userEnrolled: false,
-        userBeneficiaryId: null,
       };
     }
 
@@ -84,96 +99,26 @@ export default function HorariosPage() {
   const loadUser = useCallback(async () => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) return;
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", authUser.id)
-      .single();
-
-    if (!profile) return;
-
-    const { data: beneficiary } = await supabase
-      .from("beneficiaries")
-      .select("id, category")
-      .eq("profile_id", authUser.id)
-      .maybeSingle();
-
-    const { data: membership } = await supabase
-      .from("memberships")
-      .select("plan_id, membership_plans(name)")
-      .eq("beneficiary_id", beneficiary?.id || "")
-      .eq("status", "activa")
-      .gte("end_date", new Date().toISOString().split("T")[0])
-      .maybeSingle();
-
-    setUser({
-      id: authUser.id,
-      beneficiaryId: beneficiary?.id || null,
-      activePlan: membership?.plan_id || null,
-      category: beneficiary?.category || null,
-    });
+    setUserId(authUser.id);
   }, [supabase]);
 
   useEffect(() => {
     Promise.all([loadSchedule(), loadUser()]);
   }, [loadSchedule, loadUser]);
 
-  const handleEnroll = async (schedule: Schedule) => {
-    if (!user) {
-      setOverlayMessage("Para agendar una clase debes iniciar sesión y tener un plan activo.");
-      setShowOverlay(true);
+  const handleAgendar = (schedule: Schedule, enrolledCount: number) => {
+    if (!userId) {
+      addToast("Inicia sesión para agendar clases", "error");
       return;
     }
+    setSelectedSchedule(schedule);
+    setSelectedEnrolledCount(enrolledCount);
+    setModalOpen(true);
+  };
 
-    if (!user.beneficiaryId) {
-      setOverlayMessage("No se encontró tu perfil de beneficiario. Contacta al administrador.");
-      setShowOverlay(true);
-      return;
-    }
-
-    if (schedule.category === "ninos" && user.category !== "nino") {
-      setOverlayMessage("Esta clase es solo para niños.");
-      setShowOverlay(true);
-      return;
-    }
-
-    if (schedule.category === "adultos" && user.category !== "adulto") {
-      setOverlayMessage("Esta clase es solo para adultos.");
-      setShowOverlay(true);
-      return;
-    }
-
-    if (schedule.class_plans.length > 0 && !schedule.class_plans.some((cp) => cp.plan_id === user.activePlan)) {
-      setOverlayMessage("Tu plan actual no está habilitado para esta clase. Revisa los planes disponibles.");
-      setShowOverlay(true);
-      return;
-    }
-
-    if (!user.activePlan) {
-      setOverlayMessage("Necesitas un plan activo para inscribirte. Visita la sección de membresías.");
-      setShowOverlay(true);
-      return;
-    }
-
-    setEnrolling(schedule.id);
-    const { error } = await supabase.from("class_enrollments").insert({
-      session_id: schedule.id,
-      beneficiary_id: user.beneficiaryId,
-    });
-    setEnrolling(null);
-
-    if (error) {
-      if (error.code === "23505") {
-        setOverlayMessage("Ya estás inscrito en esta clase.");
-      } else {
-        setOverlayMessage("Error al inscribirse. Intenta nuevamente.");
-      }
-      setShowOverlay(true);
-      return;
-    }
-
-    await loadSchedule();
+  const handleEnrolled = () => {
+    loadSchedule();
+    addToast("Inscripción exitosa", "success");
   };
 
   const legendItems = [
@@ -191,27 +136,33 @@ export default function HorariosPage() {
   return (
     <>
       <main className="min-h-screen bg-background">
-        {/* Overlay */}
-        {showOverlay && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowOverlay(false)}>
-            <div className="bg-surface-container-lowest border border-on-surface/10 rounded-2xl w-full max-w-md p-8 text-center" onClick={(e) => e.stopPropagation()}>
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-5">
-                <span className="material-symbols-outlined text-primary text-[32px]">lock</span>
-              </div>
-              <h3 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase mb-3">Atención</h3>
-              <p className="font-[family-name:var(--font-body-md)] text-[15px] text-on-surface-variant leading-[24px] mb-6">{overlayMessage}</p>
-              <div className="flex flex-col gap-3">
-                <Link href="/auth" className="block text-center px-6 py-3 rounded-xl btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[14px] uppercase tracking-wider hover:opacity-90 transition-opacity">
-                  Iniciar Sesión
-                </Link>
-                <Link href="/dashboard/membresias" className="block text-center px-6 py-3 rounded-xl border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[14px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider">
-                  Ver Membresías
-                </Link>
-                <button onClick={() => setShowOverlay(false)} className="text-[13px] text-on-surface-variant/60 hover:text-on-surface-variant transition-colors cursor-pointer">Cerrar</button>
+        {/* Toasts */}
+        <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none">
+          {toasts.map((t) => (
+            <div key={t.id} className={`pointer-events-auto px-4 py-3 rounded-xl border shadow-lg backdrop-blur-sm animate-slide-in-right ${
+              t.type === "success"
+                ? "bg-green-900/90 border-green-500/30 text-green-200"
+                : "bg-red-900/90 border-red-500/30 text-red-200"
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">
+                  {t.type === "success" ? "check_circle" : "error"}
+                </span>
+                <span className="font-[family-name:var(--font-body-sm)] text-[13px]">{t.message}</span>
               </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+
+        {/* Enroll Modal */}
+        <EnrollModal
+          open={modalOpen}
+          schedule={selectedSchedule}
+          enrolledCount={selectedEnrolledCount}
+          userId={userId || ""}
+          onClose={() => setModalOpen(false)}
+          onEnrolled={handleEnrolled}
+        />
 
         {/* Header */}
         <section className="pt-24 pb-8 px-5 md:px-6">
@@ -310,14 +261,13 @@ export default function HorariosPage() {
                               </div>
                               {!isFull && (
                                 <button
-                                  onClick={() => handleEnroll(s)}
-                                  disabled={enrolling === s.id || cell.userEnrolled}
-                                  className="mt-2 w-full text-center py-1 rounded-lg text-[10px] md:text-[11px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
+                                  onClick={() => handleAgendar(s, cell.enrolled)}
+                                  className="mt-2 w-full text-center py-1 rounded-lg text-[10px] md:text-[11px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider transition-colors cursor-pointer"
                                   style={{ color: color, border: `1px solid ${color}30` }}
                                   onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = `${color}15`)}
                                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                                 >
-                                  {enrolling === s.id ? "..." : cell.userEnrolled ? "Inscrito ✓" : "Agendar"}
+                                  {cell.userEnrolled ? "Inscrito ✓" : "Agendar"}
                                 </button>
                               )}
                             </div>
