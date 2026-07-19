@@ -15,6 +15,7 @@ interface PaymentRow {
   flow_order: number | null;
   beneficiary_id: string | null;
   membership_id: string | null;
+  amount?: number | null;
 }
 
 export async function confirmAndCreateMembership(
