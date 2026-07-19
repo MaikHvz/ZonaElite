@@ -6,7 +6,7 @@
 
 ## 1. Visión General
 
-**ZONAELITE** es una academia de artes marciales (Kenpo, Kickboxing, MMA) en La Serena, Chile. La aplicación web incluye:
+**ZONAELITE** es una academsia de artes marciales (Kenpo, Kickboxing, MMA) en La Serena, Chile. La aplicación web incluye:
 
 - **Landing page** pública con información de la academia
 - **Catálogos públicos**: productos, eventos, blog, horarios
