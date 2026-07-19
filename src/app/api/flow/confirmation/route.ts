@@ -1,40 +1,28 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import {
-  verifyFlowCallbackSignature,
   verifyFlowPayment,
   FLOW_LOG_PREFIX,
 } from "@/lib/flow";
-import {
-  confirmAndCreateMembership,
-  markPaymentAsPaid,
-  findPaymentByToken,
-} from "@/lib/flow-helpers";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 10;
+export const maxDuration = 30;
 
-const CONFIRM_LOG = `${FLOW_LOG_PREFIX}/confirmation`;
+const L = `${FLOW_LOG_PREFIX}/confirmation`;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const token = searchParams.get("token");
 
-  if (!token) {
-    return new Response("OK", { status: 200 });
-  }
+  console.log(L, "GET fallback hit, token:", token);
 
-  console.log(CONFIRM_LOG, "GET fallback — token from query:", token);
+  if (!token) return new Response("OK", { status: 200 });
 
-  processInBackground(token).catch((err) => {
-    console.error(CONFIRM_LOG, "Background processing failed (GET):", err);
-  });
-
+  await processInBackground(token);
   return new Response("OK", { status: 200 });
 }
 
 export async function POST(request: Request) {
   let token: string | null = null;
-  let signatureBody: Record<string, string> | null = null;
 
   try {
     const contentType = request.headers.get("content-type") || "";
@@ -43,64 +31,67 @@ export async function POST(request: Request) {
       const text = await request.text();
       const params = new URLSearchParams(text);
       token = params.get("token");
-      signatureBody = {};
-      params.forEach((value, key) => {
-        signatureBody![key] = value;
-      });
     } else if (contentType.includes("application/json")) {
       const body = await request.json();
       token = body.token;
-      signatureBody = body;
     }
   } catch (err) {
-    console.error(CONFIRM_LOG, "Failed to parse request body:", err);
+    console.error(L, "Parse error:", err);
     return new Response("OK", { status: 200 });
   }
 
   if (!token) {
-    console.warn(CONFIRM_LOG, "No token in request body");
+    console.warn(L, "No token in body");
     return new Response("OK", { status: 200 });
   }
 
-  if (signatureBody && signatureBody.s) {
-    try {
-      const isValid = verifyFlowCallbackSignature(
-        signatureBody,
-        signatureBody.s
-      );
-      if (!isValid) {
-        console.warn(CONFIRM_LOG, "Invalid HMAC signature on callback!");
-      } else {
-        console.log(CONFIRM_LOG, "HMAC signature verified OK");
-      }
-    } catch (err) {
-      console.error(CONFIRM_LOG, "HMAC verification error:", err);
-    }
-  } else {
-    console.warn(CONFIRM_LOG, "No signature (s) in callback body");
-  }
-
-  console.log(CONFIRM_LOG, "Received confirmation for token:", token);
+  console.log(L, "POST received, token:", token);
 
   processInBackground(token).catch((err) => {
-    console.error(CONFIRM_LOG, "Background processing failed:", err);
+    console.error(L, "processInBackground FAILED:", err);
   });
 
   return new Response("OK", { status: 200 });
 }
 
 async function processInBackground(token: string) {
-  const supabase = getAdminClient();
+  console.log(L, "[1/7] Starting background processing for token:", token);
 
-  const payment = await findPaymentByToken(supabase, token);
+  let supabase;
+  try {
+    supabase = getAdminClient();
+    console.log(L, "[2/7] Admin client created OK");
+  } catch (err) {
+    console.error(L, "[2/7] getAdminClient() THREW:", err);
+    return;
+  }
+
+  let payment;
+  try {
+    const result = await supabase
+      .from("payments")
+      .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id, membership_id")
+      .eq("flow_token", token)
+      .maybeSingle();
+    payment = result.data;
+    const error = result.error;
+    if (error) {
+      console.error(L, "[3/7] Supabase query ERROR:", JSON.stringify(error));
+      return;
+    }
+    console.log(L, "[3/7] Payment found:", payment ? { id: payment.id, status: payment.status, beneficiary_id: payment.beneficiary_id } : "NULL");
+  } catch (err) {
+    console.error(L, "[3/7] findPaymentByToken THREW:", err);
+    return;
+  }
 
   if (!payment) {
-    console.error(CONFIRM_LOG, "Payment not found for token:", token);
+    console.error(L, "[3/7] No payment for token:", token);
     return;
   }
 
   if (payment.status === "pagado") {
-    console.log(CONFIRM_LOG, "Payment already pagado:", payment.id);
+    console.log(L, "[3/7] Already pagado, skipping");
     return;
   }
 
@@ -108,50 +99,160 @@ async function processInBackground(token: string) {
   let flowOrder: number | undefined;
 
   try {
+    console.log(L, "[4/7] Calling Flow API verify...");
     const verification = await verifyFlowPayment(token);
+    console.log(L, "[4/7] Flow response:", { status: verification.status, flowOrder: verification.flowOrder });
+
     if (verification.status === 2) {
       flowVerified = true;
       flowOrder = verification.flowOrder;
     } else {
-      console.warn(
-        CONFIRM_LOG,
-        "Flow says payment is NOT approved. Status:",
-        verification.status,
-        "Payment ID:",
-        payment.id
-      );
-      const statusMap: Record<number, string> = {
-        3: "rechazado",
-        4: "cancelado",
-        5: "expirado",
-      };
-      const newStatus = statusMap[verification.status] || payment.status;
-      await supabase
-        .from("payments")
-        .update({ status: newStatus })
-        .eq("id", payment.id);
+      console.warn(L, "[4/7] Flow NOT approved, status:", verification.status);
       return;
     }
   } catch (err) {
-    console.error(CONFIRM_LOG, "Flow verification failed, proceeding with local data:", err);
+    console.error(L, "[4/7] Flow verify THREW:", err);
+    console.log(L, "[4/7] Proceeding anyway without Flow verification");
   }
 
-  if (!flowVerified) {
-    console.warn(
-      CONFIRM_LOG,
-      "Could not verify with Flow API, marking as pagado based on callback"
-    );
+  console.log(L, "[5/7] Marking payment as pagado...");
+  try {
+    const updateResult = await supabase
+      .from("payments")
+      .update({
+        status: "pagado",
+        paid_at: new Date().toISOString(),
+        ...(flowOrder ? { flow_order: flowOrder } : {}),
+      })
+      .eq("id", payment.id);
+    if (updateResult.error) {
+      console.error(L, "[5/7] Update payment ERROR:", JSON.stringify(updateResult.error));
+      return;
+    }
+    console.log(L, "[5/7] Payment marked pagado OK");
+  } catch (err) {
+    console.error(L, "[5/7] Update payment THREW:", err);
+    return;
   }
 
-  await markPaymentAsPaid(supabase, payment.id, token, flowOrder);
-
-  const result = await confirmAndCreateMembership(
-    supabase,
-    payment.id,
-    payment.user_id
-  );
-
-  if (!result.success) {
-    console.error(CONFIRM_LOG, "Failed to create membership:", result.error);
+  console.log(L, "[6/7] Creating membership...");
+  try {
+    await createMembershipDebug(supabase, payment);
+  } catch (err) {
+    console.error(L, "[6/7] createMembership THREW:", err);
   }
+
+  console.log(L, "[7/7] Done");
+}
+
+async function createMembershipDebug(supabase: any, payment: any) {
+  const paymentId = payment.id;
+  const userId = payment.user_id;
+
+  const { data: fullPayment, error: fpErr } = await supabase
+    .from("payments")
+    .select("id, user_id, concept, membership_id, beneficiary_id")
+    .eq("id", paymentId)
+    .single();
+  console.log(L, "  [m1] Full payment:", fullPayment, "error:", fpErr);
+
+  if (!fullPayment) {
+    console.error(L, "  [m1] Payment not found in second query!");
+    return;
+  }
+
+  if (fullPayment.membership_id) {
+    console.log(L, "  [m1] Already has membership:", fullPayment.membership_id);
+    return;
+  }
+
+  const concept = fullPayment.concept;
+  const metadataMatch = concept?.match(/^Membres[íi]a\s+(.+)$/i);
+  const planName = metadataMatch ? metadataMatch[1].trim() : null;
+  console.log(L, "  [m2] Concept:", concept, "-> planName:", planName);
+
+  if (!planName) {
+    console.error(L, "  [m2] Could not extract plan name from concept:", concept);
+    return;
+  }
+
+  const { data: plans, error: planErr } = await supabase
+    .from("membership_plans")
+    .select("id, name, duration_days, active")
+    .ilike("name", planName);
+  console.log(L, "  [m3] Plans found:", plans, "error:", planErr);
+
+  if (!plans || plans.length === 0) {
+    const { data: allPlans } = await supabase
+      .from("membership_plans")
+      .select("id, name, active");
+    console.error(L, "  [m3] Plan not found. All plans in DB:", allPlans);
+    return;
+  }
+
+  const plan = plans[0];
+  console.log(L, "  [m3] Using plan:", { id: plan.id, name: plan.name, duration_days: plan.duration_days, active: plan.active });
+
+  let targetBeneficiaryId = fullPayment.beneficiary_id;
+  console.log(L, "  [m4] beneficiary_id from payment:", targetBeneficiaryId);
+
+  if (!targetBeneficiaryId) {
+    console.log(L, "  [m4] No beneficiary in payment, looking up own beneficiary for user:", userId);
+    const { data: ownBen, error: benErr } = await supabase
+      .from("beneficiaries")
+      .select("id")
+      .eq("profile_id", userId)
+      .maybeSingle();
+    console.log(L, "  [m4] Own beneficiary:", ownBen, "error:", benErr);
+    if (ownBen) targetBeneficiaryId = ownBen.id;
+  }
+
+  if (!targetBeneficiaryId) {
+    console.error(L, "  [m4] No beneficiary found for user:", userId);
+    return;
+  }
+
+  const { data: existing, error: exErr } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("beneficiary_id", targetBeneficiaryId)
+    .eq("plan_id", plan.id)
+    .eq("status", "activa")
+    .gte("created_at", new Date(Date.now() - 10 * 60 * 1000).toISOString())
+    .maybeSingle();
+  console.log(L, "  [m5] Existing membership:", existing, "error:", exErr);
+
+  if (existing) {
+    await supabase.from("payments").update({ membership_id: existing.id }).eq("id", paymentId);
+    console.log(L, "  [m5] Linked to existing:", existing.id);
+    return;
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  const endDate = new Date(Date.now() + plan.duration_days * 86400000).toISOString().split("T")[0];
+
+  console.log(L, "  [m6] Inserting membership:", { beneficiary_id: targetBeneficiaryId, plan_id: plan.id, purchased_by: userId, start: today, end: endDate });
+
+  const { data: membership, error: memErr } = await supabase
+    .from("memberships")
+    .insert({
+      beneficiary_id: targetBeneficiaryId,
+      plan_id: plan.id,
+      purchased_by: userId,
+      start_date: today,
+      end_date: endDate,
+      status: "activa",
+    })
+    .select("id")
+    .single();
+
+  console.log(L, "  [m6] Membership insert result:", membership, "error:", memErr);
+
+  if (!membership) {
+    console.error(L, "  [m6] MEMBERSHIP INSERT FAILED:", JSON.stringify(memErr));
+    return;
+  }
+
+  await supabase.from("payments").update({ membership_id: membership.id }).eq("id", paymentId);
+  console.log(L, "  [m7] Membership created and linked:", membership.id);
 }
