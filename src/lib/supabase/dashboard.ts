@@ -440,7 +440,16 @@ export async function getAttendanceForSession(sessionId: string) {
 
     if (!session) return { beneficiaries: [] as AttendanceBeneficiary[] };
 
-    const { data: membersWithMembership } = await supabase
+    const { data: enrollments } = await supabase
+      .from("class_enrollments")
+      .select("beneficiary_id")
+      .or(`session_id.eq.${sessionId},schedule_id.eq.${session.schedule_id}`);
+
+    const enrolledIds = [...new Set((enrollments || []).map((e) => e.beneficiary_id))];
+
+    if (enrolledIds.length === 0) return { beneficiaries: [] as AttendanceBeneficiary[] };
+
+    const { data: members } = await supabase
       .from("memberships")
       .select(
         `
@@ -454,10 +463,11 @@ export async function getAttendanceForSession(sessionId: string) {
       )
       .eq("status", "activa")
       .lte("start_date", new Date().toISOString().split("T")[0])
-      .gte("end_date", new Date().toISOString().split("T")[0]);
+      .gte("end_date", new Date().toISOString().split("T")[0])
+      .in("beneficiary_id", enrolledIds);
 
     const beneficiaryMap = new Map<string, AttendanceBeneficiary>();
-    for (const m of membersWithMembership || []) {
+    for (const m of members || []) {
       if (beneficiaryMap.has(m.beneficiary_id)) continue;
       const b = m.beneficiary as unknown as {
         id: string;
@@ -473,6 +483,31 @@ export async function getAttendanceForSession(sessionId: string) {
         category,
         attendance: attendanceByBeneficiary.get(m.beneficiary_id) || null,
       });
+    }
+
+    for (const id of enrolledIds) {
+      if (!beneficiaryMap.has(id)) {
+        const { data: ben } = await supabase
+          .from("beneficiaries")
+          .select("id, dependent:dependents(full_name, category), profile:profiles(full_name)")
+          .eq("id", id)
+          .single();
+        if (ben) {
+          const b = ben as unknown as {
+            id: string;
+            dependent: { full_name: string; category: string } | null;
+            profile: { full_name: string } | null;
+          };
+          const name = b.dependent?.full_name || b.profile?.full_name || "Sin nombre";
+          const category = b.dependent?.category || "adulto";
+          beneficiaryMap.set(id, {
+            id,
+            full_name: name,
+            category,
+            attendance: attendanceByBeneficiary.get(id) || null,
+          });
+        }
+      }
     }
 
     return {
