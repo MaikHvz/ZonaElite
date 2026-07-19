@@ -28,9 +28,23 @@ export async function POST(request: Request) {
 
   const results: Record<string, unknown> = { token };
 
-  const admin = getAdminClient();
+  let admin;
+  try {
+    admin = getAdminClient();
+  } catch (err) {
+    results.error = "Failed to create admin client";
+    results.details = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(results, { status: 500 });
+  }
 
-  const payment = await findPaymentByToken(admin, token);
+  let payment;
+  try {
+    payment = await findPaymentByToken(admin, token);
+  } catch (err) {
+    results.error = "DB query failed";
+    results.details = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(results, { status: 500 });
+  }
 
   if (!payment) {
     results.error = "Pago no encontrado con ese token en la DB";
@@ -50,12 +64,16 @@ export async function POST(request: Request) {
     results.note = "Ya esta pagado. Verificando membresia...";
 
     if (!payment.membership_id) {
-      const membershipResult = await confirmAndCreateMembership(
-        admin,
-        payment.id,
-        payment.user_id
-      );
-      results.membershipResult = membershipResult;
+      try {
+        const membershipResult = await confirmAndCreateMembership(
+          admin,
+          payment.id,
+          payment.user_id
+        );
+        results.membershipResult = membershipResult;
+      } catch (err) {
+        results.membershipError = err instanceof Error ? err.message : String(err);
+      }
     } else {
       results.note = "Ya tiene membership asociada";
     }

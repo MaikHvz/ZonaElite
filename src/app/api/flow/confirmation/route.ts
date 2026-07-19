@@ -3,6 +3,7 @@ import {
   verifyFlowPayment,
   FLOW_LOG_PREFIX,
 } from "@/lib/flow";
+import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -17,7 +18,8 @@ export async function GET(request: Request) {
 
   if (!token) return new Response("OK", { status: 200 });
 
-  await processInBackground(token);
+  after(() => processInBackground(token));
+
   return new Response("OK", { status: 200 });
 }
 
@@ -47,15 +49,13 @@ export async function POST(request: Request) {
 
   console.log(L, "POST received, token:", token);
 
-  processInBackground(token).catch((err) => {
-    console.error(L, "processInBackground FAILED:", err);
-  });
+  after(() => processInBackground(token));
 
   return new Response("OK", { status: 200 });
 }
 
 async function processInBackground(token: string) {
-  console.log(L, "[1/7] Starting background processing for token:", token);
+  console.log(L, "[1/7] Starting processing for token:", token);
 
   let supabase;
   try {
