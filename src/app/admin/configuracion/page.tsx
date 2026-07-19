@@ -13,11 +13,24 @@ interface AcademySettings {
   social_links: Record<string, string>;
 }
 
+interface GalleryImage {
+  id: string;
+  url: string;
+  alt: string;
+  position: number;
+  active: boolean;
+}
+
 export default function AdminConfiguracionPage() {
   const [settings, setSettings] = useState<AcademySettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const [gallery, setGallery] = useState<GalleryImage[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(true);
+  const [newImageAlt, setNewImageAlt] = useState("");
+  const [addingImage, setAddingImage] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -25,6 +38,15 @@ export default function AdminConfiguracionPage() {
       setSettings(data as AcademySettings);
       setLoading(false);
     });
+
+    supabase
+      .from("gallery_images")
+      .select("*")
+      .order("position")
+      .then(({ data }) => {
+        setGallery((data as GalleryImage[]) || []);
+        setGalleryLoading(false);
+      });
   }, []);
 
   const handleSave = async () => {
@@ -41,6 +63,50 @@ export default function AdminConfiguracionPage() {
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleAddImage = async (url: string) => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("gallery_images")
+      .insert({ url, alt: newImageAlt, position: gallery.length })
+      .select()
+      .single();
+    if (data) {
+      setGallery((prev) => [...prev, data as GalleryImage]);
+      setNewImageAlt("");
+    }
+    setAddingImage(false);
+  };
+
+  const handleDeleteImage = async (id: string) => {
+    const supabase = createClient();
+    await supabase.from("gallery_images").delete().eq("id", id);
+    setGallery((prev) => prev.filter((img) => img.id !== id));
+  };
+
+  const handleToggleImage = async (id: string, active: boolean) => {
+    const supabase = createClient();
+    await supabase.from("gallery_images").update({ active }).eq("id", id);
+    setGallery((prev) => prev.map((img) => img.id === id ? { ...img, active } : img));
+  };
+
+  const handleReorder = async (id: string, direction: "up" | "down") => {
+    const idx = gallery.findIndex((img) => img.id === id);
+    if (idx < 0) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= gallery.length) return;
+
+    const newGallery = [...gallery];
+    [newGallery[idx], newGallery[swapIdx]] = [newGallery[swapIdx], newGallery[idx]];
+
+    const supabase = createClient();
+    const updates = newGallery.map((img, i) =>
+      supabase.from("gallery_images").update({ position: i }).eq("id", img.id)
+    );
+    await Promise.all(updates);
+
+    setGallery(newGallery.map((img, i) => ({ ...img, position: i })));
   };
 
   if (loading) {
@@ -100,6 +166,88 @@ export default function AdminConfiguracionPage() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Gallery Management */}
+        <div className="border-t border-on-surface/5 pt-5">
+          <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase mb-1">Galería de Espacios</h3>
+          <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant mb-4">
+            Imágenes del carrusel en la página /nosotros. Se muestran en el orden indicado.
+          </p>
+
+          {galleryLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-16 bg-surface-container-high/50 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2 mb-4">
+                {gallery.map((img, idx) => (
+                  <div key={img.id} className={`flex items-center gap-3 p-3 rounded-xl border border-on-surface/5 ${img.active ? "" : "opacity-50"}`}>
+                    <img src={img.url} alt={img.alt} className="w-16 h-12 object-cover rounded-lg shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">{img.alt || "Sin título"}</p>
+                      <span className="font-[family-name:var(--font-label-sm)] text-[10px] text-on-surface-variant/60">Posición {idx + 1}</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => handleReorder(img.id, "up")} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-on-surface/5 disabled:opacity-30 cursor-pointer">
+                        <span className="material-symbols-outlined text-on-surface-variant text-[16px]">arrow_upward</span>
+                      </button>
+                      <button onClick={() => handleReorder(img.id, "down")} disabled={idx === gallery.length - 1} className="p-1.5 rounded-lg hover:bg-on-surface/5 disabled:opacity-30 cursor-pointer">
+                        <span className="material-symbols-outlined text-on-surface-variant text-[16px]">arrow_downward</span>
+                      </button>
+                      <button onClick={() => handleToggleImage(img.id, !img.active)} className="p-1.5 rounded-lg hover:bg-on-surface/5 cursor-pointer">
+                        <span className="material-symbols-outlined text-on-surface-variant text-[16px]">{img.active ? "visibility" : "visibility_off"}</span>
+                      </button>
+                      <button onClick={() => handleDeleteImage(img.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 cursor-pointer">
+                        <span className="material-symbols-outlined text-red-400 text-[16px]">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {gallery.length === 0 && (
+                  <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant/60 text-center py-6">
+                    No hay imágenes en la galería
+                  </p>
+                )}
+              </div>
+
+              {/* Add Image */}
+              {addingImage ? (
+                <div className="bg-surface-container-high/30 rounded-xl p-4 space-y-3">
+                  <ImageUpload
+                    value={null}
+                    onChange={(url) => { if (url) handleAddImage(url); }}
+                    folder="gallery"
+                    label="Nueva imagen"
+                  />
+                  <div>
+                    <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Descripción (opcional)</label>
+                    <input
+                      value={newImageAlt}
+                      onChange={(e) => setNewImageAlt(e.target.value)}
+                      placeholder="Ej: Área de entrenamiento"
+                      className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+                    />
+                  </div>
+                  <button onClick={() => setAddingImage(false)} className="text-[12px] text-on-surface-variant/60 hover:text-on-surface-variant cursor-pointer">
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingImage(true)}
+                  className="w-full flex items-center justify-center gap-2 border border-dashed border-on-surface/15 rounded-xl py-3 text-on-surface-variant hover:border-primary/30 hover:text-primary transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">add_photo_alternate</span>
+                  <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider">Agregar imagen</span>
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

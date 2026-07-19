@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Footer from "@/components/Footer";
 import PageCTA from "@/components/PageCTA";
+import GalleryCarousel from "@/components/GalleryCarousel";
 
 export const metadata: Metadata = {
   title: "Academia de Artes Marciales en La Serena | ZONAELITE",
@@ -228,6 +229,9 @@ export default function NosotrosPage() {
             </div>
           </div>
         </section>
+
+        {/* Galería */}
+        <GalleryCarousel />
 
         {/* Disciplinas Detalladas */}
         <section className="py-[64px] md:py-[96px] bg-surface-container-low fade-up">
