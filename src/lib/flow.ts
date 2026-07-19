@@ -24,11 +24,20 @@ export function getFlowConfig() {
 }
 
 function getBaseUrl(): string {
-  return (
+  const raw =
     process.env.NEXT_PUBLIC_BASE_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
-    "https://zona-elite-six.vercel.app"
-  );
+    "https://zona-elite-six.vercel.app";
+
+  let url = raw.replace(/^http:\/\//i, "https://");
+
+  url = url.replace(/\/+$/, "");
+
+  if (raw !== url) {
+    console.warn(FLOW_LOG_PREFIX, "Base URL normalized:", url);
+  }
+
+  return url;
 }
 
 function signFlowParams(

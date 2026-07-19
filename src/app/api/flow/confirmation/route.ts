@@ -15,6 +15,23 @@ export const maxDuration = 10;
 
 const CONFIRM_LOG = `${FLOW_LOG_PREFIX}/confirmation`;
 
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const token = searchParams.get("token");
+
+  if (!token) {
+    return new Response("OK", { status: 200 });
+  }
+
+  console.log(CONFIRM_LOG, "GET fallback — token from query:", token);
+
+  processInBackground(token).catch((err) => {
+    console.error(CONFIRM_LOG, "Background processing failed (GET):", err);
+  });
+
+  return new Response("OK", { status: 200 });
+}
+
 export async function POST(request: Request) {
   let token: string | null = null;
   let signatureBody: Record<string, string> | null = null;
