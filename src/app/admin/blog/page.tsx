@@ -6,6 +6,7 @@ import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
+import ImageUpload from "@/components/admin/ImageUpload";
 
 interface BlogPost { id: string; title: string; slug: string; content: string; cover_image: string | null; status: string; published_at: string | null; created_at: string; }
 
@@ -72,6 +73,7 @@ export default function AdminBlogPage() {
 
       <DataTable
         columns={[
+          { key: "cover_image", label: "Imagen", render: (p) => p.cover_image ? <img src={p.cover_image} alt="" className="w-10 h-10 rounded-lg object-cover" /> : <span className="text-on-surface-variant/30">—</span> },
           { key: "title", label: "Título" },
           { key: "slug", label: "Slug", render: (p) => <span className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">/{p.slug}</span> },
           { key: "status", label: "Estado", render: (p) => <StatusBadge status={p.status} /> },
@@ -101,8 +103,12 @@ export default function AdminBlogPage() {
             <textarea value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} rows={8} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 resize-none" />
           </div>
           <div>
-            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">URL de imagen</label>
-            <input value={form.cover_image} onChange={(e) => setForm({ ...form, cover_image: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+            <ImageUpload
+              value={form.cover_image || null}
+              onChange={(url) => setForm({ ...form, cover_image: url || "" })}
+              folder="blog"
+              label="Imagen de portada"
+            />
           </div>
           <div>
             <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Estado *</label>

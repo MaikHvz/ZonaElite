@@ -6,6 +6,7 @@ import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
+import ImageUpload from "@/components/admin/ImageUpload";
 
 interface Event {
   id: string;
@@ -83,6 +84,7 @@ export default function AdminEventosPage() {
 
       <DataTable
         columns={[
+          { key: "image", label: "Imagen", render: (e) => e.image ? <img src={e.image} alt="" className="w-10 h-10 rounded-lg object-cover" /> : <span className="text-on-surface-variant/30">—</span> },
           { key: "title", label: "Título" },
           { key: "type", label: "Tipo", render: (e) => typeLabel(e.type) },
           { key: "event_date", label: "Fecha", render: (e) => new Date(e.event_date + "T00:00:00").toLocaleDateString("es-CL") },
@@ -127,8 +129,12 @@ export default function AdminEventosPage() {
             </div>
           </div>
           <div>
-            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">URL de imagen</label>
-            <input value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+            <ImageUpload
+              value={form.image || null}
+              onChange={(url) => setForm({ ...form, image: url || "" })}
+              folder="events"
+              label="Imagen del evento"
+            />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-on-surface/5">
             <button onClick={() => setModalOpen(false)} className="px-4 py-2.5 rounded-lg border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[14px] cursor-pointer">Cancelar</button>

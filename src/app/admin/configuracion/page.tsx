@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import ImageUpload from "@/components/admin/ImageUpload";
 
 interface AcademySettings {
   id: string;
@@ -76,8 +77,12 @@ export default function AdminConfiguracionPage() {
           <input value={settings.whatsapp || ""} onChange={(e) => setSettings({ ...settings, whatsapp: e.target.value })} placeholder="+56912345678" className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50" />
         </div>
         <div>
-          <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Logo URL</label>
-          <input value={settings.logo_url || ""} onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })} className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+          <ImageUpload
+            value={settings.logo_url || null}
+            onChange={(url) => setSettings({ ...settings, logo_url: url })}
+            folder="settings"
+            label="Logo de la academia"
+          />
         </div>
 
         <div className="border-t border-on-surface/5 pt-5">

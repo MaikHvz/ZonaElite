@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import PageCTA from "@/components/PageCTA";
 
@@ -82,9 +83,10 @@ export default function ProductosPage() {
             {filtered.map((product) => {
               const img = product.product_images?.sort((a, b) => a.position - b.position)[0];
               return (
-                <article
+                <Link
                   key={product.id}
-                  className="rounded-2xl border border-on-surface/5 bg-surface-container-lowest overflow-hidden hover:border-primary/30 transition-colors group"
+                  href={`/productos/${product.id}`}
+                  className="block rounded-2xl border border-on-surface/5 bg-surface-container-lowest overflow-hidden hover:border-primary/30 transition-colors group"
                 >
                   <div className="h-[200px] bg-surface-container flex items-center justify-center overflow-hidden">
                     {img ? (
@@ -130,7 +132,7 @@ export default function ProductosPage() {
                       )}
                     </div>
                   </div>
-                </article>
+                </Link>
               );
             })}
           </div>
