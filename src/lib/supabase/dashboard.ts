@@ -578,6 +578,255 @@ export async function getAttendanceHistory(
   });
 }
 
+// ─── Attendance Analytics (Admin) ─────────────────────────────────────────────
+
+export interface AttendanceByDiscipline {
+  discipline: string;
+  present: number;
+  absent: number;
+  justified: number;
+  total: number;
+  rate: number;
+}
+
+export interface AttendanceStatusBreakdown {
+  status: string;
+  count: number;
+}
+
+export interface AttendanceTrend {
+  date: string;
+  present: number;
+  absent: number;
+  justified: number;
+  total: number;
+  rate: number;
+}
+
+export async function getAdminAttendanceAnalytics() {
+  return safeQuery(async () => {
+    const supabase = createClient();
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
+    const sixWeeksAgo = new Date(now.getTime() - 42 * 86400000);
+
+    const [attendanceRes, sessionsRes] = await Promise.all([
+      supabase
+        .from("attendance")
+        .select("status, session_id, session:class_sessions(session_date, schedule:schedules(discipline:disciplines(name)))")
+        .gte("marked_at", sixWeeksAgo.toISOString()),
+      supabase
+        .from("class_sessions")
+        .select("id, session_date")
+        .gte("session_date", sixWeeksAgo.toISOString().split("T")[0]),
+    ]);
+
+    const rows = (attendanceRes.data || []) as unknown as Array<{
+      status: string;
+      session_id: string;
+      session: {
+        session_date: string;
+        schedule: { discipline: { name: string } | null } | null;
+      } | null;
+    }>;
+
+    const allSessions = (sessionsRes.data || []) as Array<{ id: string; session_date: string }>;
+
+    // Status breakdown
+    const statusCounts: Record<string, number> = {};
+    rows.forEach((r) => {
+      statusCounts[r.status] = (statusCounts[r.status] || 0) + 1;
+    });
+    const statusBreakdown: AttendanceStatusBreakdown[] = [
+      { status: "presente", count: statusCounts["presente"] || 0 },
+      { status: "ausente", count: statusCounts["ausente"] || 0 },
+      { status: "justificado", count: statusCounts["justificado"] || 0 },
+    ];
+
+    // By discipline
+    const disciplineMap: Record<string, { present: number; absent: number; justified: number; total: number }> = {};
+    rows.forEach((r) => {
+      const discName = r.session?.schedule?.discipline?.name || "Sin disciplina";
+      if (!disciplineMap[discName]) disciplineMap[discName] = { present: 0, absent: 0, justified: 0, total: 0 };
+      disciplineMap[discName].total += 1;
+      if (r.status === "presente") disciplineMap[discName].present += 1;
+      else if (r.status === "ausente") disciplineMap[discName].absent += 1;
+      else disciplineMap[discName].justified += 1;
+    });
+    const byDiscipline: AttendanceByDiscipline[] = Object.entries(disciplineMap)
+      .map(([discipline, data]) => ({
+        discipline,
+        ...data,
+        rate: data.total > 0 ? Math.round((data.present / data.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    // Trend (last 6 weeks, grouped by week)
+    const weekMap: Record<string, { present: number; absent: number; justified: number; total: number; date: string }> = {};
+    for (let i = 5; i >= 0; i--) {
+      const weekStart = new Date(now.getTime() - (i + 1) * 7 * 86400000);
+      const label = `${weekStart.getDate()}/${weekStart.getMonth() + 1}`;
+      weekMap[`w${i}`] = { present: 0, absent: 0, justified: 0, total: 0, date: label };
+    }
+    rows.forEach((r) => {
+      const d = new Date(r.session?.session_date || "");
+      const diff = Math.floor((now.getTime() - d.getTime()) / (7 * 86400000));
+      const key = diff < 6 ? `w${5 - diff}` : null;
+      if (key && weekMap[key]) {
+        weekMap[key].total += 1;
+        if (r.status === "presente") weekMap[key].present += 1;
+        else if (r.status === "ausente") weekMap[key].absent += 1;
+        else weekMap[key].justified += 1;
+      }
+    });
+    const trend: AttendanceTrend[] = Object.entries(weekMap).map(([, v]) => ({
+      date: v.date,
+      present: v.present,
+      absent: v.absent,
+      justified: v.justified,
+      total: v.total,
+      rate: v.total > 0 ? Math.round((v.present / v.total) * 100) : 0,
+    }));
+
+    // Global stats
+    const totalRecords = rows.length;
+    const totalPresent = statusCounts["presente"] || 0;
+    const overallRate = totalRecords > 0 ? Math.round((totalPresent / totalRecords) * 100) : 0;
+    const sessionsLast30Days = allSessions.filter(
+      (s) => new Date(s.session_date) >= thirtyDaysAgo
+    ).length;
+
+    return {
+      overallRate,
+      totalSessions: sessionsLast30Days,
+      totalRecords,
+      totalPresent,
+      totalAbsent: statusCounts["ausente"] || 0,
+      totalJustified: statusCounts["justificado"] || 0,
+      statusBreakdown,
+      byDiscipline,
+      trend,
+    };
+  });
+}
+
+// ─── Attendance Stats (User Dashboard) ────────────────────────────────────────
+
+export interface UserAttendanceStats {
+  totalSessions: number;
+  present: number;
+  absent: number;
+  justified: number;
+  rate: number;
+  byDiscipline: Array<{
+    discipline: string;
+    present: number;
+    total: number;
+    rate: number;
+  }>;
+  recentRecords: Array<{
+    date: string;
+    discipline: string;
+    status: string;
+  }>;
+}
+
+export async function getUserAttendanceStats(userId: string) {
+  return safeQuery(async () => {
+    const supabase = createClient();
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
+
+    const [ownBeneficiary, dependentsWithBeneficiary] = await Promise.all([
+      supabase
+        .from("beneficiaries")
+        .select("id")
+        .eq("profile_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("dependents")
+        .select("id, full_name, beneficiaries(id)")
+        .eq("tutor_id", userId),
+    ]);
+
+    const beneficiaryIds: { id: string; name: string }[] = [];
+    if (ownBeneficiary.data) {
+      beneficiaryIds.push({ id: ownBeneficiary.data.id, name: "Yo" });
+    }
+    for (const d of dependentsWithBeneficiary.data || []) {
+      const bRaw = d.beneficiaries as unknown as { id: string }[] | { id: string } | null;
+      const bId = Array.isArray(bRaw) ? bRaw[0]?.id : bRaw?.id;
+      if (bId) beneficiaryIds.push({ id: bId, name: d.full_name });
+    }
+
+    if (beneficiaryIds.length === 0) {
+      return {
+        totalSessions: 0,
+        present: 0,
+        absent: 0,
+        justified: 0,
+        rate: 0,
+        byDiscipline: [],
+        recentRecords: [],
+      } as UserAttendanceStats;
+    }
+
+    const bIds = beneficiaryIds.map((b) => b.id);
+
+    const { data } = await supabase
+      .from("attendance")
+      .select("status, session:class_sessions(session_date, schedule:schedules(discipline:disciplines(name)))")
+      .in("beneficiary_id", bIds)
+      .gte("marked_at", thirtyDaysAgo.toISOString())
+      .order("marked_at", { ascending: false });
+
+    const rows = (data || []) as unknown as Array<{
+      status: string;
+      session: {
+        session_date: string;
+        schedule: { discipline: { name: string } | null } | null;
+      } | null;
+    }>;
+
+    const present = rows.filter((r) => r.status === "presente").length;
+    const absent = rows.filter((r) => r.status === "ausente").length;
+    const justified = rows.filter((r) => r.status === "justificado").length;
+    const totalSessions = rows.length;
+    const rate = totalSessions > 0 ? Math.round((present / totalSessions) * 100) : 0;
+
+    const disciplineMap: Record<string, { present: number; total: number }> = {};
+    rows.forEach((r) => {
+      const disc = r.session?.schedule?.discipline?.name || "Sin disciplina";
+      if (!disciplineMap[disc]) disciplineMap[disc] = { present: 0, total: 0 };
+      disciplineMap[disc].total += 1;
+      if (r.status === "presente") disciplineMap[disc].present += 1;
+    });
+    const byDiscipline = Object.entries(disciplineMap)
+      .map(([discipline, d]) => ({
+        discipline,
+        ...d,
+        rate: d.total > 0 ? Math.round((d.present / d.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    const recentRecords = rows.slice(0, 10).map((r) => ({
+      date: r.session?.session_date || "",
+      discipline: r.session?.schedule?.discipline?.name || "Sin disciplina",
+      status: r.status,
+    }));
+
+    return {
+      totalSessions,
+      present,
+      absent,
+      justified,
+      rate,
+      byDiscipline,
+      recentRecords,
+    } as UserAttendanceStats;
+  });
+}
+
 export async function getUserAttendance(userId: string, limit = 50) {
   return safeQuery(async () => {
     const supabase = createClient();
@@ -613,7 +862,7 @@ export async function getUserAttendance(userId: string, limit = 50) {
     }
 
     if (beneficiaryIds.length === 0) {
-      return { records: [] as any[] };
+      return { records: [] as Array<AttendanceRecord & { beneficiary_name: string }> };
     }
 
     const bIds = beneficiaryIds.map((b) => b.id);

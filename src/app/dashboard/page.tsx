@@ -12,11 +12,11 @@ import QuickStats from "@/components/dashboard/QuickStats";
 import MembershipCard from "@/components/dashboard/MembershipCard";
 import PaymentRow from "@/components/dashboard/PaymentRow";
 import NotificationItem from "@/components/dashboard/NotificationItem";
+import AttendanceSummary from "@/components/dashboard/AttendanceSummary";
 import {
   StatsSkeleton,
   MembershipCardSkeleton,
   PaymentRowSkeleton,
-  NotificationSkeleton,
   HeroSkeleton,
 } from "@/components/dashboard/DashboardSkeleton";
 import { getUserNotifications, type NotificationData } from "@/lib/supabase/dashboard";
@@ -113,6 +113,8 @@ export default function DashboardPage() {
             paidThisMonth={summary.paidThisMonth}
             dependentsCount={summary.dependentsCount}
           />
+
+          <AttendanceSummary userId={user.id} />
 
           {summary.activeMemberships.length > 0 && (
             <section>
