@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import StatusBadge from "@/components/admin/StatusBadge";
+import Toast from "@/components/admin/Toast";
+import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 
 interface UserRow {
   id: string;
@@ -34,6 +36,7 @@ export default function AdminUsuariosPage() {
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [form, setForm] = useState({ role_id: 4, active: true });
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const load = async () => {
     const supabase = createClient();
@@ -86,12 +89,18 @@ export default function AdminUsuariosPage() {
 
   const handleSave = async () => {
     if (!editing) return;
-    setSaving(true);
-    const supabase = createClient();
-    await supabase.from("profiles").update({ role_id: form.role_id, active: form.active }).eq("id", editing.id);
-    setModalOpen(false);
-    setSaving(false);
-    await load();
+    try {
+      setSaving(true);
+      const supabase = createClient();
+      const { error } = await supabase.from("profiles").update({ role_id: form.role_id, active: form.active }).eq("id", editing.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error, "actualizar usuario"), type: "error" }); return; }
+      setModalOpen(false);
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "guardar usuario"), type: "error" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -158,6 +167,7 @@ export default function AdminUsuariosPage() {
           </div>
         </div>
       </FormModal>
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

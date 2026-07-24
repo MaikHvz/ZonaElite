@@ -33,10 +33,6 @@ function getBaseUrl(): string {
 
   url = url.replace(/\/+$/, "");
 
-  if (raw !== url) {
-    console.warn(FLOW_LOG_PREFIX, "Base URL normalized:", url);
-  }
-
   return url;
 }
 
@@ -104,8 +100,6 @@ export async function createFlowOrder(
     commerceOrder: params.commerceOrder,
     subject: params.subject,
     amount: params.amount,
-    urlConfirmation: signParams.urlConfirmation,
-    urlReturn: signParams.urlReturn,
   });
 
   const response = await fetch(`${apiUrl}/payment/create`, {
@@ -150,7 +144,6 @@ export async function createFlowOrder(
 
   console.log(FLOW_LOG_PREFIX, "Order created:", {
     flowOrder: data.flowOrder,
-    token: data.token,
   });
 
   return data as unknown as CreateOrderResult;
@@ -176,8 +169,6 @@ export async function verifyFlowPayment(
   const s = signFlowParams(signParams, secretKey);
 
   const url = `${apiUrl}/payment/getStatus?apiKey=${encodeURIComponent(apiKey)}&token=${encodeURIComponent(token)}&s=${encodeURIComponent(s)}`;
-
-  console.log(FLOW_LOG_PREFIX, "Verifying payment, token:", token);
 
   const response = await fetch(url, { method: "GET" });
 
@@ -209,22 +200,6 @@ export async function verifyFlowPayment(
       `Flow verify error: ${data.error_message || data.error || "Unknown"}`
     );
   }
-
-  const status = data.status as number;
-  const statusLabels: Record<number, string> = {
-    1: "pendiente",
-    2: "pagado",
-    3: "rechazado",
-    4: "cancelado",
-    5: "expirado",
-  };
-
-  console.log(FLOW_LOG_PREFIX, "Verify result:", {
-    status,
-    statusLabel: statusLabels[status] || "desconocido",
-    flowOrder: data.flowOrder,
-    commerceOrder: data.commerceOrder,
-  });
 
   return data as unknown as VerifyResult;
 }

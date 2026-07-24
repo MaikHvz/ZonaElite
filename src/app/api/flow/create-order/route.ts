@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
-import { createFlowOrder, verifyFlowPayment, FLOW_LOG_PREFIX } from "@/lib/flow";
+import { createFlowOrder, getFlowConfig, verifyFlowPayment, FLOW_LOG_PREFIX } from "@/lib/flow";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
@@ -17,7 +17,6 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.warn(ROUTE_LOG, "Unauthorized request:", authError?.message);
       return NextResponse.json(
         { error: "Inicia sesión para continuar" },
         { status: 401 }
@@ -41,7 +40,6 @@ export async function POST(request: Request) {
       .single();
 
     if (planError || !plan) {
-      console.warn(ROUTE_LOG, "Plan not found:", planId, planError?.message);
       return NextResponse.json(
         { error: "Plan no encontrado" },
         { status: 400 }
@@ -62,7 +60,6 @@ export async function POST(request: Request) {
       .single();
 
     if (benError || !beneficiary) {
-      console.warn(ROUTE_LOG, "Beneficiary not found:", beneficiaryId, benError?.message);
       return NextResponse.json(
         { error: "Beneficiario no válido" },
         { status: 400 }
@@ -110,8 +107,6 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (existingPending?.flow_token) {
-      console.log(ROUTE_LOG, "Reusing existing pending payment:", existingPending.id);
-
       try {
         const verifyRes = await verifyFlowPayment(existingPending.flow_token);
         if (verifyRes.status === 2) {
@@ -120,12 +115,15 @@ export async function POST(request: Request) {
             .update({ status: "pagado", paid_at: new Date().toISOString() })
             .eq("id", existingPending.id);
         }
-      } catch (verifyErr) {
-        console.warn(ROUTE_LOG, "Verify on reuse failed (continuing):", verifyErr);
+      } catch {
+        // Keep as pending — will require manual verification
       }
 
+      const { apiUrl } = getFlowConfig();
+      const flowPaymentUrl = apiUrl.replace(/\/api\/?$/, "/payment") + "?token=" + encodeURIComponent(existingPending.flow_token);
+
       return NextResponse.json({
-        url: existingPending.flow_token,
+        url: flowPaymentUrl,
         token: existingPending.flow_token,
         reused: true,
       });
@@ -146,20 +144,11 @@ export async function POST(request: Request) {
       .single();
 
     if (paymentError || !payment) {
-      console.error(ROUTE_LOG, "Payment insert error:", paymentError);
       return NextResponse.json(
         { error: "Error al procesar pago" },
         { status: 500 }
       );
     }
-
-    console.log(ROUTE_LOG, "Payment created:", {
-      paymentId: payment.id,
-      userId: user.id,
-      planName: plan.name,
-      amount: plan.price,
-      beneficiaryId: beneficiary.id,
-    });
 
     const flowResponse = await createFlowOrder({
       commerceOrder,
@@ -180,11 +169,6 @@ export async function POST(request: Request) {
         flow_order: flowResponse.flowOrder,
       })
       .eq("id", payment.id);
-
-    console.log(ROUTE_LOG, "Order created in Flow:", {
-      paymentId: payment.id,
-      flowOrder: flowResponse.flowOrder,
-    });
 
     return NextResponse.json({
       url: flowResponse.url,

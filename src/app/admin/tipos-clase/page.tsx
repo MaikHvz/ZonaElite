@@ -6,6 +6,8 @@ import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
+import Toast from "@/components/admin/Toast";
+import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 
 interface ClassType {
   id: string;
@@ -39,6 +41,7 @@ export default function AdminTiposClasePage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ClassType | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const load = async () => {
     const supabase = createClient();
@@ -58,26 +61,41 @@ export default function AdminTiposClasePage() {
 
   const handleSave = async () => {
     setSaving(true);
-    const supabase = createClient();
-    const payload = { name: form.name, color_hex: form.color_hex, icon: form.icon, description: form.description || null, active: form.active };
-    if (editing) {
-      await supabase.from("disciplines").update(payload).eq("id", editing.id);
-    } else {
-      await supabase.from("disciplines").insert(payload);
+    try {
+      const supabase = createClient();
+      const payload = { name: form.name, color_hex: form.color_hex, icon: form.icon, description: form.description || null, active: form.active };
+      if (editing) {
+        const { error } = await supabase.from("disciplines").update(payload).eq("id", editing.id);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error), type: "error" }); setSaving(false); return; }
+      } else {
+        const { error } = await supabase.from("disciplines").insert(payload);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error), type: "error" }); setSaving(false); return; }
+      }
+      setModalOpen(false);
+      setToast({ msg: editing ? "Tipo actualizado" : "Tipo creado", type: "success" });
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e), type: "error" });
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
-    setSaving(false);
-    await load();
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    const supabase = createClient();
-    await supabase.from("disciplines").delete().eq("id", deleteTarget.id);
-    setDeleting(false);
-    setDeleteTarget(null);
-    await load();
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("disciplines").delete().eq("id", deleteTarget.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error), type: "error" }); setDeleting(false); return; }
+      setDeleteTarget(null);
+      setToast({ msg: "Tipo eliminado", type: "success" });
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e), type: "error" });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -158,6 +176,8 @@ export default function AdminTiposClasePage() {
       </FormModal>
 
       <DeleteConfirm open={!!deleteTarget} title="Eliminar Tipo" message={`¿Estás seguro de eliminar "${deleteTarget?.name}"? Se eliminarán también los horarios asociados.`} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} loading={deleting} />
+
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

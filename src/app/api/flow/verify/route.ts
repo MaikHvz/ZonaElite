@@ -37,15 +37,10 @@ export async function GET(request: Request) {
     const payment = await findPaymentByTokenAndUser(admin, token, user.id);
 
     if (!payment) {
-      console.warn(VERIFY_LOG, "No payment found for token/user:", {
-        token,
-        userId: user.id,
-      });
       return NextResponse.json({ status: "not_found" });
     }
 
     if (payment.status === "pagado") {
-      console.log(VERIFY_LOG, "Payment already pagado:", payment.id);
       return NextResponse.json({ status: "pagado" });
     }
 
@@ -53,8 +48,6 @@ export async function GET(request: Request) {
       const verification = await verifyFlowPayment(token);
 
       if (verification.status === 2) {
-        console.log(VERIFY_LOG, "Flow verified payment as approved:", payment.id);
-
         await markPaymentAsPaid(
           admin,
           payment.id,
@@ -76,7 +69,6 @@ export async function GET(request: Request) {
       }
 
       if (verification.status === 4) {
-        console.log(VERIFY_LOG, "Flow says payment cancelled:", payment.id);
         await admin
           .from("payments")
           .update({ status: "cancelado" })
@@ -84,14 +76,11 @@ export async function GET(request: Request) {
         return NextResponse.json({ status: "cancelado" });
       }
 
-      console.log(VERIFY_LOG, "Flow status not approved:", verification.status);
       return NextResponse.json({ status: payment.status });
-    } catch (verifyErr) {
-      console.error(VERIFY_LOG, "Flow API verification failed:", verifyErr);
+    } catch {
       return NextResponse.json({ status: payment.status });
     }
-  } catch (error) {
-    console.error(VERIFY_LOG, "Unexpected error:", error);
+  } catch {
     return NextResponse.json({ status: "error" });
   }
 }

@@ -7,6 +7,8 @@ import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
+import Toast from "@/components/admin/Toast";
+import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 
 interface Notification {
   id: string;
@@ -44,6 +46,7 @@ export default function AdminNotificacionesPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Notification | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const load = async () => {
     const supabase = createClient();
@@ -62,29 +65,44 @@ export default function AdminNotificacionesPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    const supabase = createClient();
-    if (editing) {
-      await supabase.from("notifications").update(form).eq("id", editing.id);
-    } else {
-      await supabase.from("notifications").insert({
-        ...form,
-        sent_by: profile?.id,
-        sent_at: new Date().toISOString(),
-      });
+    try {
+      const supabase = createClient();
+      if (editing) {
+        const { error } = await supabase.from("notifications").update(form).eq("id", editing.id);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error), type: "error" }); setSaving(false); return; }
+      } else {
+        const { error } = await supabase.from("notifications").insert({
+          ...form,
+          sent_by: profile?.id,
+          sent_at: new Date().toISOString(),
+        });
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error), type: "error" }); setSaving(false); return; }
+      }
+      setModalOpen(false);
+      setToast({ msg: editing ? "Notificación actualizada" : "Notificación creada", type: "success" });
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e), type: "error" });
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
-    setSaving(false);
-    await load();
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    const supabase = createClient();
-    await supabase.from("notifications").delete().eq("id", deleteTarget.id);
-    setDeleting(false);
-    setDeleteTarget(null);
-    await load();
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("notifications").delete().eq("id", deleteTarget.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error), type: "error" }); setDeleting(false); return; }
+      setDeleteTarget(null);
+      setToast({ msg: "Notificación eliminada", type: "success" });
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e), type: "error" });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -185,6 +203,8 @@ export default function AdminNotificacionesPage() {
         onCancel={() => setDeleteTarget(null)}
         loading={deleting}
       />
+
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

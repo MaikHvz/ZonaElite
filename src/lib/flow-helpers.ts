@@ -35,7 +35,6 @@ export async function confirmAndCreateMembership(
   }
 
   if (payment.membership_id) {
-    console.log(HELPERS_LOG, "Payment already has membership:", payment.membership_id);
     return { success: true, membershipId: payment.membership_id };
   }
 
@@ -86,7 +85,6 @@ export async function confirmAndCreateMembership(
     .maybeSingle();
 
   if (existingMembership) {
-    console.log(HELPERS_LOG, "Linking to existing membership:", existingMembership.id);
     await supabase
       .from("payments")
       .update({ membership_id: existingMembership.id })
@@ -124,13 +122,6 @@ export async function confirmAndCreateMembership(
     .update({ membership_id: membership.id })
     .eq("id", paymentId);
 
-  console.log(HELPERS_LOG, "Membership created:", {
-    membershipId: membership.id,
-    beneficiaryId: targetBeneficiaryId,
-    planId: plan.id,
-    endDate,
-  });
-
   return { success: true, membershipId: membership.id };
 }
 
@@ -158,8 +149,6 @@ export async function markPaymentAsPaid(
     .from("payments")
     .update(updateData)
     .eq("id", paymentId);
-
-  console.log(HELPERS_LOG, "Payment marked as pagado:", paymentId);
 }
 
 export async function findPaymentByToken(

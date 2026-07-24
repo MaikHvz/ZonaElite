@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import ImageUpload from "@/components/admin/ImageUpload";
+import Toast from "@/components/admin/Toast";
+import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 
 interface AcademySettings {
   id: string;
@@ -31,6 +33,7 @@ export default function AdminConfiguracionPage() {
   const [galleryLoading, setGalleryLoading] = useState(true);
   const [newImageAlt, setNewImageAlt] = useState("");
   const [addingImage, setAddingImage] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -51,44 +54,78 @@ export default function AdminConfiguracionPage() {
 
   const handleSave = async () => {
     if (!settings) return;
-    setSaving(true);
-    const supabase = createClient();
-    await supabase.from("academy_settings").update({
-      name: settings.name,
-      logo_url: settings.logo_url,
-      address: settings.address,
-      whatsapp: settings.whatsapp,
-      social_links: settings.social_links,
-    }).eq("id", settings.id);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      setSaving(true);
+      const supabase = createClient();
+      const { error } = await supabase.from("academy_settings").update({
+        name: settings.name,
+        logo_url: settings.logo_url,
+        address: settings.address,
+        whatsapp: settings.whatsapp,
+        social_links: settings.social_links,
+      }).eq("id", settings.id);
+      if (error) {
+        setToast({ msg: getSupabaseErrorMessage(error, "Guardar configuración"), type: "error" });
+        return;
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setToast({ msg: getSupabaseErrorMessage(err, "Guardar configuración"), type: "error" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAddImage = async (url: string) => {
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("gallery_images")
-      .insert({ url, alt: newImageAlt, position: gallery.length, active: true })
-      .select()
-      .single();
-    if (data) {
-      setGallery((prev) => [...prev, data as GalleryImage]);
-      setNewImageAlt("");
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("gallery_images")
+        .insert({ url, alt: newImageAlt, position: gallery.length, active: true })
+        .select()
+        .single();
+      if (error) {
+        setToast({ msg: getSupabaseErrorMessage(error, "Agregar imagen"), type: "error" });
+        return;
+      }
+      if (data) {
+        setGallery((prev) => [...prev, data as GalleryImage]);
+        setNewImageAlt("");
+      }
+    } catch (err) {
+      setToast({ msg: getSupabaseErrorMessage(err, "Agregar imagen"), type: "error" });
+    } finally {
+      setAddingImage(false);
     }
-    setAddingImage(false);
   };
 
   const handleDeleteImage = async (id: string) => {
-    const supabase = createClient();
-    await supabase.from("gallery_images").delete().eq("id", id);
-    setGallery((prev) => prev.filter((img) => img.id !== id));
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("gallery_images").delete().eq("id", id);
+      if (error) {
+        setToast({ msg: getSupabaseErrorMessage(error, "Eliminar imagen"), type: "error" });
+        return;
+      }
+      setGallery((prev) => prev.filter((img) => img.id !== id));
+    } catch (err) {
+      setToast({ msg: getSupabaseErrorMessage(err, "Eliminar imagen"), type: "error" });
+    }
   };
 
   const handleToggleImage = async (id: string, active: boolean) => {
-    const supabase = createClient();
-    await supabase.from("gallery_images").update({ active }).eq("id", id);
-    setGallery((prev) => prev.map((img) => img.id === id ? { ...img, active } : img));
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("gallery_images").update({ active }).eq("id", id);
+      if (error) {
+        setToast({ msg: getSupabaseErrorMessage(error, "Cambiar visibilidad"), type: "error" });
+        return;
+      }
+      setGallery((prev) => prev.map((img) => img.id === id ? { ...img, active } : img));
+    } catch (err) {
+      setToast({ msg: getSupabaseErrorMessage(err, "Cambiar visibilidad"), type: "error" });
+    }
   };
 
   const handleReorder = async (id: string, direction: "up" | "down") => {
@@ -97,16 +134,25 @@ export default function AdminConfiguracionPage() {
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= gallery.length) return;
 
-    const newGallery = [...gallery];
-    [newGallery[idx], newGallery[swapIdx]] = [newGallery[swapIdx], newGallery[idx]];
+    try {
+      const newGallery = [...gallery];
+      [newGallery[idx], newGallery[swapIdx]] = [newGallery[swapIdx], newGallery[idx]];
 
-    const supabase = createClient();
-    const updates = newGallery.map((img, i) =>
-      supabase.from("gallery_images").update({ position: i }).eq("id", img.id)
-    );
-    await Promise.all(updates);
+      const supabase = createClient();
+      const updates = newGallery.map((img, i) =>
+        supabase.from("gallery_images").update({ position: i }).eq("id", img.id)
+      );
+      const results = await Promise.all(updates);
+      const hasError = results.some((r) => r.error);
+      if (hasError) {
+        setToast({ msg: getSupabaseErrorMessage(new Error("Error al reordenar imágenes"), "Reordenar"), type: "error" });
+        return;
+      }
 
-    setGallery(newGallery.map((img, i) => ({ ...img, position: i })));
+      setGallery(newGallery.map((img, i) => ({ ...img, position: i })));
+    } catch (err) {
+      setToast({ msg: getSupabaseErrorMessage(err, "Reordenar"), type: "error" });
+    }
   };
 
   if (loading) {
@@ -250,6 +296,7 @@ export default function AdminConfiguracionPage() {
           )}
         </div>
       </div>
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
