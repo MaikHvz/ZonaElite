@@ -294,6 +294,8 @@ CREATE TABLE IF NOT EXISTS public.payments (
   flow_token text,
   flow_order bigint,
   beneficiary_id uuid,
+  include_enrollment boolean DEFAULT false NOT NULL,
+  enrollment_plan_id uuid,
   CONSTRAINT payments_pkey PRIMARY KEY (id)
 );
 

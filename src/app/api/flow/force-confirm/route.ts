@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { FLOW_LOG_PREFIX } from "@/lib/flow";
-import { confirmAndCreateMembership, markPaymentAsPaid } from "@/lib/flow-helpers";
+import { confirmAndCreateMembership, extendEnrollment, markPaymentAsPaid } from "@/lib/flow-helpers";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
@@ -35,7 +35,25 @@ export async function POST(request: Request) {
     }
 
     await markPaymentAsPaid(admin, paymentId, "force-confirm", undefined);
-    await confirmAndCreateMembership(admin, paymentId, payment.user_id);
+
+    // Only call confirmAndCreateMembership if concept includes membership
+    const hasMembership = /membres[íi]a/i.test(payment.concept || "");
+    if (hasMembership) {
+      await confirmAndCreateMembership(admin, paymentId, payment.user_id);
+    }
+
+    // Handle enrollment if included in payment record
+    if (payment.include_enrollment && payment.enrollment_plan_id && payment.beneficiary_id) {
+      const enrollResult = await extendEnrollment(
+        admin,
+        paymentId,
+        payment.beneficiary_id,
+        payment.enrollment_plan_id
+      );
+      if (!enrollResult.success) {
+        console.error(`${FORCE_LOG} enrollment extension failed:`, enrollResult.error);
+      }
+    }
 
     console.log(`${FORCE_LOG} payment ${paymentId} force-confirmed successfully`);
 

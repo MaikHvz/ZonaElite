@@ -200,28 +200,24 @@ export async function POST(request: Request) {
       });
     }
 
-    // Create payment record
-    const metadata: Record<string, string> = {
-      paymentId: "", // will be filled after insert
-      beneficiaryId: beneficiary.id,
+    // Create payment record (store enrollment info directly — Flow doesn't return 'optional' on getStatus)
+    const insertPayload: Record<string, unknown> = {
+      user_id: user.id,
+      beneficiary_id: beneficiary.id,
+      commerce_order: commerceOrder,
+      concept,
+      amount: totalAmount,
+      method: "flow",
+      status: "pendiente",
     };
-    if (membershipPlan) metadata.planId = membershipPlan.id;
     if (enrollmentPlan) {
-      metadata.includeEnrollment = "true";
-      metadata.enrollmentPlanId = enrollmentPlan.id;
+      insertPayload.include_enrollment = true;
+      insertPayload.enrollment_plan_id = enrollmentPlan.id;
     }
 
     const { data: payment, error: paymentError } = await supabase
       .from("payments")
-      .insert({
-        user_id: user.id,
-        beneficiary_id: beneficiary.id,
-        commerce_order: commerceOrder,
-        concept,
-        amount: totalAmount,
-        method: "flow",
-        status: "pendiente",
-      })
+      .insert(insertPayload)
       .select("id")
       .single();
 
@@ -232,15 +228,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update metadata with payment ID
-    metadata.paymentId = payment.id;
-
     const flowResponse = await createFlowOrder({
       commerceOrder,
       subject: `${concept} - ZONAELITE`,
       amount: totalAmount,
       email: user.email || "",
-      metadata,
     });
 
     await supabase

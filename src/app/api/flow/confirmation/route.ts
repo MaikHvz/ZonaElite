@@ -62,7 +62,7 @@ async function processInBackground(token: string) {
   try {
     const result = await supabase
       .from("payments")
-      .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id, membership_id")
+      .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id, membership_id, include_enrollment, enrollment_plan_id")
       .eq("flow_token", token)
       .maybeSingle();
     payment = result.data;
@@ -126,25 +126,15 @@ async function processInBackground(token: string) {
 
   // Handle enrollment extension if included in payment
   try {
-    const optional = verification.optional;
-    if (optional) {
-      let metadata: Record<string, string> = {};
-      try {
-        metadata = JSON.parse(optional);
-      } catch {
-        // Not JSON, skip
-      }
-
-      if (metadata.includeEnrollment === "true" && metadata.enrollmentPlanId && payment.beneficiary_id) {
-        const enrollResult = await extendEnrollment(
-          supabase,
-          payment.id,
-          payment.beneficiary_id,
-          metadata.enrollmentPlanId
-        );
-        if (!enrollResult.success) {
-          console.error(L, "Enrollment extension failed:", enrollResult.error);
-        }
+    if (payment.include_enrollment && payment.enrollment_plan_id && payment.beneficiary_id) {
+      const enrollResult = await extendEnrollment(
+        supabase,
+        payment.id,
+        payment.beneficiary_id,
+        payment.enrollment_plan_id
+      );
+      if (!enrollResult.success) {
+        console.error(L, "Enrollment extension failed:", enrollResult.error);
       }
     }
   } catch (err) {
