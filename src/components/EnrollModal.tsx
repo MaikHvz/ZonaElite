@@ -119,13 +119,16 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
     if (ownBenRes.data) {
       const benId = ownBenRes.data.id;
 
-      const { data: membership } = await supabase
+      const { data: membershipRows } = await supabase
         .from("memberships")
         .select("id, plan_id, membership_plans(name, category)")
         .eq("beneficiary_id", benId)
         .eq("status", "activa")
         .gte("end_date", today)
-        .maybeSingle();
+        .order("end_date", { ascending: false })
+        .limit(1);
+
+      const membership = membershipRows?.[0] || null;
 
       const planCategory = (membership as { membership_plans?: { category?: string } } | null)?.membership_plans?.category || "adulto";
       const planId = membership?.plan_id || null;
@@ -200,13 +203,16 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
 
         const benId = ben.id;
 
-        const { data: membership } = await supabase
+        const { data: membershipRows } = await supabase
           .from("memberships")
           .select("id, plan_id, membership_plans(name, category)")
           .eq("beneficiary_id", benId)
           .eq("status", "activa")
           .gte("end_date", today)
-          .maybeSingle();
+          .order("end_date", { ascending: false })
+          .limit(1);
+
+        const membership = membershipRows?.[0] || null;
 
         const planCategory = dep.category;
         const planId = membership?.plan_id || null;
@@ -375,11 +381,10 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
                       key={s.id}
                       onClick={() => !isFull && setSelectedSession(s.id)}
                       disabled={isFull}
-                      className={`px-3 py-2 rounded-lg border text-left transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-                        full
+                      className={`px-3 py-2 rounded-lg border text-left transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${full
                           ? "border-primary bg-primary/10"
                           : "border-on-surface/10 hover:border-on-surface/20"
-                      }`}
+                        }`}
                     >
                       <p className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider ${full ? "text-primary" : "text-on-surface"}`}>
                         {formatShortDate(s.session_date)}
@@ -418,19 +423,17 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
                     key={b.beneficiaryId}
                     onClick={() => isEligible && toggle(b.beneficiaryId)}
                     disabled={!isEligible}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left cursor-pointer disabled:cursor-not-allowed ${
-                      !isEligible
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left cursor-pointer disabled:cursor-not-allowed ${!isEligible
                         ? "bg-surface-container-high/30 border-on-surface/5 opacity-50"
                         : selected.has(b.beneficiaryId)
                           ? "border-primary/40 bg-primary/5"
                           : "border-on-surface/5 hover:border-on-surface/15"
-                    }`}
+                      }`}
                   >
-                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                      selected.has(b.beneficiaryId)
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${selected.has(b.beneficiaryId)
                         ? "border-primary bg-primary"
                         : "border-on-surface/20"
-                    }`}>
+                      }`}>
                       {selected.has(b.beneficiaryId) && (
                         <span className="material-symbols-outlined text-white text-[14px]">check</span>
                       )}
@@ -438,9 +441,8 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-[family-name:var(--font-headline-sm)] text-[14px] text-on-surface truncate">{b.label}</span>
-                        <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
-                          b.category === "nino" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400"
-                        }`}>
+                        <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full ${b.category === "nino" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400"
+                          }`}>
                           {b.category === "nino" ? "Niño" : "Adulto"}
                         </span>
                       </div>

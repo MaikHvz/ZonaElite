@@ -556,7 +556,14 @@ CREATE POLICY "class_plans_select_all" ON public.class_plans FOR SELECT USING (t
 CREATE POLICY "class_plans_admin_write" ON public.class_plans FOR ALL USING (public.is_admin());
 ALTER TABLE public.class_enrollments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "class_enrollments_select_own_or_admin" ON public.class_enrollments FOR SELECT USING (public.is_admin() OR public.owns_beneficiary(beneficiary_id));
-CREATE POLICY "class_enrollments_insert_admin" ON public.class_enrollments FOR INSERT WITH CHECK (public.is_admin());
+CREATE POLICY "class_enrollments_insert_admin_or_self" ON public.class_enrollments FOR INSERT WITH CHECK (
+  public.is_admin()
+  OR (
+    public.owns_beneficiary(beneficiary_id)
+    AND EXISTS (SELECT 1 FROM public.academy_enrollments ae WHERE ae.beneficiary_id = class_enrollments.beneficiary_id AND ae.status = 'activa' AND ae.end_date >= current_date)
+    AND EXISTS (SELECT 1 FROM public.memberships m WHERE m.beneficiary_id = class_enrollments.beneficiary_id AND m.status = 'activa' AND m.end_date >= current_date)
+  )
+);
 CREATE POLICY "class_enrollments_delete_admin" ON public.class_enrollments FOR DELETE USING (public.is_admin());
 ALTER TABLE public.dependents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "dependents_select_own_or_admin" ON public.dependents FOR SELECT USING (tutor_id = auth.uid() OR public.is_admin());
