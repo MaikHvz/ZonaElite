@@ -206,6 +206,17 @@ export default function CheckoutModal({
     }
   }, [includeEnrollment, enrollmentPlans, selectedEnrollmentPlanId]);
 
+  // Force enrollment when selected beneficiary has no active enrollment
+  useEffect(() => {
+    const ben = beneficiaries.find((b) => b.id === selectedId);
+    if (ben && !ben.hasActiveEnrollment && mode === "membership") {
+      setIncludeEnrollment(true);
+      if (enrollmentPlans.length > 0 && !selectedEnrollmentPlanId) {
+        setSelectedEnrollmentPlanId(enrollmentPlans[0].id);
+      }
+    }
+  }, [selectedId, beneficiaries, mode, enrollmentPlans, selectedEnrollmentPlanId]);
+
   if (!open || (!plan && mode === "membership")) return null;
   if (!open && mode === "enrollment-only") return null;
 
@@ -373,10 +384,15 @@ export default function CheckoutModal({
                         {b.sublabel}
                       </p>
                     </div>
-                    {b.hasActiveEnrollment && (
+                    {b.hasActiveEnrollment ? (
                       <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-green-400 flex items-center gap-1 flex-shrink-0">
                         <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                        Inscripción activa
+                        Inscrito
+                      </span>
+                    ) : (
+                      <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-red-400 flex items-center gap-1 flex-shrink-0">
+                        <span className="material-symbols-outlined text-[14px]">cancel</span>
+                        Sin inscripción
                       </span>
                     )}
                   </label>
@@ -387,84 +403,77 @@ export default function CheckoutModal({
 
           {/* Enrollment section */}
           {selectedId && enrollmentPlans.length > 0 && (
-            <div className="bg-surface-container rounded-xl p-4 border border-on-surface/5 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary text-[20px]">badge</span>
-                  <h4 className="font-[family-name:var(--font-headline-md)] text-[14px] text-on-surface uppercase">
-                    Inscripción a la Academia
-                  </h4>
-                </div>
-                {selectedBeneficiary?.hasActiveEnrollment && (
-                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-green-400">
-                    Vigente
-                  </span>
-                )}
-              </div>
-
+            <div className={`rounded-xl p-4 border space-y-3 ${
+              selectedBeneficiary?.hasActiveEnrollment
+                ? "bg-green-500/5 border-green-500/20"
+                : "bg-surface-container border-on-surface/5"
+            }`}>
               {selectedBeneficiary?.hasActiveEnrollment ? (
-                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
-                  Inscripción vigente hasta <strong className="text-on-surface">{formatDate(selectedBeneficiary.enrollmentEndDate || "")}</strong>
-                  {selectedBeneficiary.enrollmentPlanName && ` (${selectedBeneficiary.enrollmentPlanName})`}
-                </p>
+                /* === ACTIVE ENROLLMENT: positive feedback === */
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-green-400 text-[24px]">check_circle</span>
+                  <div>
+                    <p className="font-[family-name:var(--font-body-md)] text-[13px] text-green-400 font-medium">
+                      Inscripción activa
+                    </p>
+                    <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
+                      Vigente hasta <strong className="text-on-surface">{formatDate(selectedBeneficiary.enrollmentEndDate || "")}</strong>
+                      {selectedBeneficiary.enrollmentPlanName && ` — ${selectedBeneficiary.enrollmentPlanName}`}
+                    </p>
+                  </div>
+                </div>
               ) : (
+                /* === NO ENROLLMENT: mandatory purchase === */
                 <>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-red-400 text-[20px]">warning</span>
+                    <h4 className="font-[family-name:var(--font-headline-md)] text-[14px] text-on-surface uppercase">
+                      Sin inscripción a la academia
+                    </h4>
+                  </div>
                   <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
-                    Requisito para comprar membresías e inscribirse en clases.
+                    <strong className="text-red-400">{selectedBeneficiary?.label}</strong> no tiene una inscripción vigente. Debes incluirla para poder comprar la membresía.
                   </p>
 
-                  {mode === "membership" && (
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${includeEnrollment ? "border-primary bg-primary" : "border-on-surface/20"}`}>
-                        {includeEnrollment && <span className="material-symbols-outlined text-white text-[14px]">check</span>}
-                      </div>
-                      <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
-                        Agregar inscripción al pago
-                      </span>
+                  <div className="space-y-2">
+                    <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block">
+                      Seleccionar plan de inscripción
                     </label>
-                  )}
-
-                  {(mode === "enrollment-only" || includeEnrollment) && (
-                    <div className="space-y-2">
-                      <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block">
-                        Seleccionar plan
-                      </label>
-                      <div className="space-y-1">
-                        {enrollmentPlans.map((ep) => (
-                          <label
-                            key={ep.id}
-                            className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                              selectedEnrollmentPlanId === ep.id
-                                ? "border-primary bg-primary/5"
-                                : "border-on-surface/10 hover:border-on-surface/20"
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="radio"
-                                name="enrollment-plan"
-                                checked={selectedEnrollmentPlanId === ep.id}
-                                onChange={() => setSelectedEnrollmentPlanId(ep.id)}
-                                className="accent-primary"
-                              />
-                              <div>
-                                <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">{ep.name}</p>
-                                <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">{ep.duration_days} días</p>
-                              </div>
+                    <div className="space-y-1">
+                      {enrollmentPlans.map((ep) => (
+                        <label
+                          key={ep.id}
+                          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                            selectedEnrollmentPlanId === ep.id
+                              ? "border-primary bg-primary/5"
+                              : "border-on-surface/10 hover:border-on-surface/20"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="radio"
+                              name="enrollment-plan"
+                              checked={selectedEnrollmentPlanId === ep.id}
+                              onChange={() => setSelectedEnrollmentPlanId(ep.id)}
+                              className="accent-primary"
+                            />
+                            <div>
+                              <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">{ep.name}</p>
+                              <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">{ep.duration_days} días</p>
                             </div>
-                            <span className="font-[family-name:var(--font-headline-md)] text-[15px] text-primary">
-                              {formatCLP(ep.price)}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                      {selectedEnrollmentPlan && (
-                        <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant/60">
-                          {getEnrollmentLabel()}
-                        </p>
-                      )}
+                          </div>
+                          <span className="font-[family-name:var(--font-headline-md)] text-[15px] text-primary">
+                            {formatCLP(ep.price)}
+                          </span>
+                        </label>
+                      ))}
                     </div>
-                  )}
+                    {selectedEnrollmentPlan && (
+                      <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant/60">
+                        {getEnrollmentLabel()}
+                      </p>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -510,7 +519,7 @@ export default function CheckoutModal({
 
           <button
             onClick={handlePay}
-            disabled={!selectedId || processing || (showEnrollmentSection && !selectedEnrollmentPlanId && !selectedBeneficiary?.hasActiveEnrollment) || (mode === "enrollment-only" && !!selectedBeneficiary?.hasActiveEnrollment)}
+            disabled={!selectedId || processing || (showEnrollmentSection && !selectedEnrollmentPlanId && !selectedBeneficiary?.hasActiveEnrollment) || (mode === "enrollment-only" && !!selectedBeneficiary?.hasActiveEnrollment) || (mode === "membership" && !selectedBeneficiary?.hasActiveEnrollment && !selectedEnrollmentPlanId)}
             className="w-full btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider py-3 rounded-lg transition-opacity disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
           >
             {processing ? (
