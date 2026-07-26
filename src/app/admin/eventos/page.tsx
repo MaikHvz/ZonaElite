@@ -7,6 +7,8 @@ import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
 import ImageUpload from "@/components/admin/ImageUpload";
+import Toast from "@/components/admin/Toast";
+import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 
 interface Event {
   id: string;
@@ -46,6 +48,7 @@ export default function AdminEventosPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Event | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const load = async () => {
     const supabase = createClient();
@@ -72,33 +75,46 @@ export default function AdminEventosPage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    const supabase = createClient();
-    const payload = {
-      ...form,
-      description: form.description || null,
-      image: form.image || null,
-      location_name: form.location_name || null,
-      location_url: form.location_url || null,
-    };
-    if (editing) {
-      await supabase.from("events").update(payload).eq("id", editing.id);
-    } else {
-      await supabase.from("events").insert(payload);
+    try {
+      setSaving(true);
+      const supabase = createClient();
+      const payload = {
+        ...form,
+        description: form.description || null,
+        image: form.image || null,
+        location_name: form.location_name || null,
+        location_url: form.location_url || null,
+      };
+      if (editing) {
+        const { error } = await supabase.from("events").update(payload).eq("id", editing.id);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error, "actualizar evento"), type: "error" }); return; }
+      } else {
+        const { error } = await supabase.from("events").insert(payload);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error, "crear evento"), type: "error" }); return; }
+      }
+      setModalOpen(false);
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "guardar evento"), type: "error" });
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
-    setSaving(false);
-    await load();
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    setDeleting(true);
-    const supabase = createClient();
-    await supabase.from("events").delete().eq("id", deleteTarget.id);
-    setDeleting(false);
-    setDeleteTarget(null);
-    await load();
+    try {
+      setDeleting(true);
+      const supabase = createClient();
+      const { error } = await supabase.from("events").delete().eq("id", deleteTarget.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error, "eliminar evento"), type: "error" }); return; }
+      setDeleteTarget(null);
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "eliminar evento"), type: "error" });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const typeLabel = (t: string) => ({ torneo: "Torneo", graduacion: "Ceremonia", seminario: "Seminario", clase_especial: "Clase Especial" }[t] || t);
@@ -201,6 +217,7 @@ export default function AdminEventosPage() {
       </FormModal>
 
       <DeleteConfirm open={!!deleteTarget} title="Eliminar Evento" message={`¿Estás seguro de eliminar "${deleteTarget?.title}"? Esta acción no se puede deshacer.`} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} loading={deleting} />
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

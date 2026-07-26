@@ -8,6 +8,7 @@ import MembershipBreakdown from "@/components/admin/MembershipBreakdown";
 import NewStudentsChart from "@/components/admin/NewStudentsChart";
 import MonthlyComparison from "@/components/admin/MonthlyComparison";
 import PaymentOverview from "@/components/admin/PaymentOverview";
+import AttendanceOverview from "@/components/admin/AttendanceOverview";
 import Link from "next/link";
 
 export default function AdminDashboard() {
@@ -19,6 +20,7 @@ export default function AdminDashboard() {
     pendingPayments: 0,
     totalRevenue: 0,
     thisMonthRevenue: 0,
+    attendanceRate: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -26,6 +28,7 @@ export default function AdminDashboard() {
     const supabase = createClient();
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000).toISOString();
 
     Promise.all([
       supabase.from("profiles").select("id", { count: "exact", head: true }).eq("active", true),
@@ -35,9 +38,14 @@ export default function AdminDashboard() {
       supabase.from("payments").select("id", { count: "exact", head: true }).eq("status", "pendiente"),
       supabase.from("payments").select("amount").eq("status", "pagado"),
       supabase.from("payments").select("amount").eq("status", "pagado").gte("paid_at", thisMonthStart),
-    ]).then(([users, members, prods, events, pays, allPays, monthPays]) => {
+      supabase.from("attendance").select("status").gte("marked_at", thirtyDaysAgo),
+    ]).then(([users, members, prods, events, pays, allPays, monthPays, attRes]) => {
       const totalRevenue = (allPays.data || []).reduce((sum, p) => sum + (p.amount || 0), 0);
       const thisMonthRevenue = (monthPays.data || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+      const attRows = (attRes.data || []) as Array<{ status: string }>;
+      const attTotal = attRows.length;
+      const attPresent = attRows.filter((r) => r.status === "presente").length;
+      const attendanceRate = attTotal > 0 ? Math.round((attPresent / attTotal) * 100) : 0;
       setStats({
         users: users.count || 0,
         activeMemberships: members.count || 0,
@@ -46,6 +54,7 @@ export default function AdminDashboard() {
         pendingPayments: pays.count || 0,
         totalRevenue,
         thisMonthRevenue,
+        attendanceRate,
       });
       setLoading(false);
     });
@@ -66,12 +75,13 @@ export default function AdminDashboard() {
       </h1>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-10">
         <StatsCard icon="group" label="Usuarios Activos" value={stats.users} color="blue" />
         <StatsCard icon="card_membership" label="Membresías Activas" value={stats.activeMemberships} color="green" />
         <StatsCard icon="payments" label="Ingresos Mes" value={`$${stats.thisMonthRevenue.toLocaleString("es-CL")}`} color="green" />
         <StatsCard icon="emoji_events" label="Próximos Eventos" value={stats.upcomingEvents} color="yellow" />
         <StatsCard icon="pending_actions" label="Pagos Pendientes" value={stats.pendingPayments} color="yellow" />
+        <StatsCard icon="fact_check" label="Asistencia (30d)" value={`${stats.attendanceRate}%`} color="green" />
       </div>
 
       {/* Charts Grid */}
@@ -88,6 +98,14 @@ export default function AdminDashboard() {
           <MembershipBreakdown />
           <PaymentOverview />
         </div>
+      </div>
+
+      {/* Attendance Analytics */}
+      <h2 className="font-[family-name:var(--font-headline-md)] text-[18px] text-on-surface uppercase tracking-tighter mb-4">
+        Asistencia
+      </h2>
+      <div className="mb-8">
+        <AttendanceOverview />
       </div>
 
       {/* Quick Links */}

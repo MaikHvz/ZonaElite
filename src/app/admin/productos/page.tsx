@@ -7,6 +7,8 @@ import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
 import ImageUpload from "@/components/admin/ImageUpload";
+import Toast from "@/components/admin/Toast";
+import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 
 interface Product {
   id: string;
@@ -32,6 +34,7 @@ export default function AdminProductosPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [images, setImages] = useState<(string | null)[]>([null, null, null]);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -71,71 +74,91 @@ export default function AdminProductosPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
 
-    if (editing) {
-      await supabase.from("products").update(form).eq("id", editing.id);
-    } else {
-      const { data: newProduct } = await supabase.from("products").insert(form).select("id").single();
-      if (newProduct) {
+      if (editing) {
+        const { error } = await supabase.from("products").update(form).eq("id", editing.id);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error), type: "error" }); setSaving(false); return; }
+      } else {
+        const { data: newProduct, error } = await supabase.from("products").insert(form).select("id").single();
+        if (error || !newProduct) { setToast({ msg: getSupabaseErrorMessage(error), type: "error" }); setSaving(false); return; }
         const inserts = images
           .map((url, position) => url ? { product_id: newProduct.id, url, position } : null)
           .filter((item): item is { product_id: string; url: string; position: number } => item !== null);
-        if (inserts.length > 0) await supabase.from("product_images").insert(inserts);
-      }
-      setModalOpen(false);
-      setSaving(false);
-      await load();
-      return;
-    }
-
-    if (editing) {
-      const existing = editing.product_images || [];
-      const newUrls = images.filter(Boolean);
-
-      const toDelete = existing.filter((ei) => !newUrls.includes(ei.url));
-      if (toDelete.length > 0) {
-        await supabase.from("product_images").delete().in("id", toDelete.map((d) => d.id));
+        if (inserts.length > 0) {
+          const { error: imgError } = await supabase.from("product_images").insert(inserts);
+          if (imgError) { setToast({ msg: getSupabaseErrorMessage(imgError), type: "error" }); setSaving(false); return; }
+        }
+        setModalOpen(false);
+        setToast({ msg: "Producto creado", type: "success" });
+        await load();
+        return;
       }
 
-      const toInsert = images
-        .map((url, position) => {
-          if (!url) return null;
-          const alreadyExists = existing.some((ei) => ei.url === url);
-          if (alreadyExists) {
-            const ex = existing.find((ei) => ei.url === url);
-            if (ex && ex.position !== position) {
-              return { _update: true, id: ex.id, position };
+      if (editing) {
+        const existing = editing.product_images || [];
+        const newUrls = images.filter(Boolean);
+
+        const toDelete = existing.filter((ei) => !newUrls.includes(ei.url));
+        if (toDelete.length > 0) {
+          const { error: delError } = await supabase.from("product_images").delete().in("id", toDelete.map((d) => d.id));
+          if (delError) { setToast({ msg: getSupabaseErrorMessage(delError), type: "error" }); setSaving(false); return; }
+        }
+
+        const toInsert = images
+          .map((url, position) => {
+            if (!url) return null;
+            const alreadyExists = existing.some((ei) => ei.url === url);
+            if (alreadyExists) {
+              const ex = existing.find((ei) => ei.url === url);
+              if (ex && ex.position !== position) {
+                return { _update: true, id: ex.id, position };
+              }
+              return null;
             }
-            return null;
-          }
-          return { product_id: editing.id, url, position };
-        })
-        .filter(Boolean) as { product_id?: string; url?: string; position: number; id?: string; _update?: boolean }[];
+            return { product_id: editing.id, url, position };
+          })
+          .filter(Boolean) as { product_id?: string; url?: string; position: number; id?: string; _update?: boolean }[];
 
-      for (const item of toInsert) {
-        if (item._update && item.id) {
-          await supabase.from("product_images").update({ position: item.position }).eq("id", item.id);
-        } else if (item.product_id && item.url) {
-          await supabase.from("product_images").insert({ product_id: item.product_id, url: item.url, position: item.position });
+        for (const item of toInsert) {
+          if (item._update && item.id) {
+            const { error: updError } = await supabase.from("product_images").update({ position: item.position }).eq("id", item.id);
+            if (updError) { setToast({ msg: getSupabaseErrorMessage(updError), type: "error" }); setSaving(false); return; }
+          } else if (item.product_id && item.url) {
+            const { error: insError } = await supabase.from("product_images").insert({ product_id: item.product_id, url: item.url, position: item.position });
+            if (insError) { setToast({ msg: getSupabaseErrorMessage(insError), type: "error" }); setSaving(false); return; }
+          }
         }
       }
-    }
 
-    setModalOpen(false);
-    setSaving(false);
-    await load();
+      setModalOpen(false);
+      setToast({ msg: editing ? "Producto actualizado" : "Producto creado", type: "success" });
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e), type: "error" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    const supabase = createClient();
-    await supabase.from("product_images").delete().eq("product_id", deleteTarget.id);
-    await supabase.from("products").delete().eq("id", deleteTarget.id);
-    setDeleting(false);
-    setDeleteTarget(null);
-    await load();
+    try {
+      const supabase = createClient();
+      const { error: imgDelError } = await supabase.from("product_images").delete().eq("product_id", deleteTarget.id);
+      if (imgDelError) { setToast({ msg: getSupabaseErrorMessage(imgDelError), type: "error" }); setDeleting(false); return; }
+      const { error } = await supabase.from("products").delete().eq("id", deleteTarget.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error), type: "error" }); setDeleting(false); return; }
+      setDeleteTarget(null);
+      setToast({ msg: "Producto eliminado", type: "success" });
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e), type: "error" });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const updateImage = (index: number, url: string | null) => {
@@ -242,6 +265,8 @@ export default function AdminProductosPage() {
       </FormModal>
 
       <DeleteConfirm open={!!deleteTarget} title="Eliminar Producto" message={`¿Estás seguro de eliminar "${deleteTarget?.name}"? Esta acción no se puede deshacer.`} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} loading={deleting} />
+
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

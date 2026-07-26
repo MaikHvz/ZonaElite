@@ -84,12 +84,25 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
     setSelectedProfile(p);
     setForm({ ...form, search: p.full_name, beneficiaryId: "", planId: "", amount: 0 });
     const supabase = createClient();
-    const [depRes, benRes] = await Promise.all([
-      supabase.from("dependents").select("id, full_name, tutor_id, category").eq("tutor_id", p.id),
-      supabase.from("beneficiaries").select("id, profile_id, dependent_id").or(`profile_id.eq.${p.id},dependent_id.in.(select id from dependents where tutor_id = ${p.id})`),
-    ]);
-    setDependents((depRes.data as Dependent[]) || []);
-    setBeneficiaries((benRes.data as Beneficiary[]) || []);
+    const depRes = await supabase.from("dependents").select("id, full_name, tutor_id, category").eq("tutor_id", p.id);
+    const deps = (depRes.data as Dependent[]) || [];
+    setDependents(deps);
+
+    const benByProfile = await supabase.from("beneficiaries").select("id, profile_id, dependent_id").eq("profile_id", p.id);
+    const benList = [...((benByProfile.data as Beneficiary[]) || [])];
+
+    if (deps.length > 0) {
+      const depIds = deps.map((d) => d.id);
+      const benByDependent = await supabase.from("beneficiaries").select("id, profile_id, dependent_id").in("dependent_id", depIds);
+      const depBenList = (benByDependent.data as Beneficiary[]) || [];
+      for (const b of depBenList) {
+        if (!benList.find((existing) => existing.id === b.id)) {
+          benList.push(b);
+        }
+      }
+    }
+
+    setBeneficiaries(benList);
   };
 
   const getBeneficiaryId = (profileId: string, dependentId: string | null): string => {
@@ -137,7 +150,8 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
       }
 
       await supabase.from("payments").insert({
-        user_id: user?.id,
+        user_id: selectedProfile.id,
+        beneficiary_id: form.beneficiaryId,
         membership_id: membership.id,
         concept: `Asignación manual - ${plan.name}`,
         amount: form.amount,

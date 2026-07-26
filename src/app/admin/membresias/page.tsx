@@ -9,6 +9,8 @@ import StatusBadge from "@/components/admin/StatusBadge";
 import AssignMembershipModal from "@/components/admin/AssignMembershipModal";
 import MembershipReceipt from "@/components/admin/MembershipReceipt";
 import type { ReceiptData } from "@/components/admin/MembershipReceipt";
+import Toast from "@/components/admin/Toast";
+import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 
 interface Plan { id: string; name: string; price: number; duration_days: number; category: string; benefits: string[]; active: boolean; }
 interface Membership { id: string; beneficiary_id: string; plan_id: string; purchased_by: string; start_date: string; end_date: string; status: string; created_at: string; membership_plans?: { name: string }; profiles?: { full_name: string }; beneficiaries?: { dependents?: { full_name: string; profiles?: { full_name: string } | null } | null; profiles?: { full_name: string } | null }; }
@@ -33,6 +35,7 @@ export default function AdminMembresiasPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Membership | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const load = async () => {
     const supabase = createClient();
@@ -62,26 +65,39 @@ export default function AdminMembresiasPage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    const supabase = createClient();
-    if (editing) {
-      await supabase.from("membership_plans").update(form).eq("id", editing.id);
-    } else {
-      await supabase.from("membership_plans").insert(form);
+    try {
+      setSaving(true);
+      const supabase = createClient();
+      if (editing) {
+        const { error } = await supabase.from("membership_plans").update(form).eq("id", editing.id);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error, "actualizar plan"), type: "error" }); return; }
+      } else {
+        const { error } = await supabase.from("membership_plans").insert(form);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error, "crear plan"), type: "error" }); return; }
+      }
+      setModalOpen(false);
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "guardar plan"), type: "error" });
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
-    setSaving(false);
-    await load();
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    setDeleting(true);
-    const supabase = createClient();
-    await supabase.from("membership_plans").delete().eq("id", deleteTarget.id);
-    setDeleting(false);
-    setDeleteTarget(null);
-    await load();
+    try {
+      setDeleting(true);
+      const supabase = createClient();
+      const { error } = await supabase.from("membership_plans").delete().eq("id", deleteTarget.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error, "eliminar plan"), type: "error" }); return; }
+      setDeleteTarget(null);
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "eliminar plan"), type: "error" });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const openEditMembership = (m: Membership) => {
@@ -91,22 +107,34 @@ export default function AdminMembresiasPage() {
 
   const handleSaveMembership = async () => {
     if (!editMembership) return;
-    setEditSaving(true);
-    const supabase = createClient();
-    await supabase.from("memberships").update({ end_date: editForm.endDate, status: editForm.status }).eq("id", editMembership.id);
-    setEditSaving(false);
-    setEditMembership(null);
-    await load();
+    try {
+      setEditSaving(true);
+      const supabase = createClient();
+      const { error } = await supabase.from("memberships").update({ end_date: editForm.endDate, status: editForm.status }).eq("id", editMembership.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error, "actualizar membresía"), type: "error" }); return; }
+      setEditMembership(null);
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "guardar membresía"), type: "error" });
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const handleCancelMembership = async () => {
     if (!cancelTarget) return;
-    setCancelling(true);
-    const supabase = createClient();
-    await supabase.from("memberships").update({ status: "cancelada" }).eq("id", cancelTarget.id);
-    setCancelling(false);
-    setCancelTarget(null);
-    await load();
+    try {
+      setCancelling(true);
+      const supabase = createClient();
+      const { error } = await supabase.from("memberships").update({ status: "cancelada" }).eq("id", cancelTarget.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error, "cancelar membresía"), type: "error" }); return; }
+      setCancelTarget(null);
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "cancelar membresía"), type: "error" });
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const getBeneficiaryName = (m: Membership): string => {
@@ -313,6 +341,7 @@ export default function AdminMembresiasPage() {
 
       {/* Assign membership modal */}
       <AssignMembershipModal open={assignOpen} onClose={() => setAssignOpen(false)} onSaved={load} />
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

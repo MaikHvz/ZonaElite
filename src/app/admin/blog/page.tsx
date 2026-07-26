@@ -7,6 +7,8 @@ import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
 import ImageUpload from "@/components/admin/ImageUpload";
+import Toast from "@/components/admin/Toast";
+import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 
 interface BlogPost { id: string; title: string; slug: string; content: string; cover_image: string | null; status: string; published_at: string | null; created_at: string; }
 
@@ -23,6 +25,7 @@ export default function AdminBlogPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<BlogPost | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const load = async () => {
     const supabase = createClient();
@@ -37,28 +40,41 @@ export default function AdminBlogPage() {
   const openEdit = (p: BlogPost) => { setEditing(p); setForm({ title: p.title, slug: p.slug, content: p.content, cover_image: p.cover_image || "", status: p.status }); setModalOpen(true); };
 
   const handleSave = async () => {
-    setSaving(true);
-    const supabase = createClient();
-    const payload = { ...form, cover_image: form.cover_image || null, slug: form.slug || slugify(form.title) };
-    if (editing) {
-      await supabase.from("blog_posts").update(payload).eq("id", editing.id);
-    } else {
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("blog_posts").insert({ ...payload, author_id: user?.id });
+    try {
+      setSaving(true);
+      const supabase = createClient();
+      const payload = { ...form, cover_image: form.cover_image || null, slug: form.slug || slugify(form.title) };
+      if (editing) {
+        const { error } = await supabase.from("blog_posts").update(payload).eq("id", editing.id);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error, "actualizar post"), type: "error" }); return; }
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from("blog_posts").insert({ ...payload, author_id: user?.id });
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error, "crear post"), type: "error" }); return; }
+      }
+      setModalOpen(false);
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "guardar post"), type: "error" });
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
-    setSaving(false);
-    await load();
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    setDeleting(true);
-    const supabase = createClient();
-    await supabase.from("blog_posts").delete().eq("id", deleteTarget.id);
-    setDeleting(false);
-    setDeleteTarget(null);
-    await load();
+    try {
+      setDeleting(true);
+      const supabase = createClient();
+      const { error } = await supabase.from("blog_posts").delete().eq("id", deleteTarget.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error, "eliminar post"), type: "error" }); return; }
+      setDeleteTarget(null);
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "eliminar post"), type: "error" });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -126,6 +142,7 @@ export default function AdminBlogPage() {
       </FormModal>
 
       <DeleteConfirm open={!!deleteTarget} title="Eliminar Post" message={`¿Estás seguro de eliminar "${deleteTarget?.title}"? Esta acción no se puede deshacer.`} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} loading={deleting} />
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
