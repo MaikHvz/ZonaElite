@@ -38,6 +38,24 @@ interface Toast {
 
 const DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
+function getWeekDates(): { dayName: string; date: string; full: string }[] {
+  const today = new Date();
+  const dow = today.getDay();
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return {
+      dayName: DAY_NAMES[i + 1],
+      date: d.toLocaleDateString("es-CL", { day: "numeric", month: "short" }),
+      full: d.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+    };
+  });
+}
+
 let toastId = 0;
 
 export default function HorariosPage() {
@@ -52,6 +70,7 @@ export default function HorariosPage() {
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
   const [selectedEnrolledCount, setSelectedEnrolledCount] = useState(0);
 
+  const weekDates = getWeekDates();
   const supabase = createClient();
 
   const addToast = (message: string, type: "success" | "error" = "success") => {
@@ -213,15 +232,16 @@ export default function HorariosPage() {
                 {/* Day Headers */}
                 <div className="grid grid-cols-[60px_repeat(6,1fr)] md:grid-cols-[80px_repeat(6,1fr)] gap-1.5 md:gap-2 mb-3">
                   <div />
-                  {DAY_NAMES.slice(1).map((day, i) => (
+                  {weekDates.map((wd, i) => (
                     <div key={i} className="text-center">
-                      <p className="font-[family-name:var(--font-label-sm)] text-on-surface-variant uppercase tracking-wider text-[10px] leading-[14px] md:text-[12px] md:leading-[16px]">{day}</p>
+                      <p className="font-[family-name:var(--font-label-sm)] text-on-surface uppercase tracking-wider text-[10px] leading-[14px] md:text-[12px] md:leading-[16px]">{wd.dayName}</p>
+                      <p className="font-[family-name:var(--font-label-sm)] text-primary/70 text-[9px] leading-[12px] md:text-[10px] md:leading-[14px] capitalize">{wd.date}</p>
                     </div>
                   ))}
                 </div>
                 <div className="grid grid-cols-[60px_repeat(6,1fr)] md:grid-cols-[80px_repeat(6,1fr)] gap-1.5 md:gap-2 mb-3">
                   <div />
-                  {DAY_NAMES.slice(1).map((_, i) => (<div key={i} className="h-0.5 rounded-full bg-primary/40" />))}
+                  {weekDates.map((_, i) => (<div key={i} className="h-0.5 rounded-full bg-primary/40" />))}
                 </div>
 
                 {/* Time Rows */}
