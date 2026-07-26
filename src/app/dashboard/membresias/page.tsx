@@ -22,12 +22,20 @@ interface EnrollmentStatus {
   beneficiaryId: string | null;
 }
 
+interface BeneficiaryEnrollment {
+  name: string;
+  hasActive: boolean;
+  planName: string | null;
+  endDate: string | null;
+}
+
 export default function MembresiasPage() {
   const { user } = useSession();
   const [memberships, setMemberships] = useState<MembershipData[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [enrollment, setEnrollment] = useState<EnrollmentStatus>({ hasActive: false, planName: null, endDate: null, beneficiaryId: null });
+  const [allBeneficiaryEnrollments, setAllBeneficiaryEnrollments] = useState<BeneficiaryEnrollment[]>([]);
   const [enrollmentPlans, setEnrollmentPlans] = useState<EnrollmentPlan[]>([]);
   const [enrollCheckoutOpen, setEnrollCheckoutOpen] = useState(false);
 
@@ -39,12 +47,16 @@ export default function MembresiasPage() {
       const { data } = await getUserMemberships(user.id);
       setMemberships(data?.memberships || []);
 
-      // Fetch enrollment status
+      const today = new Date().toISOString().split("T")[0];
+
+      // Fetch enrollment status for own beneficiary
       const { data: ownBen } = await supabase
         .from("beneficiaries")
         .select("id")
         .eq("profile_id", user.id)
         .maybeSingle();
+
+      const beneficiaryEnrollments: BeneficiaryEnrollment[] = [];
 
       if (ownBen) {
         const { data: enrollData } = await supabase
@@ -52,7 +64,7 @@ export default function MembresiasPage() {
           .select("end_date, enrollment_plans(name)")
           .eq("beneficiary_id", ownBen.id)
           .eq("status", "activa")
-          .gte("end_date", new Date().toISOString().split("T")[0])
+          .gte("end_date", today)
           .maybeSingle();
 
         const e = enrollData as { end_date: string; enrollment_plans?: { name: string } } | null;
@@ -62,7 +74,66 @@ export default function MembresiasPage() {
           endDate: e?.end_date || null,
           beneficiaryId: ownBen.id,
         });
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        beneficiaryEnrollments.push({
+          name: (profile as { full_name: string } | null)?.full_name || "Tú",
+          hasActive: !!e,
+          planName: e?.enrollment_plans?.name || null,
+          endDate: e?.end_date || null,
+        });
       }
+
+      // Fetch enrollment for dependents
+      const { data: deps } = await supabase
+        .from("dependents")
+        .select("id, full_name, beneficiaries(id)")
+        .eq("tutor_id", user.id);
+
+      if (deps && deps.length > 0) {
+        const depBenIds = (deps as Array<{ id: string; full_name: string; beneficiaries: unknown }>)
+          .map((d) => {
+            const b = d.beneficiaries;
+            if (!b) return null;
+            return Array.isArray(b) ? (b[0] as { id: string })?.id : (b as { id: string }).id;
+          })
+          .filter(Boolean) as string[];
+
+        if (depBenIds.length > 0) {
+          const { data: depEnrolls } = await supabase
+            .from("academy_enrollments")
+            .select("beneficiary_id, end_date, enrollment_plans(name)")
+            .in("beneficiary_id", depBenIds)
+            .eq("status", "activa")
+            .gte("end_date", today);
+
+          const enrollMap = new Map(
+            (depEnrolls || []).map((e: { beneficiary_id: string; end_date: string; enrollment_plans: unknown }) => [
+              e.beneficiary_id,
+              { planName: (Array.isArray(e.enrollment_plans) ? e.enrollment_plans[0] : e.enrollment_plans) as { name: string } | null, endDate: e.end_date },
+            ])
+          );
+
+          for (const dep of deps as Array<{ id: string; full_name: string; beneficiaries: unknown }>) {
+            const b = dep.beneficiaries;
+            const benId = Array.isArray(b) ? (b[0] as { id: string })?.id : (b as { id: string } | null)?.id;
+            const enroll = benId ? enrollMap.get(benId) : null;
+            beneficiaryEnrollments.push({
+              name: dep.full_name,
+              hasActive: !!enroll,
+              planName: enroll?.planName?.name || null,
+              endDate: enroll?.endDate || null,
+            });
+          }
+        }
+      }
+
+      setAllBeneficiaryEnrollments(beneficiaryEnrollments);
 
       // Fetch enrollment plans for checkout
       const { data: plans } = await supabase
@@ -99,45 +170,63 @@ export default function MembresiasPage() {
 
       {/* Enrollment Status */}
       {!loading && (
-        <div className={`glass-card p-4 flex items-center gap-4 ${
-          enrollment.hasActive ? "border-l-4 border-l-green-500" : "border-l-4 border-l-amber-500"
+        <div className={`glass-card p-4 border-l-4 ${
+          allBeneficiaryEnrollments.every((b) => b.hasActive)
+            ? "border-l-green-500"
+            : allBeneficiaryEnrollments.some((b) => b.hasActive)
+              ? "border-l-amber-500"
+              : "border-l-red-500"
         }`}>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-            enrollment.hasActive ? "bg-green-500/10" : "bg-amber-500/10"
-          }`}>
-            <span className={`material-symbols-outlined text-[20px] ${
-              enrollment.hasActive ? "text-green-400" : "text-amber-400"
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              allBeneficiaryEnrollments.every((b) => b.hasActive)
+                ? "bg-green-500/10"
+                : "bg-amber-500/10"
             }`}>
-              {enrollment.hasActive ? "badge" : "warning"}
-            </span>
+              <span className={`material-symbols-outlined text-[20px] ${
+                allBeneficiaryEnrollments.every((b) => b.hasActive)
+                  ? "text-green-400"
+                  : "text-amber-400"
+              }`}>
+                badge
+              </span>
+            </div>
+            <div>
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                Inscripciones a la academia
+              </p>
+              <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">
+                {allBeneficiaryEnrollments.filter((b) => b.hasActive).length} de {allBeneficiaryEnrollments.length} {allBeneficiaryEnrollments.length === 1 ? "beneficiario con" : "beneficiarios con"} inscripción activa
+              </p>
+            </div>
           </div>
-          <div className="flex-1">
-            {enrollment.hasActive ? (
-              <>
-                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
-                  Inscripción <strong>{enrollment.planName}</strong> vigente
-                </p>
-                <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">
-                  Vence el {formatDate(enrollment.endDate || "")}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
-                  Sin inscripción a la academia
-                </p>
-                <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">
-                  Requisito para comprar membresías e inscribirte en clases
-                </p>
-              </>
-            )}
+
+          <div className="space-y-2">
+            {allBeneficiaryEnrollments.map((b) => (
+              <div key={b.name} className={`flex items-center justify-between px-3 py-2 rounded-lg ${
+                b.hasActive ? "bg-green-500/5" : "bg-amber-500/5"
+              }`}>
+                <span className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface">{b.name}</span>
+                {b.hasActive ? (
+                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-green-400">
+                    {b.planName} — vence {new Date(b.endDate + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
+                ) : (
+                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400">
+                    Sin inscripción
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
-          {!enrollment.hasActive && enrollmentPlans.length > 0 && (
+
+          {allBeneficiaryEnrollments.some((b) => !b.hasActive) && enrollmentPlans.length > 0 && (
             <button
               onClick={() => setEnrollCheckoutOpen(true)}
-              className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-lg hover:bg-amber-500/10 transition-colors cursor-pointer"
+              className="mt-3 flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400 hover:text-on-surface transition-colors cursor-pointer"
             >
-              Comprar Inscripción
+              <span className="material-symbols-outlined text-[14px]">add_shopping_cart</span>
+              Comprar inscripción
             </button>
           )}
         </div>

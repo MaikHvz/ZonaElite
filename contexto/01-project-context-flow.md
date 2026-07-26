@@ -262,8 +262,8 @@ Sistema de pagos integrado con la pasarela de Flow.cl en modo sandbox.
 |---------|--------|---------|
 | `src/lib/flow.ts` | — | Funciones core: `signFlowParams` (HMAC-SHA256), `createFlowOrder`, `verifyFlowPayment`, `verifyFlowCallbackSignature` |
 | `src/lib/flow-helpers.ts` | — | Helpers: `confirmAndCreateMembership`, `markPaymentAsPaid`, `findPaymentByToken`, `findPaymentByTokenAndUser`, `extractPlanName`, `extendEnrollment` |
-| `src/app/api/flow/create-order/route.ts` | POST | Crea pago pendiente en DB + orden en Flow API. Acepta `includeEnrollment` + `enrollmentPlanId`. Previene duplicados (reutiliza pago pendiente de últimos 5 min). Retorna URL de Flow. |
-| `src/app/api/flow/confirmation/route.ts` | POST/GET | Callback de Flow. Usa `after()` de `next/server` para procesamiento background. Flujo: verificar firma → verificar pago → marcar pagado → crear membresía → extender inscripción. |
+| `src/app/api/flow/create-order/route.ts` | POST | Crea pago pendiente en DB + orden en Flow API. Almacena `include_enrollment` y `enrollment_plan_id` en `payments`. Previene duplicados (reutiliza pago pendiente de últimos 5 min). Retorna URL de Flow. |
+| `src/app/api/flow/confirmation/route.ts` | POST/GET | Callback de Flow. Usa `after()` de `next/server` para procesamiento background. Flujo: verificar firma → verificar pago → marcar pagado → crear membresía → extender inscripción (lee de `payments.include_enrollment`). |
 | `src/app/api/flow/verify/route.ts` | GET | Verificación client-side. El frontend llama con el token para confirmar estado y mostrar banner. |
 | `src/app/api/flow/force-confirm/route.ts` | POST | Recuperación manual para admin. Verifica con Flow API y fuerza confirmación si está pagado. |
 | `src/app/api/flow/debug/route.ts` | GET | Diagnóstico de pagos: config, pagos recientes, verificación con Flow API. |
@@ -277,7 +277,8 @@ Sistema de pagos integrado con la pasarela de Flow.cl en modo sandbox.
 - Genera `commerceOrder` como UUID
 - Previene duplicados: busca pago pendiente del mismo usuario en últimos 5 minutos
 - Inserta en `payments` con status `'pendiente'`, concepto `"Membresía {plan.name}"` o `"Inscripción {enrollmentPlan.name} + Membresía {plan.name}"`
-- Llama a Flow API con `subject` y `metadata` incluyendo `includeEnrollment`, `enrollmentPlanId`
+- **Almacena `include_enrollment` y `enrollment_plan_id` directamente en la tabla `payments`** (no confía en el campo `optional` de Flow que no se retorna en `getStatus`)
+- Llama a Flow API con `subject`
 - Guarda `flow_token` y `flow_order` en el pago
 
 **Confirmación** (`confirmation`):
@@ -293,7 +294,7 @@ Sistema de pagos integrado con la pasarela de Flow.cl en modo sandbox.
   7. Busca o crea beneficiario para el usuario
   8. Verifica dedup de membresía (ventana de 10 minutos)
   9. Crea membresía con `start_date` = hoy, `end_date` = hoy + `duration_days`
-  10. **Si `metadata.includeEnrollment`**: crea o extiende inscripción en `academy_enrollments` vía `extendEnrollment()`
+  10. **Si `payments.include_enrollment` está en `true`** (leído del registro de pago, NO de Flow): crea o extiende inscripción en `academy_enrollments` vía `extendEnrollment()`
 
 **Verificación client-side** (`verify`):
 - El frontend llama a `GET /api/flow/verify?token=XXX` al cargar `/dashboard/pagos`

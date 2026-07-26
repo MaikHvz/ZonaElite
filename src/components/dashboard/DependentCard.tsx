@@ -33,6 +33,10 @@ export default function DependentCard({
     .flatMap((b) => b.memberships || [])
     .find((m) => m.status === "activa");
 
+  const activeEnrollment = beneficiaryList
+    .flatMap((b) => b.academy_enrollments || [])
+    .find((e) => e.status === "activa" && e.end_date >= new Date().toISOString().split("T")[0]);
+
   return (
     <div className="bg-surface-container border border-on-surface/5 rounded-2xl p-5 hover:border-primary/30 transition-colors">
       <div className="flex items-center gap-4 mb-4">
@@ -71,6 +75,17 @@ export default function DependentCard({
             <span className="text-on-surface">{dependent.rut}</span>
           </div>
         )}
+
+        <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
+          <span className="text-on-surface-variant">Inscripción</span>
+          {activeEnrollment ? (
+            <span className="text-green-400">
+              {activeEnrollment.enrollment_plans?.name || "Activa"} — vence {new Date(activeEnrollment.end_date + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" })}
+            </span>
+          ) : (
+            <span className="text-amber-400">Sin inscripción</span>
+          )}
+        </div>
 
         <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px] pt-2 border-t border-on-surface/5">
           <span className="text-on-surface-variant">Membresía</span>

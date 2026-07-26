@@ -29,11 +29,19 @@ interface EnrollmentStatus {
   loading: boolean;
 }
 
+interface BeneficiaryEnrollment {
+  name: string;
+  hasActive: boolean;
+  planName: string | null;
+  endDate: string | null;
+}
+
 export default function DashboardPage() {
   const { user } = useSession();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [enrollment, setEnrollment] = useState<EnrollmentStatus>({ hasActive: false, planName: null, endDate: null, loading: true });
+  const [allBeneficiaryEnrollments, setAllBeneficiaryEnrollments] = useState<BeneficiaryEnrollment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,13 +67,16 @@ export default function DashboardPage() {
         .eq("profile_id", user.id)
         .maybeSingle();
 
+      const today = new Date().toISOString().split("T")[0];
+      const beneficiaryEnrollments: BeneficiaryEnrollment[] = [];
+
       if (ownBen) {
         const { data: enrollData } = await supabase
           .from("academy_enrollments")
           .select("end_date, enrollment_plans(name)")
           .eq("beneficiary_id", ownBen.id)
           .eq("status", "activa")
-          .gte("end_date", new Date().toISOString().split("T")[0])
+          .gte("end_date", today)
           .maybeSingle();
 
         const e = enrollData as { end_date: string; enrollment_plans?: { name: string } } | null;
@@ -75,9 +86,69 @@ export default function DashboardPage() {
           endDate: e?.end_date || null,
           loading: false,
         });
+
+        // Get own name
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        beneficiaryEnrollments.push({
+          name: (profile as { full_name: string } | null)?.full_name || "Tú",
+          hasActive: !!e,
+          planName: e?.enrollment_plans?.name || null,
+          endDate: e?.end_date || null,
+        });
       } else {
         setEnrollment({ hasActive: false, planName: null, endDate: null, loading: false });
       }
+
+      // Fetch enrollment for dependents
+      const { data: deps } = await supabase
+        .from("dependents")
+        .select("id, full_name, beneficiaries(id)")
+        .eq("tutor_id", user.id);
+
+      if (deps && deps.length > 0) {
+        const depBenIds = (deps as Array<{ id: string; full_name: string; beneficiaries: unknown }>)
+          .map((d) => {
+            const b = d.beneficiaries;
+            if (!b) return null;
+            return Array.isArray(b) ? (b[0] as { id: string })?.id : (b as { id: string }).id;
+          })
+          .filter(Boolean) as string[];
+
+        if (depBenIds.length > 0) {
+          const { data: depEnrolls } = await supabase
+            .from("academy_enrollments")
+            .select("beneficiary_id, end_date, enrollment_plans(name)")
+            .in("beneficiary_id", depBenIds)
+            .eq("status", "activa")
+            .gte("end_date", today);
+
+          const enrollMap = new Map(
+            (depEnrolls || []).map((e: { beneficiary_id: string; end_date: string; enrollment_plans: unknown }) => [
+              e.beneficiary_id,
+              { planName: (Array.isArray(e.enrollment_plans) ? e.enrollment_plans[0] : e.enrollment_plans) as { name: string } | null, endDate: e.end_date },
+            ])
+          );
+
+          for (const dep of deps as Array<{ id: string; full_name: string; beneficiaries: unknown }>) {
+            const b = dep.beneficiaries;
+            const benId = Array.isArray(b) ? (b[0] as { id: string })?.id : (b as { id: string } | null)?.id;
+            const enroll = benId ? enrollMap.get(benId) : null;
+            beneficiaryEnrollments.push({
+              name: dep.full_name,
+              hasActive: !!enroll,
+              planName: enroll?.planName?.name || null,
+              endDate: enroll?.endDate || null,
+            });
+          }
+        }
+      }
+
+      setAllBeneficiaryEnrollments(beneficiaryEnrollments);
 
       setLoading(false);
     })();
@@ -183,6 +254,38 @@ export default function DashboardPage() {
           )}
         </div>
       )}
+
+      {/* Beneficiary Enrollment Summary */}
+      {!loading && allBeneficiaryEnrollments.length > 1 && (() => {
+        const missing = allBeneficiaryEnrollments.filter((b) => !b.hasActive);
+        if (missing.length === 0) return null;
+        return (
+          <div className="glass-card p-4 border-l-4 border-l-amber-500">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                <span className="material-symbols-outlined text-amber-400 text-[18px]">group_off</span>
+              </div>
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                <strong>{missing.length}</strong> {missing.length === 1 ? "beneficiario tiene" : "beneficiarios tienen"} inscripción pendiente
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {missing.map((b) => (
+                <span key={b.name} className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
+                  {b.name}
+                </span>
+              ))}
+            </div>
+            <Link
+              href="/dashboard/membresias"
+              className="mt-3 inline-flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400 hover:text-on-surface transition-colors"
+            >
+              Comprar inscripción
+              <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            </Link>
+          </div>
+        );
+      })()}
 
       {loading ? (
         <>

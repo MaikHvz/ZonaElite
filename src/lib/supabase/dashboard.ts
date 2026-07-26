@@ -56,6 +56,11 @@ export interface DependentData {
       end_date: string;
       plan: { name: string; price: number } | null;
     }[];
+    academy_enrollments: {
+      status: string;
+      end_date: string;
+      enrollment_plans: { name: string } | null;
+    }[];
   }[];
 }
 
@@ -198,6 +203,11 @@ export async function getUserDependents(userId: string) {
             status,
             end_date,
             plan:membership_plans(name, price)
+          ),
+          academy_enrollments(
+            status,
+            end_date,
+            enrollment_plans(name)
           )
         )
       `

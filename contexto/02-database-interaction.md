@@ -490,28 +490,33 @@ const { data: existingPending } = await supabase
   .gte("created_at", fiveMinAgo)
   .maybeSingle();
 
-// 5. Insertar pago pendiente
+// 5. Insertar pago pendiente CON metadata de inscripción
+const insertPayload = {
+  user_id: user.id,
+  beneficiary_id: beneficiary.id,
+  commerce_order: crypto.randomUUID(),
+  concept: `Membresía ${plan.name}`,
+  amount: plan.price,
+  method: "flow",
+  status: "pendiente",
+};
+if (enrollmentPlan) {
+  insertPayload.include_enrollment = true;
+  insertPayload.enrollment_plan_id = enrollmentPlan.id;
+}
+
 const { data: payment } = await supabase
   .from("payments")
-  .insert({
-    user_id: user.id,
-    beneficiary_id: beneficiary.id,
-    commerce_order: crypto.randomUUID(),
-    concept: `Membresía ${plan.name}`,
-    amount: plan.price,
-    method: "flow",
-    status: "pendiente",
-  })
+  .insert(insertPayload)
   .select("id")
   .single();
 
-// 6. Llamar a la API de Flow con HMAC-SHA256
+// 6. Llamar a la API de Flow (sin metadata optional)
 const flowResponse = await createFlowOrder({
   commerceOrder,
-  subject: `Membresía ${plan.name} - ZONAELITE`,
-  amount: plan.price,
+  subject: `${concept} - ZONAELITE`,
+  amount: totalAmount,
   email: user.email || "",
-  metadata: { paymentId: payment.id, planId: plan.id, beneficiaryId: beneficiary.id },
 });
 
 // 7. Guardar token de Flow en el pago
@@ -520,6 +525,8 @@ await supabase
   .update({ flow_token: flowResponse.token, flow_order: flowResponse.flowOrder })
   .eq("id", payment.id);
 ```
+
+> **Nota**: La metadata de inscripción se almacena directamente en la tabla `payments` (`include_enrollment`, `enrollment_plan_id`) porque Flow **no retorna** el campo `optional` en la respuesta de `getStatus`. El confirmation callback lee estas columnas directamente del registro de pago.
 
 #### Confirmación Callback — POST `/api/flow/confirmation`
 
@@ -537,9 +544,10 @@ export async function POST(request: Request) {
 
 async function processInBackground(token: string) {
   // 1. Buscar pago por flow_token (admin client bypasses RLS)
+  // Incluye: include_enrollment, enrollment_plan_id
   const { data: payment } = await supabase
     .from("payments")
-    .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id, membership_id")
+    .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id, membership_id, include_enrollment, enrollment_plan_id")
     .eq("flow_token", token)
     .maybeSingle();
 
@@ -553,10 +561,20 @@ async function processInBackground(token: string) {
     .update({ status: "pagado", paid_at: new Date().toISOString(), flow_order })
     .eq("id", payment.id);
 
-  // 4. Crear membresía (createMembershipDebug)
-  await createMembershipDebug(supabase, payment);
+  // 4. Crear membresía (solo si concepto contiene "Membresía")
+  const hasMembership = /membres[íi]a/i.test(payment.concept || "");
+  if (hasMembership) {
+    await confirmAndCreateMembership(supabase, payment.id, payment.user_id);
+  }
+
+  // 5. Crear/extender inscripción (si include_enrollment está en true)
+  if (payment.include_enrollment && payment.enrollment_plan_id && payment.beneficiary_id) {
+    await extendEnrollment(supabase, payment.id, payment.beneficiary_id, payment.enrollment_plan_id);
+  }
 }
 ```
+
+> **Nota**: La metadata de inscripción se lee del registro de `payments` (`include_enrollment`, `enrollment_plan_id`), NO del campo `optional` de la respuesta de Flow, porque Flow no lo retorna en `getStatus`.
 
 #### Flujo de creación de membresía (`confirmAndCreateMembership`)
 
@@ -1386,13 +1404,19 @@ if (includeEnrollment && enrollmentPlanId) {
   concept = `Inscripción ${enrollmentPlan.name} + Membresía ${plan.name}`;
 }
 
-// Metadata para confirmation callback
-metadata: {
-  paymentId: payment.id,
-  planId: plan?.id || null,
-  beneficiaryId: beneficiary.id,
-  includeEnrollment: includeEnrollment ? "true" : undefined,
-  enrollmentPlanId: enrollmentPlanId || undefined,
+// Almacena en payments (NO en Flow metadata optional)
+const insertPayload = {
+  user_id: user.id,
+  beneficiary_id: beneficiary.id,
+  commerce_order: commerceOrder,
+  concept,
+  amount: totalAmount,
+  method: "flow",
+  status: "pendiente",
+};
+if (enrollmentPlan) {
+  insertPayload.include_enrollment = true;
+  insertPayload.enrollment_plan_id = enrollmentPlan.id;
 }
 ```
 
@@ -1401,9 +1425,9 @@ metadata: {
 ```typescript
 export async function extendEnrollment(
   supabase: SupabaseClient,
+  paymentId: string,
   beneficiaryId: string,
-  enrollmentPlanId: string,
-  paymentId: string
+  enrollmentPlanId: string
 ) {
   const today = new Date().toISOString().split("T")[0];
 
@@ -1808,9 +1832,11 @@ File → validateFile() → extFromMime() → crypto.randomUUID()
 | flow_token     | text        | Token de Flow (nullable)       |
 | flow_order     | bigint      | Orden de Flow (nullable)       |
 | beneficiary_id | uuid        | FK → beneficiaries (nullable)  |
+| include_enrollment | boolean  | Incluye inscripción (default: false) |
+| enrollment_plan_id | uuid    | FK → enrollment_plans (nullable) |
 
 **RLS**: 3 policies (SELECT own, INSERT/UPDATE admin)
-**FK**: `user_id → profiles(id)`, `membership_id → memberships(id)`, `order_id → product_orders(id)`, `beneficiary_id → beneficiaries(id)`
+**FK**: `user_id → profiles(id)`, `membership_id → memberships(id)`, `order_id → product_orders(id)`, `beneficiary_id → beneficiaries(id)`, `enrollment_plan_id → enrollment_plans(id)`
 **Índices**: `user_id`, `status`, `flow_token`
 
 ### `events`
