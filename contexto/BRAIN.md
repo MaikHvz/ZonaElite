@@ -188,6 +188,7 @@ src/
 | `/admin/tipos-clase` | CRUD disciplinas: name, color_hex, icon, description, active |
 | `/admin/usuarios` | Usuarios + cargas agrupadas, cambio roles, activar/desactivar |
 | `/admin/membresias` | CRUD planes + asignación manual + editar/cancelar + PDF recibo |
+| `/admin/inscripciones` | **NUEVO** CRUD planes inscripción + inscripciones asignadas + asignación manual |
 | `/admin/asistencia` | Acordeón por sesión, "Generar sesiones", "Todos presentes", "Inscribir usuario" |
 | `/admin/blog` | CRUD: borrador/programado/publicado |
 | `/admin/notificaciones` | CRUD: aviso/recordatorio/comunicado/correo_masivo |
@@ -197,8 +198,8 @@ src/
 
 | Ruta | Método | Archivo | Descripción |
 |------|--------|---------|-------------|
-| `/api/flow/create-order` | POST | `api/flow/create-order/route.ts` | Crea pago pendiente + orden Flow. Previene duplicados (5 min window) |
-| `/api/flow/confirmation` | POST/GET | `api/flow/confirmation/route.ts` | Callback Flow. `after()` background: verificar → marcar pagado → crear membresía |
+| `/api/flow/create-order` | POST | `api/flow/create-order/route.ts` | Crea pago pendiente + orden Flow. Acepta `includeEnrollment` + `enrollmentPlanId` |
+| `/api/flow/confirmation` | POST/GET | `api/flow/confirmation/route.ts` | Callback Flow. `after()`: verificar → marcar pagado → crear membresía + extender inscripción |
 | `/api/flow/verify` | GET | `api/flow/verify/route.ts` | Client-side verification. Retorna estado para banner |
 | `/api/flow/force-confirm` | POST | `api/flow/force-confirm/route.ts` | Admin manual recovery |
 | `/api/flow/debug` | GET | `api/flow/debug/route.ts` | Diagnóstico pagos |
@@ -244,6 +245,7 @@ Grid semanal desde BD. Cada celda muestra disciplina (color), profesor, capacida
    g. Dedup check (10 min window)
    h. Create membership (start=today, end=today+duration_days)
    i. Link payment → membership
+   j. Si metadata.includeEnrollment → extendEnrollment() (extiende o crea)
 6. /dashboard/pagos llama /api/flow/verify → muestra banner éxito/error
 ```
 
@@ -251,9 +253,39 @@ Grid semanal desde BD. Cada celda muestra disciplina (color), profesor, capacida
 
 **Archivos Flow**:
 - `src/lib/flow.ts`: `signFlowParams()`, `createFlowOrder()`, `verifyFlowPayment()`, `verifyFlowCallbackSignature()`
-- `src/lib/flow-helpers.ts`: `confirmAndCreateMembership()`, `markPaymentAsPaid()`, `findPaymentByToken()`, `extractPlanName()`
+- `src/lib/flow-helpers.ts`: `confirmAndCreateMembership()`, `extendEnrollment()`, `markPaymentAsPaid()`, `findPaymentByToken()`, `extractPlanName()`
 
-### 5.5 Asistencia
+### 5.5 Sistema de Inscripciones (Matrícula)
+
+**Concepto**: Pago con vencimiento configurable que es prerequisito para comprar membresías e inscribirse en clases.
+
+**Reglas**:
+- Cada beneficiario necesita su propia inscripción vigente
+- Se puede comprar sola o bundled con membresía
+- Vencimiento solo bloquea nuevas compras (membresía activa sigue vigente)
+- 1 inscripción activa por beneficiario. Comprar otra **extiende** desde vencimiento actual
+- Admin puede asignar manualmente
+- Planes variables: 6 meses, 1 año, etc.
+
+**Archivos clave**:
+- `project-context/sql-academy-enrollments.sql`: Migración SQL
+- `src/app/admin/inscripciones/page.tsx`: CRUD admin (planes + inscripciones)
+- `src/components/CheckoutModal.tsx`: Dropdown planes, resumen bundled
+- `src/app/api/flow/create-order/route.ts`: Acepta `includeEnrollment` + `enrollmentPlanId`
+- `src/lib/flow-helpers.ts`: `extendEnrollment()` — crea o extiende inscripción
+- `src/app/api/flow/confirmation/route.ts`: Llama `extendEnrollment` en after()
+- `src/components/EnrollModal.tsx`: Gate de inscripción antes de membresía
+- `src/app/dashboard/page.tsx`: Badge estado inscripción
+- `src/app/dashboard/membresias/page.tsx`: Estado inscripción + botón comprar
+
+**Flujo de extensión**:
+```
+Inscripción actual vence: 2026-10-25 (faltan 2 meses)
+Compra plan "1 Año" (365 días)
+Nuevo vencimiento: 2027-10-25 (14 meses total)
+```
+
+### 5.6 Asistencia
 
 **Admin** (`/admin/asistencia`):
 1. "Generar sesiones" → `POST /api/admin/generate-sessions` → crea `class_sessions` próximas 4 semanas (idempotente)
@@ -285,7 +317,7 @@ Grid semanal desde BD. Cada celda muestra disciplina (color), profesor, capacida
 
 ## 6. Base de datos
 
-### 26 Tablas
+### 28 Tablas
 
 | Tabla | Descripción | FKs principales |
 |-------|-------------|----------------|
@@ -300,8 +332,10 @@ Grid semanal desde BD. Cada celda muestra disciplina (color), profesor, capacida
 | `dependents` | Cargas familiares | FK → profiles (tutor) |
 | `beneficiaries` | Vínculo perfil/dependiente al sistema | FK → profiles OR dependents |
 | `attendance` | Asistencia por sesión | FK → class_sessions, beneficiaries |
-| `membership_plans` | Planes (nombre, precio, duración, categoría) | — |
+| `membership_plans` | Planes de membresía (nombre, precio, duración) | — |
 | `memberships` | Membresías activas | FK → beneficiaries, membership_plans, profiles |
+| `enrollment_plans` | **NUEVO** Planes de inscripción (nombre, precio, duración) | — |
+| `academy_enrollments` | **NUEVO** Inscripciones a la academia | FK → beneficiaries, enrollment_plans, payments |
 | `products` | Tienda | — |
 | `product_images` | Imágenes (max 3) | FK → products |
 | `product_orders` | Órdenes | FK → profiles |

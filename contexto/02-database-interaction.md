@@ -19,7 +19,7 @@
 
 - **Base de datos**: PostgreSQL alojada en Supabase en `db.sfkkfcticgqdqvzthimz.supabase.co:5432/postgres`
 - **Storage**: Supabase Storage (compatible S3), bucket `"public"` (lectura pública)
-- **RLS**: 59 políticas de Row-Level Security habilitadas en todas las tablas
+- **RLS**: 66 políticas de Row-Level Security habilitadas en todas las tablas
 
 ### 1.2 Clientes de Supabase
 
@@ -264,7 +264,7 @@ $$;
 
 ## 3. Funciones Auxiliares de RLS
 
-Las 3 funciones definidas en la sección 2 se usan a través de **59 políticas RLS** en todas las tablas. El admin client (`getAdminClient()`) usa la `SERVICE_ROLE_KEY` que **bypassa todas las políticas RLS**, mientras que el browser client las respeta completamente.
+Las 3 funciones definidas en la sección 2 se usan a través de **66 políticas RLS** en todas las tablas. El admin client (`getAdminClient()`) usa la `SERVICE_ROLE_KEY` que **bypassa todas las políticas RLS**, mientras que el browser client las respeta completamente.
 
 ### Patrones de Políticas
 
@@ -272,9 +272,12 @@ Las 3 funciones definidas en la sección 2 se usan a través de **59 políticas 
 |-------------------------------|-----------------------------------------------|------------------------------------------|
 | `SELECT USING (true)`         | roles, disciplines, schedules, products, events, membership_plans | Lectura pública para todos |
 | `SELECT USING (id = auth.uid() OR is_admin())` | profiles | Lectura propio + admin |
-| `SELECT USING (owns_beneficiary(...))` | beneficiaries, attendance, medical_records, body_metrics, consent_forms | Solo propietario o admin |
-| `FOR ALL USING (is_admin())` | disciplines, schedules, products, events, membership_plans, notifications | Escritura solo admin |
+| `SELECT USING (owns_beneficiary(...))` | beneficiaries, attendance, medical_records, body_metrics, consent_forms, academy_enrollments | Solo propietario o admin |
+| `FOR ALL USING (is_admin())` | disciplines, schedules, products, events, membership_plans, notifications, enrollment_plans, academy_enrollments | Escritura solo admin |
 | `INSERT WITH CHECK (is_admin())` | attendance, payments, class_enrollments | Insert solo admin |
+| `INSERT WITH CHECK (owns_beneficiary(...))` | academy_enrollments | Insert via Flow (usuario) |
+| `SELECT USING (auth.uid() IS NOT NULL AND active = true)` | enrollment_plans (activos) | Usuarios autenticados ven planes activos |
+| `SELECT USING (is_staff())` | enrollment_plans, academy_enrollments | Staff tiene lectura |
 | `status = 'publicado' OR is_admin()` | blog_posts | Público ve publicados, admin todo |
 
 ---
@@ -1274,6 +1277,224 @@ await supabase
 
 **Campos**: `name`, `logo_url`, `address`, `whatsapp`, `social_links` (JSONB: instagram, facebook, tiktok, youtube)
 
+### 4.14 Inscripciones (Academy Enrollments)
+
+#### Admin CRUD — `/admin/inscripciones`
+
+**Archivo**: `src/app/admin/inscripciones/page.tsx`
+
+**Tab "Planes"** — CRUD de `enrollment_plans`:
+
+```typescript
+// Cargar planes
+const { data: plans } = await supabase
+  .from("enrollment_plans")
+  .select("*")
+  .order("sort_order");
+
+// Crear plan
+await supabase.from("enrollment_plans").insert({
+  name, price, duration_days, active, sort_order
+});
+
+// Actualizar plan
+await supabase.from("enrollment_plans").update(form).eq("id", editing.id);
+
+// Eliminar plan
+await supabase.from("enrollment_plans").delete().eq("id", deleteTarget.id);
+```
+
+**Tab "Inscripciones"** — Lectura de `academy_enrollments` con joins:
+
+```typescript
+const { data: enrollments } = await supabase
+  .from("academy_enrollments")
+  .select(`
+    *,
+    beneficiary:beneficiaries(
+      id, profile_id, dependent_id,
+      dependent:dependents(full_name),
+      profile:profiles(full_name)
+    ),
+    enrollment_plans(name, price, duration_days)
+  `)
+  .order("created_at", { ascending: false });
+```
+
+**Asignación manual (admin)**:
+
+```typescript
+// 1. Buscar usuario por nombre/email
+const { data: users } = await supabase
+  .from("profiles")
+  .select("id, full_name, email")
+  .ilike("full_name", `%${query}%`)
+  .limit(5);
+
+// 2. Obtener beneficiarios del usuario
+const beneficiaries = await supabase
+  .from("beneficiaries")
+  .select("id, dependent:dependents(full_name), profile:profiles(full_name)")
+  .or(`profile_id.eq.${userId},dependent_id.in.(${dependentIds})`);
+
+// 3. Insertar inscripción
+const startDate = new Date().toISOString().split("T")[0];
+const endDate = new Date(Date.now() + plan.duration_days * 86400000)
+  .toISOString().split("T")[0];
+
+await supabase.from("academy_enrollments").insert({
+  beneficiary_id: selectedBeneficiaryId,
+  enrollment_plan_id: selectedPlanId,
+  payment_id: newPaymentId,
+  start_date: startDate,
+  end_date: endDate,
+  status: "activa",
+});
+
+// 4. Registrar pago
+await supabase.from("payments").insert({
+  user_id: userId,
+  beneficiary_id: selectedBeneficiaryId,
+  concept: `Inscripción ${plan.name}`,
+  amount: plan.price,
+  method: "transferencia", // o "efectivo", "cortesia"
+  status: "pagado",
+  paid_at: new Date().toISOString(),
+});
+```
+
+#### Compra vía Flow (bundled o standalone)
+
+**Create-order** (`src/app/api/flow/create-order/route.ts`):
+
+```typescript
+// Si includeEnrollment=true, valida plan de inscripción
+if (includeEnrollment && enrollmentPlanId) {
+  const { data: enrollmentPlan } = await supabase
+    .from("enrollment_plans")
+    .select("id, name, price, active")
+    .eq("id", enrollmentPlanId)
+    .eq("active", true)
+    .single();
+
+  if (!enrollmentPlan) {
+    return NextResponse.json({ error: "Plan de inscripción no válido" }, { status: 400 });
+  }
+
+  // Monto total = plan membresía + plan inscripción
+  totalAmount = plan.price + enrollmentPlan.price;
+  concept = `Inscripción ${enrollmentPlan.name} + Membresía ${plan.name}`;
+}
+
+// Metadata para confirmation callback
+metadata: {
+  paymentId: payment.id,
+  planId: plan?.id || null,
+  beneficiaryId: beneficiary.id,
+  includeEnrollment: includeEnrollment ? "true" : undefined,
+  enrollmentPlanId: enrollmentPlanId || undefined,
+}
+```
+
+**Extensión de inscripción** (`src/lib/flow-helpers.ts` — `extendEnrollment`):
+
+```typescript
+export async function extendEnrollment(
+  supabase: SupabaseClient,
+  beneficiaryId: string,
+  enrollmentPlanId: string,
+  paymentId: string
+) {
+  const today = new Date().toISOString().split("T")[0];
+
+  // 1. Obtener plan de inscripción
+  const { data: plan } = await supabase
+    .from("enrollment_plans")
+    .select("id, duration_days")
+    .eq("id", enrollmentPlanId)
+    .single();
+
+  // 2. Buscar inscripción activa actual
+  const { data: current } = await supabase
+    .from("academy_enrollments")
+    .select("id, end_date")
+    .eq("beneficiary_id", beneficiaryId)
+    .eq("status", "activa")
+    .gte("end_date", today)
+    .order("end_date", { ascending: false })
+    .maybeSingle();
+
+  if (current) {
+    // 3a. Extender desde max(fecha_vencimiento, hoy)
+    const baseDate = current.end_date > today ? current.end_date : today;
+    const newEndDate = new Date(
+      new Date(baseDate).getTime() + plan.duration_days * 86400000
+    ).toISOString().split("T")[0];
+
+    await supabase
+      .from("academy_enrollments")
+      .update({
+        end_date: newEndDate,
+        enrollment_plan_id: enrollmentPlanId,
+        payment_id: paymentId,
+      })
+      .eq("id", current.id);
+  } else {
+    // 3b. Crear nueva inscripción
+    const endDate = new Date(
+      Date.now() + plan.duration_days * 86400000
+    ).toISOString().split("T")[0];
+
+    await supabase.from("academy_enrollments").insert({
+      beneficiary_id: beneficiaryId,
+      enrollment_plan_id: enrollmentPlanId,
+      payment_id: paymentId,
+      start_date: today,
+      end_date: endDate,
+      status: "activa",
+    });
+  }
+}
+```
+
+#### EnrollModal — Gate de inscripción
+
+**Archivo**: `src/components/EnrollModal.tsx`
+
+```typescript
+// Check de inscripción activa (antes del check de membresía)
+const { data: enrollment } = await supabase
+  .from("academy_enrollments")
+  .select("id, end_date")
+  .eq("beneficiary_id", benId)
+  .eq("status", "activa")
+  .gte("end_date", today)
+  .maybeSingle();
+
+const hasActiveEnrollment = !!enrollment;
+
+if (!hasActiveEnrollment) {
+  eligible = false;
+  ineligibleReason = "Sin inscripción a la academia";
+}
+```
+
+#### Dashboard — Badge de estado
+
+**Archivo**: `src/app/dashboard/page.tsx`
+
+```typescript
+const { data: enrollData } = await supabase
+  .from("academy_enrollments")
+  .select("end_date, enrollment_plans(name)")
+  .eq("beneficiary_id", ownBeneficiaryId)
+  .eq("status", "activa")
+  .gte("end_date", today)
+  .maybeSingle();
+
+// Badge verde si tiene inscripción activa, ámbar si no
+```
+
 ---
 
 ## 5. Storage (S3) - Interacción con Archivos
@@ -1731,6 +1952,41 @@ File → validateFile() → extFromMime() → crypto.randomUUID()
 **Índices**: `beneficiary_id`
 **UNIQUE implícito**: `(beneficiary_id)` — usado en onConflict
 
+### `enrollment_plans`
+
+| Columna      | Tipo        | Descripción                    |
+|--------------|-------------|--------------------------------|
+| id           | uuid        | PK                             |
+| name         | text        | Nombre del plan (ej: "6 Meses") |
+| price        | int         | Precio en CLP                  |
+| duration_days | int        | Duración en días               |
+| active       | boolean     | Activo (default: true)         |
+| sort_order   | int         | Orden de visualización (default: 0) |
+| created_at   | timestamptz | Fecha creación                 |
+
+**RLS**: 3 policies (ALL admin, SELECT staff, SELECT auth+active)
+**Índices**: `active`
+**Seed**: 2 planes por defecto — "6 Meses" ($15.000, 180d), "1 Año" ($25.000, 365d)
+
+### `academy_enrollments`
+
+| Columna          | Tipo        | Descripción                    |
+|------------------|-------------|--------------------------------|
+| id               | uuid        | PK                             |
+| beneficiary_id   | uuid        | FK → beneficiaries (CASCADE)   |
+| enrollment_plan_id | uuid      | FK → enrollment_plans          |
+| payment_id       | uuid        | FK → payments (nullable)       |
+| start_date       | date        | Fecha inicio                   |
+| end_date         | date        | Fecha vencimiento              |
+| status           | text        | 'activa'/'vencida'/'cancelada' |
+| created_at       | timestamptz | Fecha creación                 |
+
+**RLS**: 4 policies (ALL admin, SELECT staff, SELECT own+admin, INSERT own+admin)
+**FK**: `beneficiary_id → beneficiaries(id)` (CASCADE), `enrollment_plan_id → enrollment_plans(id)`, `payment_id → payments(id)`
+**Índices**: `beneficiary_id`, `status`, `end_date`
+**CHECK**: `status IN ('activa', 'vencida', 'cancelada')`
+**Regla de negocio**: 1 inscripción activa por beneficiario. Comprar una nueva extiende desde la fecha de vencimiento actual.
+
 ---
 
 ## 7. Queries Más Complejas Explicadas
@@ -1814,6 +2070,48 @@ File → validateFile() → extFromMime() → crypto.randomUUID()
 6. Si existe → linkear pago a membresía existente
 7. Si no → crear nueva membresía con fechas calculadas (`start_date = hoy`, `end_date = hoy + duration_days`)
 8. Linkear pago a la nueva membresía
+
+### 7.7 `extendEnrollment` — Extensión de inscripción a la academia
+
+**Ubicación**: `src/lib/flow-helpers.ts`
+
+**Problema**: Cuando un usuario compra una inscripción nueva (sola o bundled con membresía), el plazo se **suma** al tiempo restante, no lo reemplaza.
+
+**Flujo**:
+1. Obtener el plan de inscripción (`enrollment_plans`) para saber `duration_days`
+2. Buscar inscripción activa del beneficiario (`status = 'activa'` y `end_date >= hoy`)
+3. **Si existe inscripción activa**: `base_date = max(current.end_date, today)`, luego `new_end_date = base_date + duration_days`. Actualiza la inscripción existente con la nueva fecha, el nuevo plan y el payment_id
+4. **Si no existe**: crea inscripción nueva con `start_date = hoy`, `end_date = hoy + duration_days`
+5. No se crea duplicada — siempre se actualiza o se crea una sola
+
+**Ejemplo**:
+```
+Inscripción actual vence: 2026-10-25 (faltan 2 meses)
+Compra plan "1 Año" (365 días)
+base_date = 2026-10-25 (es posterior a hoy)
+new_end_date = 2027-10-25 (14 meses total)
+```
+
+### 7.8 Consulta de inscripción activa (EnrollModal / Dashboard)
+
+**Problema**: Verificar si un beneficiario tiene inscripción vigente para permitir agendar clases o mostrar estado.
+
+**Query**:
+```typescript
+const { data: enrollment } = await supabase
+  .from("academy_enrollments")
+  .select("id, end_date, enrollment_plans(name)")
+  .eq("beneficiary_id", beneficiaryId)
+  .eq("status", "activa")
+  .gte("end_date", today)
+  .order("end_date", { ascending: false })
+  .maybeSingle();
+```
+
+**Resultado**: `null` si no tiene inscripción activa, o objeto con `end_date` y nombre del plan. Usado en:
+- `EnrollModal`: gate antes de permitir agendar clases
+- Dashboard principal: badge de estado
+- `CheckoutModal`: mostrar estado de inscripción del beneficiario seleccionado
 
 ---
 

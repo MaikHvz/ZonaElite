@@ -20,6 +20,7 @@
 --   notifications.type: 'info' | 'alerta' | 'sistema'
 --   notifications.target: 'todos' | 'adultos' | 'ninos' | 'staff'
 --   events.type: 'clase' | 'torneo' | 'seminario' | 'otro'
+--   academy_enrollments.status: 'activa' | 'vencida' | 'cancelada'
 
 -- =====================================================
 -- FUNCTIONS
@@ -614,3 +615,53 @@ ALTER TABLE public.medical_records ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "medical_records_select_own_or_admin" ON public.medical_records FOR SELECT USING (public.owns_beneficiary(beneficiary_id) OR public.is_admin());
 CREATE POLICY "medical_records_insert_admin" ON public.medical_records FOR INSERT WITH CHECK (public.is_admin());
 CREATE POLICY "medical_records_update_admin" ON public.medical_records FOR UPDATE USING (public.is_admin());
+
+-- =====================================================
+-- TABLAS NUEVAS: enrollment_plans + academy_enrollments
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS public.enrollment_plans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  price INT NOT NULL DEFAULT 0,
+  duration_days INT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT true,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.academy_enrollments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  beneficiary_id UUID NOT NULL REFERENCES public.beneficiaries(id) ON DELETE CASCADE,
+  enrollment_plan_id UUID NOT NULL REFERENCES public.enrollment_plans(id),
+  payment_id UUID REFERENCES public.payments(id),
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'activa' CHECK (status IN ('activa','vencida','cancelada')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_academy_enrollments_beneficiary ON public.academy_enrollments(beneficiary_id);
+CREATE INDEX IF NOT EXISTS idx_academy_enrollments_status ON public.academy_enrollments(status);
+CREATE INDEX IF NOT EXISTS idx_academy_enrollments_end_date ON public.academy_enrollments(end_date);
+CREATE INDEX IF NOT EXISTS idx_enrollment_plans_active ON public.enrollment_plans(active);
+
+ALTER TABLE public.enrollment_plans ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "admin_all_enrollment_plans" ON public.enrollment_plans FOR ALL USING (public.is_admin());
+CREATE POLICY "staff_read_enrollment_plans" ON public.enrollment_plans FOR SELECT USING (public.is_staff());
+CREATE POLICY "auth_read_active_enrollment_plans" ON public.enrollment_plans FOR SELECT USING (auth.uid() IS NOT NULL AND active = true);
+
+ALTER TABLE public.academy_enrollments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "admin_all_academy_enrollments" ON public.academy_enrollments FOR ALL USING (public.is_admin());
+CREATE POLICY "staff_read_academy_enrollments" ON public.academy_enrollments FOR SELECT USING (public.is_staff());
+CREATE POLICY "user_read_own_enrollments" ON public.academy_enrollments FOR SELECT USING (public.owns_beneficiary(beneficiary_id));
+CREATE POLICY "user_insert_enrollment_flow" ON public.academy_enrollments FOR INSERT WITH CHECK (public.owns_beneficiary(beneficiary_id));
+
+-- =====================================================
+-- SEED DATA: enrollment plans
+-- =====================================================
+INSERT INTO public.enrollment_plans (name, price, duration_days, active, sort_order)
+VALUES
+  ('6 Meses', 15000, 180, true, 1),
+  ('1 Año', 25000, 365, true, 2)
+ON CONFLICT DO NOTHING;

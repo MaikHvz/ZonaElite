@@ -28,6 +28,7 @@ interface BeneficiaryRow {
   activePlanName: string | null;
   membershipValid: boolean;
   alreadyEnrolled: boolean;
+  hasActiveEnrollment: boolean;
   eligible: boolean;
   ineligibleReason: string | null;
 }
@@ -85,6 +86,16 @@ export default function EnrollModal({ open, schedule, enrolledCount, userId, onC
       const planName = (membership as { membership_plans?: { name?: string } } | null)?.membership_plans?.name || null;
       const membershipValid = !!membership;
 
+      const { data: enrollment } = await supabase
+        .from("academy_enrollments")
+        .select("id")
+        .eq("beneficiary_id", benId)
+        .eq("status", "activa")
+        .gte("end_date", new Date().toISOString().split("T")[0])
+        .maybeSingle();
+
+      const hasActiveEnrollment = !!enrollment;
+
       const { count: enrolledCountOwn } = await supabase
         .from("class_enrollments")
         .select("*", { count: "exact", head: true })
@@ -105,6 +116,9 @@ export default function EnrollModal({ open, schedule, enrolledCount, userId, onC
       } else if (schedule.category === "adultos" && planCategory !== "adulto") {
         eligible = false;
         ineligibleReason = "Clase solo para adultos";
+      } else if (!hasActiveEnrollment) {
+        eligible = false;
+        ineligibleReason = "Sin inscripción a la academia";
       } else if (!membershipValid) {
         eligible = false;
         ineligibleReason = "Sin membresía activa";
@@ -121,6 +135,7 @@ export default function EnrollModal({ open, schedule, enrolledCount, userId, onC
         activePlanName: planName,
         membershipValid,
         alreadyEnrolled,
+        hasActiveEnrollment,
         eligible: eligible && !alreadyEnrolled,
         ineligibleReason: alreadyEnrolled ? "Ya inscrito" : ineligibleReason,
       });
@@ -152,6 +167,16 @@ export default function EnrollModal({ open, schedule, enrolledCount, userId, onC
         const planName = (membership as { membership_plans?: { name?: string } } | null)?.membership_plans?.name || null;
         const membershipValid = !!membership;
 
+        const { data: enrollment } = await supabase
+          .from("academy_enrollments")
+          .select("id")
+          .eq("beneficiary_id", benId)
+          .eq("status", "activa")
+          .gte("end_date", new Date().toISOString().split("T")[0])
+          .maybeSingle();
+
+        const hasActiveEnrollment = !!enrollment;
+
         const { count: enrolledCountDep } = await supabase
           .from("class_enrollments")
           .select("*", { count: "exact", head: true })
@@ -172,6 +197,9 @@ export default function EnrollModal({ open, schedule, enrolledCount, userId, onC
         } else if (schedule.category === "adultos" && planCategory !== "adulto") {
           eligible = false;
           ineligibleReason = "Clase solo para adultos";
+        } else if (!hasActiveEnrollment) {
+          eligible = false;
+          ineligibleReason = "Sin inscripción a la academia";
         } else if (!membershipValid) {
           eligible = false;
           ineligibleReason = "Sin membresía activa";
@@ -188,6 +216,7 @@ export default function EnrollModal({ open, schedule, enrolledCount, userId, onC
           activePlanName: planName,
           membershipValid,
           alreadyEnrolled,
+          hasActiveEnrollment,
           eligible: eligible && !alreadyEnrolled,
           ineligibleReason: alreadyEnrolled ? "Ya inscrito" : ineligibleReason,
         });

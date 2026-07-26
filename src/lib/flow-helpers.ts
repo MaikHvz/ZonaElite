@@ -35,6 +35,7 @@ export async function confirmAndCreateMembership(
   }
 
   if (payment.membership_id) {
+    console.log(HELPERS_LOG, "Payment already has membership:", payment.membership_id);
     return { success: true, membershipId: payment.membership_id };
   }
 
@@ -85,6 +86,7 @@ export async function confirmAndCreateMembership(
     .maybeSingle();
 
   if (existingMembership) {
+    console.log(HELPERS_LOG, "Linking to existing membership:", existingMembership.id);
     await supabase
       .from("payments")
       .update({ membership_id: existingMembership.id })
@@ -122,13 +124,122 @@ export async function confirmAndCreateMembership(
     .update({ membership_id: membership.id })
     .eq("id", paymentId);
 
+  console.log(HELPERS_LOG, "Membership created:", {
+    membershipId: membership.id,
+    beneficiaryId: targetBeneficiaryId,
+    planId: plan.id,
+    endDate,
+  });
+
   return { success: true, membershipId: membership.id };
 }
 
 function extractPlanName(concept: string | null): string | null {
   if (!concept) return null;
-  const match = concept.match(/^Membres[íi]a\s+(.+)$/i);
-  return match ? match[1].trim() : null;
+  // Match "Membresía X" or "Inscripción X + Membresía Y" or "Inscripción X + Membresía Y - ZONAELITE"
+  const membershipMatch = concept.match(/Membres[íi]a\s+(.+?)(?:\s*-\s*ZONAELITE)?$/i);
+  if (membershipMatch) return membershipMatch[1].trim();
+  // Fallback: just "Membresía X"
+  const fallback = concept.match(/^Membres[íi]a\s+(.+)$/i);
+  return fallback ? fallback[1].trim() : null;
+}
+
+export async function extendEnrollment(
+  supabase: SupabaseClient,
+  paymentId: string,
+  beneficiaryId: string,
+  enrollmentPlanId: string
+): Promise<{ success: boolean; enrollmentId?: string; error?: string }> {
+  // Get enrollment plan
+  const { data: plan } = await supabase
+    .from("enrollment_plans")
+    .select("id, duration_days")
+    .eq("id", enrollmentPlanId)
+    .single();
+
+  if (!plan) {
+    console.error(HELPERS_LOG, "Enrollment plan not found:", enrollmentPlanId);
+    return { success: false, error: "Plan de inscripción no encontrado" };
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // Check for existing active enrollment
+  const { data: existing } = await supabase
+    .from("academy_enrollments")
+    .select("id, end_date")
+    .eq("beneficiary_id", beneficiaryId)
+    .eq("status", "activa")
+    .gte("end_date", today)
+    .order("end_date", { ascending: false })
+    .maybeSingle();
+
+  let startDate: string;
+  let endDate: string;
+
+  if (existing) {
+    // Extend from current end date (or today if past)
+    const baseDate = existing.end_date > today ? existing.end_date : today;
+    startDate = baseDate;
+    endDate = new Date(new Date(baseDate + "T00:00:00").getTime() + plan.duration_days * 86400000)
+      .toISOString()
+      .split("T")[0];
+
+    // Update existing enrollment
+    const { error } = await supabase
+      .from("academy_enrollments")
+      .update({
+        end_date: endDate,
+        enrollment_plan_id: enrollmentPlanId,
+        payment_id: paymentId,
+      })
+      .eq("id", existing.id);
+
+    if (error) {
+      console.error(HELPERS_LOG, "Failed to extend enrollment:", error);
+      return { success: false, error: "Error al extender inscripción" };
+    }
+
+    console.log(HELPERS_LOG, "Enrollment extended:", {
+      enrollmentId: existing.id,
+      newEndDate: endDate,
+      daysAdded: plan.duration_days,
+    });
+
+    return { success: true, enrollmentId: existing.id };
+  } else {
+    // Create new enrollment
+    startDate = today;
+    endDate = new Date(Date.now() + plan.duration_days * 86400000)
+      .toISOString()
+      .split("T")[0];
+
+    const { data: enrollment, error } = await supabase
+      .from("academy_enrollments")
+      .insert({
+        beneficiary_id: beneficiaryId,
+        enrollment_plan_id: enrollmentPlanId,
+        payment_id: paymentId,
+        start_date: startDate,
+        end_date: endDate,
+        status: "activa",
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error(HELPERS_LOG, "Failed to create enrollment:", error);
+      return { success: false, error: "Error al crear inscripción" };
+    }
+
+    console.log(HELPERS_LOG, "Enrollment created:", {
+      enrollmentId: enrollment.id,
+      startDate,
+      endDate,
+    });
+
+    return { success: true, enrollmentId: enrollment.id };
+  }
 }
 
 export async function markPaymentAsPaid(
@@ -149,6 +260,8 @@ export async function markPaymentAsPaid(
     .from("payments")
     .update(updateData)
     .eq("id", paymentId);
+
+  console.log(HELPERS_LOG, "Payment marked as pagado:", paymentId);
 }
 
 export async function findPaymentByToken(

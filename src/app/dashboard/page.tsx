@@ -3,6 +3,7 @@
 import { useSession } from "@/providers/SessionProvider";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import {
   getDashboardSummary,
   type DashboardSummary,
@@ -21,25 +22,65 @@ import {
 } from "@/components/dashboard/DashboardSkeleton";
 import { getUserNotifications, type NotificationData } from "@/lib/supabase/dashboard";
 
+interface EnrollmentStatus {
+  hasActive: boolean;
+  planName: string | null;
+  endDate: string | null;
+  loading: boolean;
+}
+
 export default function DashboardPage() {
   const { user } = useSession();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
+  const [enrollment, setEnrollment] = useState<EnrollmentStatus>({ hasActive: false, planName: null, endDate: null, loading: true });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    Promise.all([
-      getDashboardSummary(user.id),
-      getUserNotifications(0, 3),
-    ]).then(([summaryRes, notifRes]) => {
+    const supabase = createClient();
+
+    (async () => {
+      const [summaryRes, notifRes] = await Promise.all([
+        getDashboardSummary(user.id),
+        getUserNotifications(0, 3),
+      ]);
+
       if (summaryRes.error) setError(summaryRes.error);
       else setSummary(summaryRes.data);
       if (notifRes.data) setNotifications(notifRes.data.notifications);
+
+      // Fetch enrollment status for own beneficiary
+      const { data: ownBen } = await supabase
+        .from("beneficiaries")
+        .select("id")
+        .eq("profile_id", user.id)
+        .maybeSingle();
+
+      if (ownBen) {
+        const { data: enrollData } = await supabase
+          .from("academy_enrollments")
+          .select("end_date, enrollment_plans(name)")
+          .eq("beneficiary_id", ownBen.id)
+          .eq("status", "activa")
+          .gte("end_date", new Date().toISOString().split("T")[0])
+          .maybeSingle();
+
+        const e = enrollData as { end_date: string; enrollment_plans?: { name: string } } | null;
+        setEnrollment({
+          hasActive: !!e,
+          planName: e?.enrollment_plans?.name || null,
+          endDate: e?.end_date || null,
+          loading: false,
+        });
+      } else {
+        setEnrollment({ hasActive: false, planName: null, endDate: null, loading: false });
+      }
+
       setLoading(false);
-    });
+    })();
   }, [user]);
 
   if (!user) return null;
@@ -80,6 +121,66 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Enrollment Status Card */}
+      {!loading && (
+        <div className={`glass-card p-4 flex items-center gap-4 ${
+          enrollment.loading
+            ? ""
+            : enrollment.hasActive
+              ? "border-l-4 border-l-green-500"
+              : "border-l-4 border-l-amber-500"
+        }`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+            enrollment.loading
+              ? "bg-on-surface/5"
+              : enrollment.hasActive
+                ? "bg-green-500/10"
+                : "bg-amber-500/10"
+          }`}>
+            <span className={`material-symbols-outlined text-[20px] ${
+              enrollment.loading
+                ? "text-on-surface/20"
+                : enrollment.hasActive
+                  ? "text-green-400"
+                  : "text-amber-400"
+            }`}>
+              {enrollment.loading ? "hourglass_empty" : enrollment.hasActive ? "badge" : "warning"}
+            </span>
+          </div>
+          <div className="flex-1">
+            {enrollment.loading ? (
+              <div className="h-4 bg-on-surface/5 rounded animate-pulse w-48" />
+            ) : enrollment.hasActive ? (
+              <>
+                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                  Inscripción <strong>{enrollment.planName}</strong> vigente
+                </p>
+                <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">
+                  Vence el {new Date(enrollment.endDate + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                  Sin inscripción a la academia
+                </p>
+                <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">
+                  Requisito para comprar membresías e inscribirte en clases
+                </p>
+              </>
+            )}
+          </div>
+          {!enrollment.loading && !enrollment.hasActive && (
+            <Link
+              href="/dashboard/membresias"
+              className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-lg hover:bg-amber-500/10 transition-colors"
+            >
+              Comprar
+            </Link>
+          )}
         </div>
       )}
 

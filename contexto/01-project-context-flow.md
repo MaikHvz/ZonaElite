@@ -114,6 +114,7 @@ Presente en todas las páginas vía `src/app/layout.tsx`. Incluye:
 
 #### Resumen principal (`/dashboard/page.tsx`)
 
+- **Badge de estado de inscripción**: card entre hero y alertas — verde "Inscripción {plan} vigente hasta {fecha}" o ámbar "Sin inscripción" con enlace a `/dashboard/membresias`
 - Membresías activas
 - Pagos recientes
 - Número de dependientes (cargas)
@@ -123,7 +124,7 @@ Presente en todas las páginas vía `src/app/layout.tsx`. Incluye:
 
 | Sub-ruta | Función |
 |----------|---------|
-| `/dashboard/membresias` | Detalle de membresías del usuario |
+| `/dashboard/membresias` | Detalle de membresías del usuario + estado de inscripción + botón "Comprar Inscripción" |
 | `/dashboard/pagos` | Historial de pagos + verificación de pago Flow (`?token=XXX`) |
 | `/dashboard/cargas` | Gestión de dependientes (cargas familiares) |
 | `/dashboard/notificaciones` | Notificaciones recibidas |
@@ -156,11 +157,13 @@ Presente en todas las páginas vía `src/app/layout.tsx`. Incluye:
 #### EnrollModal
 
 - Muestra el usuario actual + todos sus dependientes
-- Validación en tiempo real:
-  - Coincidencia de categoría (niño/adulto)
-  - Membresía activa
-  - Compatibilidad de plan (el plan del usuario debe ser compatible con la clase según `class_plans`)
-  - No estar ya inscrito
+- Validación en tiempo real (orden estricto):
+  1. Coincidencia de categoría (niño/adulto)
+  2. **Inscripción a la academia activa** (`academy_enrollments` con `status='activa'` y `end_date >= hoy`)
+  3. Membresía activa
+  4. Compatibilidad de plan (el plan del usuario debe ser compatible con la clase según `class_plans`)
+  5. No estar ya inscrito
+- Si no tiene inscripción activa: `ineligibleReason = "Sin inscripción a la academia"` + enlace "Comprar inscripción"
 - Inscripción almacenada en tabla `class_enrollments` vía `schedule_id`
 
 ---
@@ -258,9 +261,9 @@ Sistema de pagos integrado con la pasarela de Flow.cl en modo sandbox.
 | Archivo | Método | Función |
 |---------|--------|---------|
 | `src/lib/flow.ts` | — | Funciones core: `signFlowParams` (HMAC-SHA256), `createFlowOrder`, `verifyFlowPayment`, `verifyFlowCallbackSignature` |
-| `src/lib/flow-helpers.ts` | — | Helpers: `confirmAndCreateMembership`, `markPaymentAsPaid`, `findPaymentByToken`, `findPaymentByTokenAndUser`, `extractPlanName` |
-| `src/app/api/flow/create-order/route.ts` | POST | Crea pago pendiente en DB + orden en Flow API. Previene duplicados (reutiliza pago pendiente de últimos 5 min). Retorna URL de Flow. |
-| `src/app/api/flow/confirmation/route.ts` | POST/GET | Callback de Flow. Usa `after()` de `next/server` para procesamiento background. Flujo: verificar firma → verificar pago → marcar pagado → crear membresía. |
+| `src/lib/flow-helpers.ts` | — | Helpers: `confirmAndCreateMembership`, `markPaymentAsPaid`, `findPaymentByToken`, `findPaymentByTokenAndUser`, `extractPlanName`, `extendEnrollment` |
+| `src/app/api/flow/create-order/route.ts` | POST | Crea pago pendiente en DB + orden en Flow API. Acepta `includeEnrollment` + `enrollmentPlanId`. Previene duplicados (reutiliza pago pendiente de últimos 5 min). Retorna URL de Flow. |
+| `src/app/api/flow/confirmation/route.ts` | POST/GET | Callback de Flow. Usa `after()` de `next/server` para procesamiento background. Flujo: verificar firma → verificar pago → marcar pagado → crear membresía → extender inscripción. |
 | `src/app/api/flow/verify/route.ts` | GET | Verificación client-side. El frontend llama con el token para confirmar estado y mostrar banner. |
 | `src/app/api/flow/force-confirm/route.ts` | POST | Recuperación manual para admin. Verifica con Flow API y fuerza confirmación si está pagado. |
 | `src/app/api/flow/debug/route.ts` | GET | Diagnóstico de pagos: config, pagos recientes, verificación con Flow API. |
@@ -270,10 +273,11 @@ Sistema de pagos integrado con la pasarela de Flow.cl en modo sandbox.
 **Creación de orden** (`create-order`):
 - Valida autenticación del usuario
 - Valida plan activo y beneficiario válido (perteneciente al usuario)
+- Si `includeEnrollment=true`: valida plan de inscripción activo, calcula monto total (plan + enrollment)
 - Genera `commerceOrder` como UUID
 - Previene duplicados: busca pago pendiente del mismo usuario en últimos 5 minutos
-- Inserta en `payments` con status `'pendiente'`, concepto `"Membresía {plan.name}"`
-- Llama a Flow API con `subject: "Membresía {plan.name} - ZONAELITE"`
+- Inserta en `payments` con status `'pendiente'`, concepto `"Membresía {plan.name}"` o `"Inscripción {enrollmentPlan.name} + Membresía {plan.name}"`
+- Llama a Flow API con `subject` y `metadata` incluyendo `includeEnrollment`, `enrollmentPlanId`
 - Guarda `flow_token` y `flow_order` en el pago
 
 **Confirmación** (`confirmation`):
@@ -284,11 +288,12 @@ Sistema de pagos integrado con la pasarela de Flow.cl en modo sandbox.
   2. Si ya está pagado, salta
   3. Verifica con Flow API (`status === 2` = pagado)
   4. Marca pago como `'pagado'` con `paid_at`
-  5. Extrae nombre del plan del concepto (`"Membresía X"` → `"X"`)
+  5. Extrae nombre del plan del concepto (`"Membresía X"` → `"X"` o `"Inscripción Y + Membresía X"` → `"X"`)
   6. Busca plan en `membership_plans` por nombre (case-insensitive)
   7. Busca o crea beneficiario para el usuario
   8. Verifica dedup de membresía (ventana de 10 minutos)
   9. Crea membresía con `start_date` = hoy, `end_date` = hoy + `duration_days`
+  10. **Si `metadata.includeEnrollment`**: crea o extiende inscripción en `academy_enrollments` vía `extendEnrollment()`
 
 **Verificación client-side** (`verify`):
 - El frontend llama a `GET /api/flow/verify?token=XXX` al cargar `/dashboard/pagos`
@@ -309,6 +314,14 @@ Sistema de pagos integrado con la pasarela de Flow.cl en modo sandbox.
 | 3 | Rechazado |
 | 4 | Cancelado |
 | 5 | Expirado |
+
+#### Estados de inscripción
+
+| status | Significado |
+|--------|------------|
+| activa | Inscripción vigente (end_date >= hoy) |
+| vencida | Inscripción expirada (end_date < hoy) |
+| cancelada | Inscripción cancelada por admin |
 
 ---
 
@@ -404,6 +417,33 @@ Componentes:
   - Toggle de visibilidad
   - `ImageUpload` a carpeta `gallery` en Supabase Storage
 
+#### 3.10.12 Inscripciones `/admin/inscripciones`
+
+**Ruta**: `src/app/admin/inscripciones/page.tsx`
+
+Sistema de inscripciones (matrícula) a la academia. Dos tabs:
+
+**Tab "Planes"**:
+- CRUD de `enrollment_plans` con campos: nombre, precio, duración (días), activo
+- `DataTable` + `FormModal` + `DeleteConfirm`
+- `StatusBadge` con estado activo/inactivo
+
+**Tab "Inscripciones"**:
+- Tabla de `academy_enrollments` con joins a beneficiarios, dependientes y planes
+- Botón "Asignar inscripción" → modal con:
+  1. Búsqueda de usuario por nombre/email
+  2. Selección de beneficiario
+  3. Selección de plan de inscripción
+  4. Método de pago (efectivo, transferencia, cortesía)
+  5. Monto y comprobante
+- INSERT en `academy_enrollments` con `start_date = hoy`, `end_date = hoy + duration_days`
+- INSERT en `payments` con `method = 'transferencia'|'efectivo'|'cortesia'`, `status = 'pagado'`
+
+**Reglas de negocio**:
+- 1 inscripción activa por beneficiario
+- Comprar una nueva **extiende** la inscripción desde la fecha de vencimiento actual
+- La inscripción es **prerequisito** para comprar membresías e inscribirse en clases
+
 ---
 
 ## 4. Arquitectura técnica
@@ -419,6 +459,7 @@ src/
 │   │   ├── configuracion/
 │   │   ├── eventos/
 │   │   ├── horarios/
+│   │   ├── inscripciones/
 │   │   ├── membresias/
 │   │   ├── notificaciones/
 │   │   ├── productos/
@@ -502,7 +543,7 @@ src/
 
 ## 5. Tablas principales de la base de datos
 
-Total: 26 tablas en Supabase.
+Total: 28 tablas en Supabase.
 
 | # | Tabla | Descripción |
 |---|-------|-------------|
@@ -532,6 +573,8 @@ Total: 26 tablas en Supabase.
 | 24 | `consent_forms` | Formularios de consentimiento |
 | 25 | `body_metrics` | Métricas corporales |
 | 26 | `medical_records` | Registros médicos de dependientes |
+| 27 | `enrollment_plans` | Planes de inscripción a la academia (nombre, precio, duración en días) |
+| 28 | `academy_enrollments` | Inscripciones activas de beneficiarios a la academia (con vencimiento) |
 
 ---
 

@@ -3,7 +3,7 @@ import {
   verifyFlowPayment,
   FLOW_LOG_PREFIX,
 } from "@/lib/flow";
-import { confirmAndCreateMembership } from "@/lib/flow-helpers";
+import { confirmAndCreateMembership, extendEnrollment } from "@/lib/flow-helpers";
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -111,12 +111,43 @@ async function processInBackground(token: string) {
     return;
   }
 
+  // Only call confirmAndCreateMembership if there's a membership plan in the concept
+  const hasMembershipConcept = payment.concept && /membres[íi]a/i.test(payment.concept);
+  if (hasMembershipConcept) {
+    try {
+      const result = await confirmAndCreateMembership(supabase, payment.id, payment.user_id);
+      if (!result.success) {
+        console.error(L, "Membership creation failed:", result.error);
+      }
+    } catch (err) {
+      console.error(L, "Membership creation threw:", err);
+    }
+  }
+
+  // Handle enrollment extension if included in payment
   try {
-    const result = await confirmAndCreateMembership(supabase, payment.id, payment.user_id);
-    if (!result.success) {
-      console.error(L, "Membership creation failed:", result.error);
+    const optional = verification.optional;
+    if (optional) {
+      let metadata: Record<string, string> = {};
+      try {
+        metadata = JSON.parse(optional);
+      } catch {
+        // Not JSON, skip
+      }
+
+      if (metadata.includeEnrollment === "true" && metadata.enrollmentPlanId && payment.beneficiary_id) {
+        const enrollResult = await extendEnrollment(
+          supabase,
+          payment.id,
+          payment.beneficiary_id,
+          metadata.enrollmentPlanId
+        );
+        if (!enrollResult.success) {
+          console.error(L, "Enrollment extension failed:", enrollResult.error);
+        }
+      }
     }
   } catch (err) {
-    console.error(L, "Membership creation threw:", err);
+    console.error(L, "Enrollment extension threw:", err);
   }
 }

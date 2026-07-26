@@ -24,35 +24,82 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { planId, beneficiaryId } = body;
+    const { planId, beneficiaryId, includeEnrollment, enrollmentPlanId } = body;
 
-    if (!planId || !beneficiaryId) {
+    if (!beneficiaryId) {
       return NextResponse.json(
-        { error: "Plan y beneficiario son obligatorios" },
+        { error: "Beneficiario es obligatorio" },
         { status: 400 }
       );
     }
 
-    const { data: plan, error: planError } = await supabase
-      .from("membership_plans")
-      .select("id, name, price, duration_days, active")
-      .eq("id", planId)
-      .single();
-
-    if (planError || !plan) {
+    if (!planId && !includeEnrollment) {
       return NextResponse.json(
-        { error: "Plan no encontrado" },
+        { error: "Selecciona un plan de membresía o inscripción" },
         { status: 400 }
       );
     }
 
-    if (!plan.active) {
+    if (includeEnrollment && !enrollmentPlanId) {
       return NextResponse.json(
-        { error: "Plan no disponible" },
+        { error: "Selecciona un plan de inscripción" },
         { status: 400 }
       );
     }
 
+    // Validate membership plan
+    let membershipPlan = null;
+    if (planId) {
+      const { data, error: planError } = await supabase
+        .from("membership_plans")
+        .select("id, name, price, duration_days, active")
+        .eq("id", planId)
+        .single();
+
+      if (planError || !data) {
+        return NextResponse.json(
+          { error: "Plan no encontrado" },
+          { status: 400 }
+        );
+      }
+
+      if (!data.active) {
+        return NextResponse.json(
+          { error: "Plan no disponible" },
+          { status: 400 }
+        );
+      }
+
+      membershipPlan = data;
+    }
+
+    // Validate enrollment plan
+    let enrollmentPlan = null;
+    if (includeEnrollment && enrollmentPlanId) {
+      const { data, error: epError } = await supabase
+        .from("enrollment_plans")
+        .select("id, name, price, duration_days, active")
+        .eq("id", enrollmentPlanId)
+        .single();
+
+      if (epError || !data) {
+        return NextResponse.json(
+          { error: "Plan de inscripción no encontrado" },
+          { status: 400 }
+        );
+      }
+
+      if (!data.active) {
+        return NextResponse.json(
+          { error: "Plan de inscripción no disponible" },
+          { status: 400 }
+        );
+      }
+
+      enrollmentPlan = data;
+    }
+
+    // Validate beneficiary
     const { data: beneficiary, error: benError } = await supabase
       .from("beneficiaries")
       .select("id, profile_id, dependent_id")
@@ -94,8 +141,32 @@ export async function POST(request: Request) {
       );
     }
 
-    const commerceOrder = crypto.randomUUID();
+    // Check if beneficiary already has active enrollment
+    if (includeEnrollment) {
+      const { data: existingEnrollment } = await supabase
+        .from("academy_enrollments")
+        .select("id")
+        .eq("beneficiary_id", beneficiaryId)
+        .eq("status", "activa")
+        .gte("end_date", new Date().toISOString().split("T")[0])
+        .maybeSingle();
 
+      if (existingEnrollment) {
+        // Will extend, not create new — this is fine
+      }
+    }
+
+    // Calculate total amount
+    const totalAmount = (membershipPlan?.price || 0) + (enrollmentPlan?.price || 0);
+
+    // Build concept
+    const conceptParts: string[] = [];
+    if (enrollmentPlan) conceptParts.push(`Inscripción ${enrollmentPlan.name}`);
+    if (membershipPlan) conceptParts.push(`Membresía ${membershipPlan.name}`);
+    const concept = conceptParts.join(" + ") || "Pago ZONAELITE";
+
+    // Prevent duplicate pending payments (5 min window)
+    const commerceOrder = crypto.randomUUID();
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const { data: existingPending } = await supabase
       .from("payments")
@@ -116,7 +187,7 @@ export async function POST(request: Request) {
             .eq("id", existingPending.id);
         }
       } catch {
-        // Keep as pending — will require manual verification
+        // Keep as pending
       }
 
       const { apiUrl } = getFlowConfig();
@@ -129,14 +200,25 @@ export async function POST(request: Request) {
       });
     }
 
+    // Create payment record
+    const metadata: Record<string, string> = {
+      paymentId: "", // will be filled after insert
+      beneficiaryId: beneficiary.id,
+    };
+    if (membershipPlan) metadata.planId = membershipPlan.id;
+    if (enrollmentPlan) {
+      metadata.includeEnrollment = "true";
+      metadata.enrollmentPlanId = enrollmentPlan.id;
+    }
+
     const { data: payment, error: paymentError } = await supabase
       .from("payments")
       .insert({
         user_id: user.id,
         beneficiary_id: beneficiary.id,
         commerce_order: commerceOrder,
-        concept: `Membresía ${plan.name}`,
-        amount: plan.price,
+        concept,
+        amount: totalAmount,
         method: "flow",
         status: "pendiente",
       })
@@ -150,16 +232,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Update metadata with payment ID
+    metadata.paymentId = payment.id;
+
     const flowResponse = await createFlowOrder({
       commerceOrder,
-      subject: `Membresía ${plan.name} - ZONAELITE`,
-      amount: plan.price,
+      subject: `${concept} - ZONAELITE`,
+      amount: totalAmount,
       email: user.email || "",
-      metadata: {
-        paymentId: payment.id,
-        planId: plan.id,
-        beneficiaryId: beneficiary.id,
-      },
+      metadata,
     });
 
     await supabase
