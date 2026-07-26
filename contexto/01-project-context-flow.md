@@ -447,6 +447,39 @@ Sistema de inscripciones (matrícula) a la academia. Dos tabs:
 - Comprar una nueva **extiende** la inscripción desde la fecha de vencimiento actual
 - La inscripción es **prerequisito** para comprar membresías e inscribirse en clases
 
+#### 3.10.13 Ventas `/admin/ventas`
+
+**Ruta**: `src/app/admin/ventas/page.tsx`
+
+Panel de seguimiento de ventas y pagos. Incluye:
+
+**Resumen** (4 cards superiores):
+- Ingresos Totales (suma de pagos pagados) + cantidad de pagos confirmados
+- Pendientes (suma de montos pendientes) + cantidad
+- Cancelados (cantidad de pagos cancelados)
+- Total Registros (todos los pagos)
+
+**Desglose por Método de Pago**:
+- Tarjetas con ingresos y cantidad de pagos por método (Flow, transferencia, efectivo, cortesía)
+
+**Filtros**:
+- Por estado: Todos / Pagado / Pendiente / Cancelado
+- Por método: Todos / Flow / Transferencia / Efectivo / Cortesía
+
+**Tabla de Pagos** (`DataTable`):
+- Concepto / Usuario (nombre del plan, email)
+- Beneficiario
+- Monto
+- Método de pago (badge de color con icono)
+- Estado (`StatusBadge`)
+- Fecha de pago
+- Botón expandir para ver detalle
+
+**Detalle expandible** por pago:
+- Información del pago (ID, orden comercio, monto, concepto)
+- Usuario (nombre, email, beneficiario, ID)
+- Estado y flujo (token Flow, orden Flow, fechas, comprobante, inscripción incluida)
+
 ---
 
 ## 4. Arquitectura técnica
@@ -467,7 +500,8 @@ src/
 │   │   ├── notificaciones/
 │   │   ├── productos/
 │   │   ├── tipos-clase/
-│   │   └── usuarios/
+│   │   ├── usuarios/
+│   │   └── ventas/
 │   ├── api/
 │   │   ├── admin/
 │   │   │   └── generate-sessions/
