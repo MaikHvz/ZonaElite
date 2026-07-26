@@ -780,17 +780,35 @@ const { data: schedules } = await supabase
   .eq("active", true)
   .order("start_time");
 
-// 2. Para cada horario, contar inscripciones
-for (const s of schedules) {
-  const { count } = await supabase
-    .from("class_enrollments")
-    .select("*", { count: "exact", head: true })
-    .eq("schedule_id", s.id);
+// 2. Para cada horario, obtener la próxima sesión y contar inscripciones de esa sesión
+const today = new Date().toISOString().split("T")[0];
 
-  // 3. Construir grilla: time → day → cell
+for (const s of schedules) {
+  // 2a. Buscar próxima sesión programada
+  const { data: nextSession } = await supabase
+    .from("class_sessions")
+    .select("id, session_date")
+    .eq("schedule_id", s.id)
+    .gte("session_date", today)
+    .order("session_date")
+    .limit(1)
+    .maybeSingle();
+
+  // 2b. Contar inscritos de esa sesión específica
+  let enrolled = 0;
+  if (nextSession) {
+    const { count } = await supabase
+      .from("class_enrollments")
+      .select("*", { count: "exact", head: true })
+      .eq("session_id", nextSession.id);
+    enrolled = count || 0;
+  }
+
+  // 3. Construir grilla: time → day → cell (con nextSessionDate)
   enriched[time][day] = {
     schedule: s,
-    enrolled: count || 0,
+    enrolled,
+    nextSessionDate: nextSession?.session_date || null,
     userEnrolled: false,
   };
 }
@@ -852,11 +870,11 @@ export async function getAttendanceForSession(sessionId: string) {
       .select("schedule_id")
       .eq("id", sessionId).single();
 
-    // 2c. Obtener beneficiarios inscritos (por sesión O por schedule)
+    // 2c. Obtener beneficiarios inscritos en esa sesión específica
     const { data: enrollments } = await supabase
       .from("class_enrollments")
       .select("beneficiary_id")
-      .or(`session_id.eq.${sessionId},schedule_id.eq.${session.schedule_id}`);
+      .eq("session_id", sessionId);
 
     const enrolledIds = [...new Set((enrollments || []).map((e) => e.beneficiary_id))];
 
@@ -982,18 +1000,28 @@ export async function getUserAttendance(userId: string, limit = 50) {
 
 #### EnrollModal — `/components/EnrollModal.tsx`
 
-Validación en tiempo real para cada beneficiario:
+**Selección de fecha**: El modal carga las próximas sesiones del horario (`class_sessions`) y las muestra como botones con fecha y cupos disponibles. El usuario selecciona una sesión específica.
+
+**Validación en tiempo real** para cada beneficiario (respecto a la sesión seleccionada):
 
 ```typescript
-// Para cada beneficiario, se verifican 4 condiciones:
-
 // 1. Coincidencia de categoría
 if (schedule.category === "ninos" && planCategory !== "nino") {
   eligible = false;
   ineligibleReason = "Clase solo para niños";
 }
 
-// 2. Membresía activa
+// 2. Inscripción a la academia activa
+const { data: enrollment } = await supabase
+  .from("academy_enrollments")
+  .select("id")
+  .eq("beneficiary_id", benId)
+  .eq("status", "activa")
+  .gte("end_date", today)
+  .maybeSingle();
+const hasActiveEnrollment = !!enrollment;
+
+// 3. Membresía activa
 const { data: membership } = await supabase
   .from("memberships")
   .select("id, plan_id, membership_plans(name, category)")
@@ -1003,29 +1031,30 @@ const { data: membership } = await supabase
   .maybeSingle();
 const membershipValid = !!membership;
 
-// 3. Compatibilidad de plan (si class_plans tiene entries)
+// 4. Compatibilidad de plan (si class_plans tiene entries)
 const classPlanIds = schedule.class_plans.map((cp) => cp.plan_id);
 const planAllowed = classPlanIds.length === 0 || (planId && classPlanIds.includes(planId));
 
-// 4. Ya inscrito
-const { count } = await supabase
+// 5. Ya inscrito en ESA sesión específica (no en el horario completo)
+const { data: enrolledSessions } = await supabase
   .from("class_enrollments")
-  .select("*", { count: "exact", head: true })
-  .eq("schedule_id", schedule.id)
-  .eq("beneficiary_id", benId);
-const alreadyEnrolled = (count || 0) > 0;
+  .select("session_id")
+  .eq("beneficiary_id", benId)
+  .in("session_id", upcomingSessionIds);
+const enrolledSessionIds = new Set((enrolledSessions || []).map((e) => e.session_id));
 ```
 
-**Inscripción (submit)**:
+**Inscripción (submit)** — por sesión específica:
 ```typescript
-const insertions = ids.map((bid) =>
+// Una inscripción por sesión, no por horario
+const insertions = selectedBeneficiaryIds.map((bid) =>
   supabase.from("class_enrollments").insert({
-    schedule_id: schedule.id,
+    session_id: selectedSessionId,  // session_id, NO schedule_id
     beneficiary_id: bid,
   })
 );
 const results = await Promise.all(insertions);
-// Error code 23505 = unique violation (ya inscrito)
+// Error code 23505 = unique violation (ya inscrito en esa sesión)
 ```
 
 ### 4.7 Productos

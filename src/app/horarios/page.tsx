@@ -27,6 +27,7 @@ interface Schedule {
 interface ScheduleCell {
   schedule: Schedule;
   enrolled: number;
+  nextSessionDate: string | null;
   userEnrolled: boolean;
 }
 
@@ -68,7 +69,6 @@ export default function HorariosPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
-  const [selectedEnrolledCount, setSelectedEnrolledCount] = useState(0);
 
   const weekDates = getWeekDates();
   const supabase = createClient();
@@ -88,6 +88,7 @@ export default function HorariosPage() {
 
     if (!schedules) { setLoading(false); return; }
 
+    const today = new Date().toISOString().split("T")[0];
     const enriched: Record<string, Record<string, ScheduleCell>> = {};
     const timeSet = new Set<string>();
 
@@ -96,15 +97,29 @@ export default function HorariosPage() {
       const day = String(s.day_of_week);
       timeSet.add(time);
 
-      const { count } = await supabase
-        .from("class_enrollments")
-        .select("*", { count: "exact", head: true })
-        .eq("schedule_id", s.id);
+      const { data: nextSession } = await supabase
+        .from("class_sessions")
+        .select("id, session_date")
+        .eq("schedule_id", s.id)
+        .gte("session_date", today)
+        .order("session_date")
+        .limit(1)
+        .maybeSingle();
+
+      let enrolled = 0;
+      if (nextSession) {
+        const { count } = await supabase
+          .from("class_enrollments")
+          .select("*", { count: "exact", head: true })
+          .eq("session_id", nextSession.id);
+        enrolled = count || 0;
+      }
 
       if (!enriched[time]) enriched[time] = {};
       enriched[time][day] = {
         schedule: s,
-        enrolled: count || 0,
+        enrolled,
+        nextSessionDate: nextSession?.session_date || null,
         userEnrolled: false,
       };
     }
@@ -125,13 +140,12 @@ export default function HorariosPage() {
     Promise.all([loadSchedule(), loadUser()]);
   }, [loadSchedule, loadUser]);
 
-  const handleAgendar = (schedule: Schedule, enrolledCount: number) => {
+  const handleAgendar = (schedule: Schedule) => {
     if (!userId) {
       addToast("Inicia sesión para agendar clases", "error");
       return;
     }
     setSelectedSchedule(schedule);
-    setSelectedEnrolledCount(enrolledCount);
     setModalOpen(true);
   };
 
@@ -177,7 +191,6 @@ export default function HorariosPage() {
         <EnrollModal
           open={modalOpen}
           schedule={selectedSchedule}
-          enrolledCount={selectedEnrolledCount}
           userId={userId || ""}
           onClose={() => setModalOpen(false)}
           onEnrolled={handleEnrolled}
@@ -257,11 +270,16 @@ export default function HorariosPage() {
                         if (!cell) return <div key={day} className="min-h-[60px] md:min-h-[72px]" />;
 
                         const s = cell.schedule;
+                        const nextDate = cell.nextSessionDate;
                         const remaining = s.capacity - cell.enrolled;
                         const isFull = remaining <= 0;
                         const isLow = remaining > 0 && remaining <= 3;
                         const color = s.disciplines?.color_hex || "#666";
                         const matchesFilter = activeFilter === "all" || s.disciplines?.name === activeFilter;
+
+                        const nextDateLabel = nextDate
+                          ? new Date(nextDate + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" })
+                          : null;
 
                         return (
                           <div key={day} className={`min-h-[60px] md:min-h-[72px] transition-opacity ${matchesFilter ? "opacity-100" : "opacity-20"}`}>
@@ -273,6 +291,9 @@ export default function HorariosPage() {
                               {s.profiles && (
                                 <p className="font-[family-name:var(--font-label-sm)] text-[9px] leading-[12px] md:text-[10px] md:leading-[14px] text-on-surface-variant/70 uppercase tracking-wider mb-1">{s.profiles.full_name}</p>
                               )}
+                              {nextDateLabel && (
+                                <p className="font-[family-name:var(--font-label-sm)] text-primary/70 text-[9px] leading-[12px] md:text-[10px] md:leading-[14px] capitalize mb-1">Próx: {nextDateLabel}</p>
+                              )}
                               <div className="flex items-center gap-1 mt-1.5">
                                 <div className="flex-1 h-1 rounded-full bg-surface-container-highest overflow-hidden">
                                   <div className="h-full rounded-full transition-all" style={{ width: `${s.capacity > 0 ? (cell.enrolled / s.capacity) * 100 : 0}%`, backgroundColor: isFull ? "var(--color-on-surface-variant)" : color }} />
@@ -281,7 +302,7 @@ export default function HorariosPage() {
                               </div>
                               {!isFull && (
                                 <button
-                                  onClick={() => handleAgendar(s, cell.enrolled)}
+                                  onClick={() => handleAgendar(s)}
                                   className="mt-2 w-full text-center py-1 rounded-lg text-[10px] md:text-[11px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider transition-colors cursor-pointer"
                                   style={{ color: color, border: `1px solid ${color}30` }}
                                   onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = `${color}15`)}

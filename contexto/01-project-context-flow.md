@@ -151,20 +151,22 @@ Presente en todas las páginas vía `src/app/layout.tsx`. Incluye:
 
 - **Cuadrícula**: Grid semanal (lunes a sábado), coloreada por disciplina
 - **Filtros**: Por disciplina
-- **Barras de capacidad**: Muestran inscritos / cupo total por clase
-- **Botón "Agendar"**: Abre `EnrollModal`
+- **Barras de capacidad**: Muestran inscritos / cupo total de la próxima sesión de cada clase
+- **Fecha próxima**: Cada celda muestra la fecha de la próxima sesión programada
+- **Botón "Agendar"**: Abre `EnrollModal` con selección de sesión por fecha
 
 #### EnrollModal
 
 - Muestra el usuario actual + todos sus dependientes
-- Validación en tiempo real (orden estricto):
+- **Selección de fecha**: muestra las próximas sesiones del horario como botones con fecha y cupos disponibles
+- Validación en tiempo real (orden estricta):
   1. Coincidencia de categoría (niño/adulto)
   2. **Inscripción a la academia activa** (`academy_enrollments` con `status='activa'` y `end_date >= hoy`)
   3. Membresía activa
   4. Compatibilidad de plan (el plan del usuario debe ser compatible con la clase según `class_plans`)
-  5. No estar ya inscrito
+  5. No estar ya inscrito en esa sesión específica
 - Si no tiene inscripción activa: `ineligibleReason = "Sin inscripción a la academia"` + enlace "Comprar inscripción"
-- Inscripción almacenada en tabla `class_enrollments` vía `schedule_id`
+- Inscripción almacenada en tabla `class_enrollments` vía `session_id` (una inscripción por sesión, no por horario)
 
 ---
 
@@ -555,7 +557,7 @@ Total: 28 tablas en Supabase.
 | 5 | `schedules` | Horarios semanales (disciplina, profesor, categoría, sala) |
 | 6 | `class_sessions` | Sesiones de clase generadas desde schedules |
 | 7 | `class_plans` | Restricciones de plan por horario |
-| 8 | `class_enrollments` | Inscripciones de usuarios en horarios |
+| 8 | `class_enrollments` | Inscripciones de usuarios en sesiones específicas (`session_id`) |
 | 9 | `dependents` | Dependientes (cargas familiares) |
 | 10 | `beneficiaries` | Beneficiarios ( vínculo entre perfil/dependiente y el sistema) |
 | 11 | `attendance` | Registro de asistencia |
