@@ -239,8 +239,10 @@ export default function AdminInscripcionesPage() {
       setAssigning(true);
       const supabase = createClient();
 
-      const today = new Date().toISOString().split("T")[0];
-      const endDate = new Date(Date.now() + plan.duration_days * 86400000).toISOString().split("T")[0];
+      const todayDate = new Date();
+      const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, "0")}-${String(todayDate.getDate()).padStart(2, "0")}`;
+      const endDateObj = new Date(Date.now() + plan.duration_days * 86400000);
+      const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, "0")}-${String(endDateObj.getDate()).padStart(2, "0")}`;
 
       const { data: enrollment, error: enrollError } = await supabase
         .from("academy_enrollments")

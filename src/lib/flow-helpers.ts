@@ -181,7 +181,7 @@ export async function extendEnrollment(
     // Extend from current end date (or today if past)
     const baseDate = existing.end_date > today ? existing.end_date : today;
     startDate = baseDate;
-    endDate = new Date(new Date(baseDate + "T00:00:00").getTime() + plan.duration_days * 86400000)
+    endDate = new Date(new Date(baseDate + "T12:00:00").getTime() + plan.duration_days * 86400000)
       .toISOString()
       .split("T")[0];
 

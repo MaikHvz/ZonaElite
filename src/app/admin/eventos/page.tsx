@@ -138,7 +138,7 @@ export default function AdminEventosPage() {
           { key: "image", label: "Imagen", render: (e) => e.image ? <img src={e.image} alt="" className="w-10 h-10 rounded-lg object-cover" /> : <span className="text-on-surface-variant/30">—</span> },
           { key: "title", label: "Título" },
           { key: "type", label: "Tipo", render: (e) => typeLabel(e.type) },
-          { key: "event_date", label: "Fecha", render: (e) => new Date(e.event_date + "T00:00:00").toLocaleDateString("es-CL") },
+          { key: "event_date", label: "Fecha", render: (e) => new Date(e.event_date + "T12:00:00").toLocaleDateString("es-CL") },
           { key: "location_name", label: "Lugar", render: (e) => e.location_name || "—" },
         ]}
         data={events}

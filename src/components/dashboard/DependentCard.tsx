@@ -80,7 +80,7 @@ export default function DependentCard({
           <span className="text-on-surface-variant">Inscripción</span>
           {activeEnrollment ? (
             <span className="text-green-400">
-              {activeEnrollment.enrollment_plans?.name || "Activa"} — vence {new Date(activeEnrollment.end_date + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" })}
+              {activeEnrollment.enrollment_plans?.name || "Activa"} — vence {new Date(activeEnrollment.end_date + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" })}
             </span>
           ) : (
             <span className="text-amber-400">Sin inscripción</span>

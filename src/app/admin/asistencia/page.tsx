@@ -293,10 +293,26 @@ export default function AdminAsistenciaPage() {
     if (!expandedSession) return;
     setClosingSession(true);
 
-    const { data: allEnrollments } = await supabase
+    const sessionRow = sessions.find((s) => s.id === expandedSession);
+    const scheduleId = sessionRow?.schedule_id;
+
+    const { data: sessionEnrollments } = await supabase
       .from("class_enrollments")
       .select("beneficiary_id, source")
       .eq("session_id", expandedSession);
+
+    const { data: scheduleEnrollments } = scheduleId
+      ? await supabase
+          .from("class_enrollments")
+          .select("beneficiary_id, source")
+          .eq("schedule_id", scheduleId)
+          .is("session_id", null)
+      : { data: null };
+
+    const allEnrollments = [...(sessionEnrollments || []), ...(scheduleEnrollments || [])];
+    const uniqueEnrollments = Array.from(
+      new Map(allEnrollments.map((e) => [e.beneficiary_id, e])).values()
+    );
 
     const { data: existingAttendance } = await supabase
       .from("attendance")
@@ -305,7 +321,7 @@ export default function AdminAsistenciaPage() {
 
     const attendedIds = new Set((existingAttendance || []).map((a) => a.beneficiary_id));
 
-    const notAttended = (allEnrollments || []).filter(
+    const notAttended = uniqueEnrollments.filter(
       (e) => !attendedIds.has(e.beneficiary_id)
     );
 
@@ -327,7 +343,7 @@ export default function AdminAsistenciaPage() {
       .eq("status", "presente");
 
     const qrBenIds = new Set(
-      (allEnrollments || []).filter((e) => e.source === "qr").map((e) => e.beneficiary_id)
+      uniqueEnrollments.filter((e) => e.source === "qr").map((e) => e.beneficiary_id)
     );
 
     const attendees: SummaryAttendee[] = (allAttendance || [])

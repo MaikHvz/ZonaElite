@@ -88,7 +88,8 @@ export default function HorariosPage() {
 
     if (!schedules) { setLoading(false); return; }
 
-    const today = new Date().toISOString().split("T")[0];
+    const todayObj = new Date();
+    const today = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, "0")}-${String(todayObj.getDate()).padStart(2, "0")}`;
     const enriched: Record<string, Record<string, ScheduleCell>> = {};
     const timeSet = new Set<string>();
 
@@ -278,7 +279,7 @@ export default function HorariosPage() {
                         const matchesFilter = activeFilter === "all" || s.disciplines?.name === activeFilter;
 
                         const nextDateLabel = nextDate
-                          ? new Date(nextDate + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" })
+                          ? new Date(nextDate + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" })
                           : null;
 
                         return (

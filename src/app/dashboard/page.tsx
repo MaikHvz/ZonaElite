@@ -230,7 +230,7 @@ export default function DashboardPage() {
                   Inscripción <strong>{enrollment.planName}</strong> vigente
                 </p>
                 <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">
-                  Vence el {new Date(enrollment.endDate + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })}
+                  Vence el {new Date(enrollment.endDate + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })}
                 </p>
               </>
             ) : (

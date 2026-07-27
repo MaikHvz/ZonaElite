@@ -160,7 +160,7 @@ export default function MembresiasPage() {
   ];
 
   const formatDate = (d: string) =>
-    new Date(d + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" });
+    new Date(d + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" });
 
   return (
     <div className="space-y-6">
@@ -209,7 +209,7 @@ export default function MembresiasPage() {
                 <span className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface">{b.name}</span>
                 {b.hasActive ? (
                   <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-green-400">
-                    {b.planName} — vence {new Date(b.endDate + "T00:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" })}
+                    {b.planName} — vence {new Date(b.endDate + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" })}
                   </span>
                 ) : (
                   <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400">

@@ -29,7 +29,10 @@ export async function POST() {
 
       while (current <= endDate) {
         if (current.getDay() === schedule.day_of_week) {
-          const dateStr = current.toISOString().split("T")[0];
+          const y = current.getFullYear();
+          const m = String(current.getMonth() + 1).padStart(2, "0");
+          const dd = String(current.getDate()).padStart(2, "0");
+          const dateStr = `${y}-${m}-${dd}`;
           sessionsToInsert.push({
             schedule_id: schedule.id,
             session_date: dateStr,

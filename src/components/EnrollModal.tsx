@@ -50,7 +50,7 @@ interface EnrollModalProps {
 const DAY_NAMES_FULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
 function formatSessionDate(d: string) {
-  return new Date(d + "T00:00:00").toLocaleDateString("es-CL", {
+  return new Date(d + "T12:00:00").toLocaleDateString("es-CL", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -58,7 +58,7 @@ function formatSessionDate(d: string) {
 }
 
 function formatShortDate(d: string) {
-  return new Date(d + "T00:00:00").toLocaleDateString("es-CL", {
+  return new Date(d + "T12:00:00").toLocaleDateString("es-CL", {
     day: "numeric",
     month: "short",
   });
