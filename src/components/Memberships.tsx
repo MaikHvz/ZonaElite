@@ -84,14 +84,14 @@ export default function Memberships() {
         </p>
       </div>
 
-      <div className="flex flex-col md:flex-row justify-center items-stretch gap-6 md:gap-8">
+      <div className="flex flex-col md:flex-row flex-wrap justify-center items-stretch gap-6 md:gap-8">
         {plans.map((plan, idx) => {
           const featured = idx === 1 || (plans.length === 3 && idx === 1);
           const benefits = Array.isArray(plan.benefits) ? plan.benefits : [];
           return (
             <article
               key={plan.id}
-              className={`flex flex-col rounded-2xl p-8 w-full md:w-1/3 transition-all duration-300 ${
+              className={`flex flex-col rounded-2xl p-8 w-full md:w-[calc(33.333%-16px)] min-w-[280px] transition-all duration-300 ${
                 featured
                   ? "bg-surface-container-lowest border-2 border-primary shadow-[0_12px_40px_rgba(229,57,53,0.15)] md:-translate-y-4 hover:-translate-y-6"
                   : "bg-surface-container-low border border-on-surface/5 hover:shadow-[0_12px_24px_rgba(0,0,0,0.3)] hover:border-on-surface/10"
