@@ -50,11 +50,17 @@ export async function POST(req: Request) {
   }> = [];
 
   for (const bId of beneficiary_ids) {
-    const { data: ownership } = await admin
-      .rpc("owns_beneficiary", { b_id: bId })
-      .single();
+    const { data: benCheck } = await admin
+      .from("beneficiaries")
+      .select("id, profile_id, dependent:dependents(tutor_id)")
+      .eq("id", bId)
+      .maybeSingle();
 
-    if (!ownership) {
+    const isOwner =
+      benCheck?.profile_id === user.id ||
+      (benCheck?.dependent as unknown as { tutor_id: string })?.tutor_id === user.id;
+
+    if (!isOwner) {
       results.push({
         beneficiary_id: bId,
         name: "",
