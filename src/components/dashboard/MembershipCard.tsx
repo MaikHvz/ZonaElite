@@ -43,12 +43,12 @@ export default function MembershipCard({
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
 
   useEffect(() => {
-    if (membership.status === "activa" && membership.plan?.tokens !== null && membership.plan?.tokens !== undefined) {
+    if (membership.status === "activa") {
       getRemainingTokens(membership.beneficiary_id, membership.id).then((info) => {
         setTokenInfo(info);
       });
     }
-  }, [membership.beneficiary_id, membership.id, membership.status, membership.plan?.tokens]);
+  }, [membership.beneficiary_id, membership.id, membership.status]);
 
   const bgGradient = isExpired
     ? "from-red-950/20 to-transparent"
@@ -102,39 +102,90 @@ export default function MembershipCard({
                   " (carga)"}
               </p>
             )}
-            {membership.status === "activa" && membership.plan?.tokens !== null && membership.plan?.tokens !== undefined && (
-              <div className="mt-1">
-                {tokenInfo ? (
-                  <span className={`font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                    tokenInfo.is_unlimited
-                      ? "bg-green-500/10 text-green-400"
-                      : tokenInfo.remaining !== null && tokenInfo.remaining > 0
-                        ? "bg-blue-500/10 text-blue-400"
-                        : "bg-red-500/10 text-red-400"
-                  }`}>
-                    {tokenInfo.is_unlimited
-                      ? "Clases ilimitadas"
-                      : `${tokenInfo.remaining}/${tokenInfo.total} tokens`
-                    }
-                  </span>
-                ) : (
-                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/60">
-                    Cargando tokens...
-                  </span>
-                )}
-              </div>
-            )}
-            {membership.status === "activa" && (membership.plan?.tokens === null || membership.plan?.tokens === undefined) && (
-              <div className="mt-1">
-                <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">
-                  Clases ilimitadas
-                </span>
-              </div>
-            )}
           </div>
         </div>
         <StatusBadge status={membership.status} />
       </div>
+
+      {/* Clases disponibles — siempre visible en membresías activas */}
+      {membership.status === "activa" && (
+        <div className="mb-4 p-3 bg-surface-container-lowest/50 rounded-xl border border-on-surface/5">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="material-symbols-outlined text-primary text-[16px]">confirmation_number</span>
+            <span className="font-[family-name:var(--font-headline-md)] text-[12px] uppercase tracking-wider text-on-surface">
+              Clases disponibles
+            </span>
+          </div>
+          {tokenInfo ? (
+            tokenInfo.is_unlimited ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-green-400 text-[22px]">all_inclusive</span>
+                  <span className="font-[family-name:var(--font-headline-md)] text-[18px] text-green-400">
+                    Ilimitadas
+                  </span>
+                </div>
+                {tokenInfo.consumed > 0 && (
+                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">
+                    {tokenInfo.consumed} usadas
+                  </span>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="flex items-baseline gap-1.5 mb-2">
+                  <span className={`font-[family-name:var(--font-headline-md)] text-[24px] ${
+                    tokenInfo.remaining !== null && tokenInfo.remaining > 0
+                      ? "text-on-surface"
+                      : "text-red-400"
+                  }`}>
+                    {tokenInfo.remaining !== null ? Math.max(0, tokenInfo.remaining) : 0}
+                  </span>
+                  {tokenInfo.total !== null && (
+                    <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
+                      de {tokenInfo.total}
+                    </span>
+                  )}
+                </div>
+                {tokenInfo.total !== null && tokenInfo.total > 0 && (
+                <div className="h-1.5 rounded-full bg-on-surface/10 overflow-hidden mb-2">
+                  <div
+                    className="h-full rounded-full transition-all duration-700 ease-out"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, ((tokenInfo.total - tokenInfo.consumed) / tokenInfo.total) * 100))}%`,
+                      background: tokenInfo.remaining !== null && tokenInfo.remaining <= 0
+                        ? "linear-gradient(90deg, #ef4444, #dc2626)"
+                        : tokenInfo.remaining !== null && tokenInfo.remaining <= Math.ceil(tokenInfo.total * 0.25)
+                          ? "linear-gradient(90deg, #ef4444, #dc2626)"
+                          : tokenInfo.remaining !== null && tokenInfo.remaining <= Math.ceil(tokenInfo.total * 0.5)
+                            ? "linear-gradient(90deg, #eab308, #f59e0b)"
+                            : "linear-gradient(90deg, #22c55e, #16a34a)",
+                    }}
+                  />
+                </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">
+                    {tokenInfo.consumed} usadas · {tokenInfo.justified > 0 ? `${tokenInfo.justified} justificadas` : "0 justificadas"}
+                  </span>
+                  {tokenInfo.remaining !== null && tokenInfo.remaining <= 0 && (
+                    <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-red-400">
+                      {tokenInfo.remaining < 0 ? `Deuda: ${Math.abs(tokenInfo.remaining)}` : "Agotadas"}
+                    </span>
+                  )}
+                </div>
+              </>
+            )
+          ) : (
+            <div className="flex items-center gap-2 py-1">
+              <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full" />
+              <span className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
+                Cargando...
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2 mb-4">
         <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
@@ -175,35 +226,6 @@ export default function MembershipCard({
           }}
         />
       </div>
-
-      {/* Token progress bar — only for limited plans */}
-      {membership.status === "activa" && tokenInfo && !tokenInfo.is_unlimited && tokenInfo.total !== null && tokenInfo.total > 0 && (
-        <div className="mt-2">
-          <div className="flex items-center justify-between mb-1">
-            <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider text-on-surface-variant/60">
-              Tokens
-            </span>
-            <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider text-on-surface-variant/60">
-              {tokenInfo.consumed} usados / {tokenInfo.total}
-            </span>
-          </div>
-          <div className="h-1.5 rounded-full bg-on-surface/10 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-700 ease-out"
-              style={{
-                width: `${Math.min(100, Math.max(0, (tokenInfo.consumed / tokenInfo.total) * 100))}%`,
-                background: tokenInfo.remaining !== null && tokenInfo.remaining < 0
-                  ? "linear-gradient(90deg, #ef4444, #dc2626)"
-                  : tokenInfo.remaining !== null && tokenInfo.remaining <= Math.ceil(tokenInfo.total * 0.25)
-                    ? "linear-gradient(90deg, #ef4444, #dc2626)"
-                    : tokenInfo.remaining !== null && tokenInfo.remaining <= Math.ceil(tokenInfo.total * 0.5)
-                      ? "linear-gradient(90deg, #eab308, #f59e0b)"
-                      : "linear-gradient(90deg, #22c55e, #16a34a)",
-            }}
-          />
-        </div>
-        </div>
-      )}
 
       {membership.plan?.benefits &&
         membership.plan.benefits.length > 0 && (

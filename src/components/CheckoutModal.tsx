@@ -29,6 +29,9 @@ interface Beneficiary {
   hasActiveEnrollment: boolean;
   enrollmentEndDate: string | null;
   enrollmentPlanName: string | null;
+  hasActiveMembership: boolean;
+  activeMembershipName: string | null;
+  activeMembershipEndDate: string | null;
 }
 
 interface CheckoutModalProps {
@@ -72,12 +75,14 @@ export default function CheckoutModal({
   const [enrollmentPlans, setEnrollmentPlans] = useState<EnrollmentPlan[]>([]);
   const [includeEnrollment, setIncludeEnrollment] = useState(false);
   const [selectedEnrollmentPlanId, setSelectedEnrollmentPlanId] = useState("");
+  const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
 
   const handleClose = useCallback(() => {
     setSelectedId("");
     setError(null);
     setIncludeEnrollment(false);
     setSelectedEnrollmentPlanId("");
+    setShowOverwriteWarning(false);
     onClose();
   }, [onClose]);
 
@@ -132,16 +137,35 @@ export default function CheckoutModal({
 
       const list: Beneficiary[] = [];
 
-      if (ownBenRes.data) {
-        const { data: enroll } = await supabase
-          .from("academy_enrollments")
-          .select("end_date, enrollment_plans(name)")
-          .eq("beneficiary_id", ownBenRes.data.id)
-          .eq("status", "activa")
-          .gte("end_date", new Date().toISOString().split("T")[0])
-          .maybeSingle();
+      const today = new Date().toISOString().split("T")[0];
 
-        const hasActive = !!enroll;
+      const fetchMembership = async (beneficiaryId: string) => {
+        const { data: mem } = await supabase
+          .from("memberships")
+          .select("end_date, membership_plans(name)")
+          .eq("beneficiary_id", beneficiaryId)
+          .eq("status", "activa")
+          .gte("end_date", today)
+          .order("end_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return mem as { end_date: string; membership_plans?: { name: string } } | null;
+      };
+
+      if (ownBenRes.data) {
+        const [enrollResult, memResult] = await Promise.all([
+          supabase
+            .from("academy_enrollments")
+            .select("end_date, enrollment_plans(name)")
+            .eq("beneficiary_id", ownBenRes.data.id)
+            .eq("status", "activa")
+            .gte("end_date", today)
+            .maybeSingle(),
+          fetchMembership(ownBenRes.data.id),
+        ]);
+
+        const enroll = enrollResult.data;
+        const hasActiveEnrollment = !!enroll;
         const e = enroll as { end_date: string; enrollment_plans?: { name: string } } | null;
 
         list.push({
@@ -150,9 +174,12 @@ export default function CheckoutModal({
           dependent_id: ownBenRes.data.dependent_id,
           label: "Yo",
           sublabel: user.email || "",
-          hasActiveEnrollment: hasActive,
-          enrollmentEndDate: hasActive ? e?.end_date || null : null,
-          enrollmentPlanName: hasActive ? e?.enrollment_plans?.name || null : null,
+          hasActiveEnrollment,
+          enrollmentEndDate: hasActiveEnrollment ? e?.end_date || null : null,
+          enrollmentPlanName: hasActiveEnrollment ? e?.enrollment_plans?.name || null : null,
+          hasActiveMembership: !!memResult,
+          activeMembershipName: memResult?.membership_plans?.name || null,
+          activeMembershipEndDate: memResult?.end_date || null,
         });
       }
 
@@ -168,15 +195,19 @@ export default function CheckoutModal({
             (b) => b.dependent_id === dep.id
           );
           if (ben) {
-            const { data: enroll } = await supabase
-              .from("academy_enrollments")
-              .select("end_date, enrollment_plans(name)")
-              .eq("beneficiary_id", ben.id)
-              .eq("status", "activa")
-              .gte("end_date", new Date().toISOString().split("T")[0])
-              .maybeSingle();
+            const [enrollResult, memResult] = await Promise.all([
+              supabase
+                .from("academy_enrollments")
+                .select("end_date, enrollment_plans(name)")
+                .eq("beneficiary_id", ben.id)
+                .eq("status", "activa")
+                .gte("end_date", today)
+                .maybeSingle(),
+              fetchMembership(ben.id),
+            ]);
 
-            const hasActive = !!enroll;
+            const enroll = enrollResult.data;
+            const hasActiveEnrollment = !!enroll;
             const e = enroll as { end_date: string; enrollment_plans?: { name: string } } | null;
 
             list.push({
@@ -185,9 +216,12 @@ export default function CheckoutModal({
               dependent_id: ben.dependent_id,
               label: dep.full_name,
               sublabel: `Carga · ${dep.category === "nino" ? "Niño" : "Adulto"}`,
-              hasActiveEnrollment: hasActive,
-              enrollmentEndDate: hasActive ? e?.end_date || null : null,
-              enrollmentPlanName: hasActive ? e?.enrollment_plans?.name || null : null,
+              hasActiveEnrollment,
+              enrollmentEndDate: hasActiveEnrollment ? e?.end_date || null : null,
+              enrollmentPlanName: hasActiveEnrollment ? e?.enrollment_plans?.name || null : null,
+              hasActiveMembership: !!memResult,
+              activeMembershipName: memResult?.membership_plans?.name || null,
+              activeMembershipEndDate: memResult?.end_date || null,
             });
           }
         }
@@ -235,6 +269,12 @@ export default function CheckoutModal({
     if (!selectedId) return;
     if (mode === "membership" && !plan) return;
     if (mode === "enrollment-only" && !selectedEnrollmentPlanId) return;
+
+    if (mode === "membership" && selectedBeneficiary?.hasActiveMembership) {
+      setShowOverwriteWarning(true);
+      return;
+    }
+
     setProcessing(true);
     setError(null);
 
@@ -275,6 +315,50 @@ export default function CheckoutModal({
     }
   };
 
+  const handleConfirmOverwrite = () => {
+    setShowOverwriteWarning(false);
+    setProcessing(true);
+    setError(null);
+
+    (async () => {
+      try {
+        const body: Record<string, unknown> = {
+          beneficiaryId: selectedId,
+        };
+
+        if (mode === "membership" && plan) {
+          body.planId = plan.id;
+        }
+
+        if (showEnrollmentSection && selectedEnrollmentPlan) {
+          body.includeEnrollment = true;
+          body.enrollmentPlanId = selectedEnrollmentPlan.id;
+        }
+
+        const res = await fetch("/api/flow/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.error || "Error al procesar pago");
+          setProcessing(false);
+          return;
+        }
+
+        const flowUrl = new URL(data.url);
+        flowUrl.searchParams.set("token", data.token);
+        window.location.href = flowUrl.toString();
+      } catch {
+        setError("Error de conexión. Intenta de nuevo.");
+        setProcessing(false);
+      }
+    })();
+  };
+
   const getEnrollmentLabel = () => {
     if (!selectedBeneficiary) return "";
     if (selectedBeneficiary.hasActiveEnrollment) {
@@ -289,6 +373,7 @@ export default function CheckoutModal({
   };
 
   return (
+    <>
     <div
       ref={overlayRef}
       className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -546,5 +631,77 @@ export default function CheckoutModal({
         </div>
       </div>
     </div>
+
+    {/* Overwrite membership warning overlay */}
+    {showOverwriteWarning && selectedBeneficiary && plan && (
+      <div
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) setShowOverwriteWarning(false);
+        }}
+      >
+        <div className="bg-surface-container-lowest border border-red-500/30 rounded-2xl w-full max-w-md p-6 space-y-5">
+          <div className="flex items-start gap-3">
+            <span className="material-symbols-outlined text-red-400 text-[28px] mt-0.5">warning</span>
+            <div>
+              <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase">
+                Sobrescribir membresía activa
+              </h3>
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mt-2">
+                <strong className="text-on-surface">{selectedBeneficiary.label}</strong> ya tiene una membresía activa
+                {selectedBeneficiary.activeMembershipName && (
+                  <> ({selectedBeneficiary.activeMembershipName}{selectedBeneficiary.activeMembershipEndDate ? `, vigente hasta ${formatDate(selectedBeneficiary.activeMembershipEndDate)}` : ""})</>
+                )}.
+              </p>
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-red-400 mt-2 font-medium">
+                Esta acción sobrescribirá la membresía actual y no tiene vuelta atrás. La membresía anterior será cancelada permanentemente.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-surface-container rounded-xl p-4 border border-on-surface/5 space-y-2">
+            <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
+              <span className="text-on-surface-variant">Nueva membresía</span>
+              <span className="text-on-surface">{plan.name}</span>
+            </div>
+            <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
+              <span className="text-on-surface-variant">Precio</span>
+              <span className="text-primary">{formatCLP(plan.price)}</span>
+            </div>
+            <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
+              <span className="text-on-surface-variant">Beneficiario</span>
+              <span className="text-on-surface">{selectedBeneficiary.label}</span>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowOverwriteWarning(false)}
+              className="flex-1 bg-surface-container hover:bg-surface-container-high text-on-surface font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider py-3 rounded-lg transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmOverwrite}
+              disabled={processing}
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider py-3 rounded-lg transition-opacity disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+            >
+              {processing ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[18px]">check</span>
+                  Confirmar y pagar
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
