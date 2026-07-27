@@ -293,21 +293,44 @@ export default function AdminAsistenciaPage() {
     if (!expandedSession) return;
     setClosingSession(true);
 
-    const { data: attendData } = await supabase
+    const { data: allEnrollments } = await supabase
+      .from("class_enrollments")
+      .select("beneficiary_id, source")
+      .eq("session_id", expandedSession);
+
+    const { data: existingAttendance } = await supabase
+      .from("attendance")
+      .select("beneficiary_id, status")
+      .eq("session_id", expandedSession);
+
+    const attendedIds = new Set((existingAttendance || []).map((a) => a.beneficiary_id));
+
+    const notAttended = (allEnrollments || []).filter(
+      (e) => !attendedIds.has(e.beneficiary_id)
+    );
+
+    if (notAttended.length > 0) {
+      const absentInserts = notAttended.map((e) => ({
+        session_id: expandedSession,
+        beneficiary_id: e.beneficiary_id,
+        status: "ausente" as const,
+        marked_by: user?.id || null,
+        marked_at: new Date().toISOString(),
+      }));
+      await supabase.from("attendance").insert(absentInserts);
+    }
+
+    const { data: allAttendance } = await supabase
       .from("attendance")
       .select("beneficiary_id, marked_at, beneficiaries(id, profile:profiles(full_name), dependent:dependents(full_name))")
       .eq("session_id", expandedSession)
       .eq("status", "presente");
 
-    const { data: qrEnrollments } = await supabase
-      .from("class_enrollments")
-      .select("beneficiary_id")
-      .eq("session_id", expandedSession)
-      .eq("source", "qr");
+    const qrBenIds = new Set(
+      (allEnrollments || []).filter((e) => e.source === "qr").map((e) => e.beneficiary_id)
+    );
 
-    const qrBenIds = new Set((qrEnrollments || []).map((e) => e.beneficiary_id));
-
-    const attendees: SummaryAttendee[] = (attendData || [])
+    const attendees: SummaryAttendee[] = (allAttendance || [])
       .filter((a) => qrBenIds.has(a.beneficiary_id))
       .map((a) => {
         const b = a.beneficiaries as unknown as {
