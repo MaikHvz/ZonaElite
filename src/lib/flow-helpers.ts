@@ -96,23 +96,24 @@ export async function confirmAndCreateMembership(
     return { success: true, membershipId: existingMembership.id };
   }
 
-  // Cancel ALL existing active memberships for this beneficiary (no end_date filter, prevents failing if they have >1)
-  let cancelQuery = supabase
+  // Cancel ANY active membership for this beneficiary (no end_date filter)
+  const { data: currentActiveMembership } = await supabase
     .from("memberships")
-    .update({ status: "cancelada" })
+    .select("id")
     .eq("beneficiary_id", targetBeneficiaryId)
-    .eq("status", "activa");
+    .eq("status", "activa")
+    .neq("id", existingMembership?.id || "")
+    .maybeSingle();
 
-  if (existingMembership) {
-    cancelQuery = cancelQuery.neq("id", existingMembership.id);
-  }
-
-  const { error: cancelError } = await cancelQuery;
-
-  if (cancelError) {
-    console.error(HELPERS_LOG, "Failed to cancel existing memberships:", cancelError);
-  } else {
-    console.log(HELPERS_LOG, "Successfully cancelled previous active memberships");
+  if (currentActiveMembership) {
+    console.log(HELPERS_LOG, "Deactivating existing membership:", currentActiveMembership.id);
+    const { error: cancelError } = await supabase
+      .from("memberships")
+      .update({ status: "cancelada" })
+      .eq("id", currentActiveMembership.id);
+    if (cancelError) {
+      console.error(HELPERS_LOG, "Failed to cancel existing membership:", cancelError);
+    }
   }
 
   const endDate = addDaysChile(today, plan.duration_days);

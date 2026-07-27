@@ -158,12 +158,9 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
     const plan = plans.find((p) => p.id === form.planId);
     if (!plan) { setSaving(false); return; }
 
-    // Cancelar cualquier membresía activa previa
-    await supabase
-      .from("memberships")
-      .update({ status: "cancelada" })
-      .eq("beneficiary_id", form.beneficiaryId)
-      .eq("status", "activa");
+    if (existingMembership) {
+      await supabase.from("memberships").update({ status: "cancelada" }).eq("id", existingMembership.id);
+    }
 
     const endDate = new Date(form.startDate);
     endDate.setDate(endDate.getDate() + plan.duration_days);
