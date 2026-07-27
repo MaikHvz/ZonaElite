@@ -49,7 +49,7 @@ export async function confirmAndCreateMembership(
   const { data: plan } = await supabase
     .from("membership_plans")
     .select("id, duration_days")
-    .ilike("name", planName)
+    .ilike("name", `%${planName}%`)
     .single();
 
   if (!plan) {
