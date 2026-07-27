@@ -1,5 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import StatusBadge from "@/components/admin/StatusBadge";
-import type { MembershipData } from "@/lib/supabase/dashboard";
+import type { MembershipData, TokenInfo } from "@/lib/supabase/dashboard";
+import { getRemainingTokens } from "@/lib/supabase/dashboard";
 
 function getProgress(start: string, end: string) {
   const s = new Date(start).getTime();
@@ -35,6 +39,16 @@ export default function MembershipCard({
   const beneficiaryName = membership.beneficiary?.dependent
     ? membership.beneficiary.dependent.full_name
     : null;
+
+  const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
+
+  useEffect(() => {
+    if (membership.status === "activa" && membership.plan?.tokens !== null && membership.plan?.tokens !== undefined) {
+      getRemainingTokens(membership.beneficiary_id, membership.id).then((info) => {
+        setTokenInfo(info);
+      });
+    }
+  }, [membership.beneficiary_id, membership.id, membership.status, membership.plan?.tokens]);
 
   const bgGradient = isExpired
     ? "from-red-950/20 to-transparent"
@@ -88,6 +102,35 @@ export default function MembershipCard({
                   " (carga)"}
               </p>
             )}
+            {membership.status === "activa" && membership.plan?.tokens !== null && membership.plan?.tokens !== undefined && (
+              <div className="mt-1">
+                {tokenInfo ? (
+                  <span className={`font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                    tokenInfo.is_unlimited
+                      ? "bg-green-500/10 text-green-400"
+                      : tokenInfo.remaining !== null && tokenInfo.remaining > 0
+                        ? "bg-blue-500/10 text-blue-400"
+                        : "bg-red-500/10 text-red-400"
+                  }`}>
+                    {tokenInfo.is_unlimited
+                      ? "Clases ilimitadas"
+                      : `${tokenInfo.remaining}/${tokenInfo.total} tokens`
+                    }
+                  </span>
+                ) : (
+                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/60">
+                    Cargando tokens...
+                  </span>
+                )}
+              </div>
+            )}
+            {membership.status === "activa" && (membership.plan?.tokens === null || membership.plan?.tokens === undefined) && (
+              <div className="mt-1">
+                <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">
+                  Clases ilimitadas
+                </span>
+              </div>
+            )}
           </div>
         </div>
         <StatusBadge status={membership.status} />
@@ -116,7 +159,7 @@ export default function MembershipCard({
         )}
       </div>
 
-      {/* Progress bar with glow */}
+      {/* Time progress bar */}
       <div className="h-1.5 rounded-full bg-on-surface/10 overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-700 ease-out ${
@@ -132,6 +175,35 @@ export default function MembershipCard({
           }}
         />
       </div>
+
+      {/* Token progress bar — only for limited plans */}
+      {membership.status === "activa" && tokenInfo && !tokenInfo.is_unlimited && tokenInfo.total !== null && tokenInfo.total > 0 && (
+        <div className="mt-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider text-on-surface-variant/60">
+              Tokens
+            </span>
+            <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider text-on-surface-variant/60">
+              {tokenInfo.consumed} usados / {tokenInfo.total}
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-on-surface/10 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700 ease-out"
+              style={{
+                width: `${Math.min(100, Math.max(0, (tokenInfo.consumed / tokenInfo.total) * 100))}%`,
+                background: tokenInfo.remaining !== null && tokenInfo.remaining < 0
+                  ? "linear-gradient(90deg, #ef4444, #dc2626)"
+                  : tokenInfo.remaining !== null && tokenInfo.remaining <= Math.ceil(tokenInfo.total * 0.25)
+                    ? "linear-gradient(90deg, #ef4444, #dc2626)"
+                    : tokenInfo.remaining !== null && tokenInfo.remaining <= Math.ceil(tokenInfo.total * 0.5)
+                      ? "linear-gradient(90deg, #eab308, #f59e0b)"
+                      : "linear-gradient(90deg, #22c55e, #16a34a)",
+            }}
+          />
+        </div>
+        </div>
+      )}
 
       {membership.plan?.benefits &&
         membership.plan.benefits.length > 0 && (

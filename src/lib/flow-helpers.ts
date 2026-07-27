@@ -75,6 +75,7 @@ export async function confirmAndCreateMembership(
     return { success: false, error: "Beneficiario no encontrado" };
   }
 
+  const today = new Date().toISOString().split("T")[0];
   const dedupWindow = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   const { data: existingMembership } = await supabase
     .from("memberships")
@@ -94,7 +95,22 @@ export async function confirmAndCreateMembership(
     return { success: true, membershipId: existingMembership.id };
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const { data: currentActiveMembership } = await supabase
+    .from("memberships")
+    .select("id")
+    .eq("beneficiary_id", targetBeneficiaryId)
+    .eq("status", "activa")
+    .gte("end_date", today)
+    .maybeSingle();
+
+  if (currentActiveMembership) {
+    console.log(HELPERS_LOG, "Deactivating existing membership:", currentActiveMembership.id);
+    await supabase
+      .from("memberships")
+      .update({ status: "cancelada" })
+      .eq("id", currentActiveMembership.id);
+  }
+
   const endDate = new Date(
     Date.now() + plan.duration_days * 86400000
   )

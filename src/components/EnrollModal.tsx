@@ -37,6 +37,9 @@ interface BeneficiaryRow {
   enrolledSessions: Set<string>;
   eligible: boolean;
   ineligibleReason: string | null;
+  tokensRemaining: number | null;
+  tokensTotal: number | null;
+  isUnlimited: boolean;
 }
 
 interface EnrollModalProps {
@@ -158,6 +161,23 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
 
       let eligible = true;
       let ineligibleReason: string | null = null;
+      let tokensRemaining: number | null = null;
+      let tokensTotal: number | null = null;
+      let isUnlimited = true;
+
+      if (membership) {
+        const { data: tokenData } = await supabase.rpc("get_remaining_tokens", {
+          p_beneficiary_id: benId,
+          p_membership_id: membership.id,
+        });
+
+        if (tokenData && tokenData.length > 0) {
+          const tokenInfo = tokenData[0];
+          tokensRemaining = tokenInfo.remaining;
+          tokensTotal = tokenInfo.total;
+          isUnlimited = tokenInfo.is_unlimited;
+        }
+      }
 
       if (schedule.category === "ninos" && planCategory !== "nino") {
         eligible = false;
@@ -174,6 +194,9 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
       } else if (!planAllowed) {
         eligible = false;
         ineligibleReason = "Plan no habilitado para esta clase";
+      } else if (!isUnlimited && tokensRemaining !== null && tokensRemaining <= 0) {
+        eligible = false;
+        ineligibleReason = "Sin tokens disponibles";
       }
 
       rows.push({
@@ -187,6 +210,9 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
         enrolledSessions: enrolledSessionIds,
         eligible,
         ineligibleReason,
+        tokensRemaining,
+        tokensTotal,
+        isUnlimited,
       });
     }
 
@@ -242,6 +268,23 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
 
         let eligible = true;
         let ineligibleReason: string | null = null;
+        let tokensRemaining: number | null = null;
+        let tokensTotal: number | null = null;
+        let isUnlimited = true;
+
+        if (membership) {
+          const { data: tokenData } = await supabase.rpc("get_remaining_tokens", {
+            p_beneficiary_id: benId,
+            p_membership_id: membership.id,
+          });
+
+          if (tokenData && tokenData.length > 0) {
+            const tokenInfo = tokenData[0];
+            tokensRemaining = tokenInfo.remaining;
+            tokensTotal = tokenInfo.total;
+            isUnlimited = tokenInfo.is_unlimited;
+          }
+        }
 
         if (schedule.category === "ninos" && planCategory !== "nino") {
           eligible = false;
@@ -258,6 +301,9 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
         } else if (!planAllowed) {
           eligible = false;
           ineligibleReason = "Plan no habilitado para esta clase";
+        } else if (!isUnlimited && tokensRemaining !== null && tokensRemaining <= 0) {
+          eligible = false;
+          ineligibleReason = "Sin tokens disponibles";
         }
 
         rows.push({
@@ -271,6 +317,9 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
           enrolledSessions: enrolledSessionIds,
           eligible,
           ineligibleReason,
+          tokensRemaining,
+          tokensTotal,
+          isUnlimited,
         });
       }
     }
@@ -449,6 +498,19 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
                       <div className="flex items-center gap-2 mt-0.5">
                         {b.activePlanName && (
                           <span className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant/60">{b.activePlanName}</span>
+                        )}
+                        {b.membershipValid && (
+                          <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full ${b.isUnlimited
+                              ? "bg-green-500/10 text-green-400"
+                              : b.tokensRemaining !== null && b.tokensRemaining > 0
+                                ? "bg-blue-500/10 text-blue-400"
+                                : "bg-red-500/10 text-red-400"
+                            }`}>
+                            {b.isUnlimited
+                              ? "Ilimitado"
+                              : `${b.tokensRemaining}/${b.tokensTotal} tokens`
+                            }
+                          </span>
                         )}
                       </div>
                     </div>

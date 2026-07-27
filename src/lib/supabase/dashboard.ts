@@ -30,6 +30,7 @@ export interface MembershipData {
     duration_days: number;
     category: string;
     benefits: string[];
+    tokens: number | null;
   };
   beneficiary: {
     id: string;
@@ -137,7 +138,7 @@ export async function getUserMemberships(userId: string) {
       .select(
         `
         *,
-        plan:membership_plans(id, name, price, duration_days, category, benefits),
+        plan:membership_plans(id, name, price, duration_days, category, benefits, tokens),
         beneficiary:beneficiaries(
           id,
           profile_id,
@@ -551,6 +552,38 @@ export async function markAttendance(
       .select()
       .single();
     if (error) throw error;
+
+    if (status === "justificado") {
+      const { data: session } = await supabase
+        .from("class_sessions")
+        .select("session_date, schedule:schedules(discipline:disciplines(name))")
+        .eq("id", sessionId)
+        .single();
+
+      const { data: beneficiary } = await supabase
+        .from("beneficiaries")
+        .select("id, profile_id, dependent:dependents(full_name, tutor_id)")
+        .eq("id", beneficiaryId)
+        .single();
+
+      if (session && beneficiary) {
+        const depData = beneficiary.dependent as unknown as { full_name: string; tutor_id: string } | null;
+        const beneficiaryName = depData?.full_name || "Alumno";
+        const ownerId = depData?.tutor_id || beneficiary.profile_id;
+        const disciplineData = (session as { schedule?: { discipline?: { name?: string } } }).schedule?.discipline?.name || "Clase";
+        const sessionDate = (session as { session_date?: string }).session_date;
+
+        if (ownerId && sessionDate) {
+          await supabase.rpc("notify_token_return", {
+            p_user_id: ownerId,
+            p_beneficiary_name: beneficiaryName,
+            p_session_date: sessionDate,
+            p_discipline_name: disciplineData,
+          });
+        }
+      }
+    }
+
     return data as AttendanceRecord;
   });
 }
@@ -904,4 +937,201 @@ export async function getUserAttendance(userId: string, limit = 50) {
 
     return { records };
   });
+}
+
+// =====================================================
+// TOKEN SYSTEM TYPES AND FUNCTIONS
+// =====================================================
+
+export interface TokenInfo {
+  remaining: number | null;
+  total: number | null;
+  consumed: number;
+  justified: number;
+  is_unlimited: boolean;
+}
+
+export interface DebtDetail {
+  enrollment_id: string;
+  session_date: string;
+  discipline_name: string;
+  start_time: string;
+  end_time: string;
+  professor_name: string;
+  source: string;
+  enrolled_at: string;
+}
+
+export async function getRemainingTokens(
+  beneficiaryId: string,
+  membershipId: string
+): Promise<TokenInfo> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc("get_remaining_tokens", {
+    p_beneficiary_id: beneficiaryId,
+    p_membership_id: membershipId,
+  });
+
+  if (error || !data || data.length === 0) {
+    return {
+      remaining: null,
+      total: null,
+      consumed: 0,
+      justified: 0,
+      is_unlimited: true,
+    };
+  }
+
+  const result = data[0];
+  return {
+    remaining: result.remaining,
+    total: result.total,
+    consumed: result.consumed,
+    justified: result.justified,
+    is_unlimited: result.is_unlimited,
+  };
+}
+
+export async function getEnrollmentDebt(
+  beneficiaryId: string,
+  membershipId: string
+): Promise<DebtDetail[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase.rpc("get_enrollment_debt", {
+    p_beneficiary_id: beneficiaryId,
+    p_membership_id: membershipId,
+  });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data as DebtDetail[];
+}
+
+export async function getBeneficiaryTokens(
+  userId: string
+): Promise<Map<string, TokenInfo>> {
+  const supabase = createClient();
+  const tokenMap = new Map<string, TokenInfo>();
+
+  const [ownBeneficiary, dependentsWithBeneficiary] = await Promise.all([
+    supabase
+      .from("beneficiaries")
+      .select("id")
+      .eq("profile_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("dependents")
+      .select("id, beneficiaries(id)")
+      .eq("tutor_id", userId),
+  ]);
+
+  const beneficiaryIds: string[] = [];
+
+  if (ownBeneficiary.data?.id) {
+    beneficiaryIds.push(ownBeneficiary.data.id);
+  }
+
+  for (const d of dependentsWithBeneficiary.data || []) {
+    const bRaw = d.beneficiaries as unknown as { id: string }[] | { id: string } | null;
+    const bId = Array.isArray(bRaw) ? bRaw[0]?.id : bRaw?.id;
+    if (bId) {
+      beneficiaryIds.push(bId);
+    }
+  }
+
+  if (beneficiaryIds.length === 0) {
+    return tokenMap;
+  }
+
+  for (const bId of beneficiaryIds) {
+    const { data: membership } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("beneficiary_id", bId)
+      .eq("status", "activa")
+      .gte("end_date", new Date().toISOString().split("T")[0])
+      .order("end_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (membership) {
+      const tokenInfo = await getRemainingTokens(bId, membership.id);
+      tokenMap.set(bId, tokenInfo);
+    }
+  }
+
+  return tokenMap;
+}
+
+// =====================================================
+// USER NOTIFICATIONS
+// =====================================================
+
+export interface UserNotification {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  read: boolean;
+  created_at: string;
+}
+
+export async function getPersonalNotifications(userId: string): Promise<UserNotification[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("user_notifications")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data as UserNotification[];
+}
+
+export async function getUnreadNotificationCount(userId: string): Promise<number> {
+  const supabase = createClient();
+
+  const { count, error } = await supabase
+    .from("user_notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("read", false);
+
+  if (error) {
+    return 0;
+  }
+
+  return count || 0;
+}
+
+export async function markNotificationAsRead(notificationId: string): Promise<boolean> {
+  const supabase = createClient();
+
+  const { error } = await supabase
+    .from("user_notifications")
+    .update({ read: true })
+    .eq("id", notificationId);
+
+  return !error;
+}
+
+export async function markAllNotificationsAsRead(userId: string): Promise<boolean> {
+  const supabase = createClient();
+
+  const { error } = await supabase
+    .from("user_notifications")
+    .update({ read: true })
+    .eq("user_id", userId)
+    .eq("read", false);
+
+  return !error;
 }

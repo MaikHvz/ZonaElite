@@ -31,6 +31,10 @@ interface EnrollableBeneficiary {
   category: string;
   beneficiary_id: string;
   activePlan: string | null;
+  membershipId: string | null;
+  tokensRemaining: number | null;
+  tokensTotal: number | null;
+  isUnlimited: boolean;
 }
 
 interface QrAlert {
@@ -480,11 +484,29 @@ export default function AdminAsistenciaPage() {
 
       const { data: membership } = await supabase
         .from("memberships")
-        .select("plan_id, membership_plans(name)")
+        .select("id, plan_id, membership_plans(name, tokens)")
         .eq("beneficiary_id", ben.id)
         .eq("status", "activa")
         .gte("end_date", today)
         .maybeSingle();
+
+      let tokensRemaining: number | null = null;
+      let tokensTotal: number | null = null;
+      let isUnlimited = true;
+
+      if (membership) {
+        const { data: tokenData } = await supabase.rpc("get_remaining_tokens", {
+          p_beneficiary_id: ben.id,
+          p_membership_id: membership.id,
+        });
+
+        if (tokenData && tokenData.length > 0) {
+          const tokenInfo = tokenData[0];
+          tokensRemaining = tokenInfo.remaining;
+          tokensTotal = tokenInfo.total;
+          isUnlimited = tokenInfo.is_unlimited;
+        }
+      }
 
       results.push({
         id: p.id,
@@ -492,6 +514,10 @@ export default function AdminAsistenciaPage() {
         category: "adulto",
         beneficiary_id: ben.id,
         activePlan: membership?.plan_id || null,
+        membershipId: membership?.id || null,
+        tokensRemaining,
+        tokensTotal,
+        isUnlimited,
       });
     }
 
@@ -509,11 +535,29 @@ export default function AdminAsistenciaPage() {
 
       const { data: membership } = await supabase
         .from("memberships")
-        .select("plan_id, membership_plans(name)")
+        .select("id, plan_id, membership_plans(name, tokens)")
         .eq("beneficiary_id", ben.id)
         .eq("status", "activa")
         .gte("end_date", today)
         .maybeSingle();
+
+      let tokensRemaining: number | null = null;
+      let tokensTotal: number | null = null;
+      let isUnlimited = true;
+
+      if (membership) {
+        const { data: tokenData } = await supabase.rpc("get_remaining_tokens", {
+          p_beneficiary_id: ben.id,
+          p_membership_id: membership.id,
+        });
+
+        if (tokenData && tokenData.length > 0) {
+          const tokenInfo = tokenData[0];
+          tokensRemaining = tokenInfo.remaining;
+          tokensTotal = tokenInfo.total;
+          isUnlimited = tokenInfo.is_unlimited;
+        }
+      }
 
       results.push({
         id: d.tutor_id,
@@ -521,6 +565,10 @@ export default function AdminAsistenciaPage() {
         category: d.category,
         beneficiary_id: ben.id,
         activePlan: membership?.plan_id || null,
+        membershipId: membership?.id || null,
+        tokensRemaining,
+        tokensTotal,
+        isUnlimited,
       });
     }
 
@@ -629,22 +677,59 @@ export default function AdminAsistenciaPage() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {searchResults.map((r) => (
-                    <div key={r.beneficiary_id} className="flex items-center justify-between p-3 rounded-xl border border-on-surface/5">
-                      <div>
-                        <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{r.full_name}</p>
-                        <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider ${r.category === "nino" ? "text-blue-400" : "text-on-surface-variant/60"}`}>
-                          {r.category === "nino" ? "Niño" : "Adulto"}
-                          {r.activePlan ? " · Con membresía" : " · Sin membresía"}
-                        </span>
+                   {searchResults.map((r) => (
+                    <div key={r.beneficiary_id} className="p-3 rounded-xl border border-on-surface/5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{r.full_name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider ${r.category === "nino" ? "text-blue-400" : "text-on-surface-variant/60"}`}>
+                              {r.category === "nino" ? "Niño" : "Adulto"}
+                            </span>
+                            {r.activePlan ? (
+                              <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full ${r.isUnlimited
+                                  ? "bg-green-500/10 text-green-400"
+                                  : r.tokensRemaining !== null && r.tokensRemaining > 0
+                                    ? "bg-blue-500/10 text-blue-400"
+                                    : "bg-red-500/10 text-red-400"
+                                }`}>
+                                {r.isUnlimited
+                                  ? "Ilimitado"
+                                  : `${r.tokensRemaining}/${r.tokensTotal} tokens`
+                                }
+                              </span>
+                            ) : (
+                              <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider text-red-400">
+                                Sin membresía
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleEnroll(r.beneficiary_id)}
+                          disabled={enrolling === r.beneficiary_id || !r.activePlan}
+                          className="btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-4 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {enrolling === r.beneficiary_id ? "..." : "Inscribir"}
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleEnroll(r.beneficiary_id)}
-                        disabled={enrolling === r.beneficiary_id || !r.activePlan}
-                        className="btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-4 py-1.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {enrolling === r.beneficiary_id ? "..." : "Inscribir"}
-                      </button>
+                      {r.activePlan && !r.isUnlimited && r.tokensRemaining !== null && r.tokensRemaining <= 0 && (
+                        <div className={`mt-2 flex items-center gap-1.5 px-2 py-1.5 rounded-lg ${
+                          r.tokensRemaining === 0
+                            ? "bg-yellow-500/5 border border-yellow-500/15"
+                            : "bg-red-500/5 border border-red-500/15"
+                        }`}>
+                          <span className={`material-symbols-outlined text-[12px] ${r.tokensRemaining === 0 ? "text-yellow-400" : "text-red-400"}`}>
+                            {r.tokensRemaining === 0 ? "warning" : "error"}
+                          </span>
+                          <span className={`font-[family-name:var(--font-body-md)] text-[11px] ${r.tokensRemaining === 0 ? "text-yellow-400" : "text-red-400"}`}>
+                            {r.tokensRemaining === 0
+                              ? "Esto generará una deuda de 1 clase"
+                              : `Deuda acumulada: ${Math.abs(r.tokensRemaining)} clase${Math.abs(r.tokensRemaining) > 1 ? "s" : ""}`
+                            }
+                          </span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -201,12 +201,16 @@ export default function CheckinPage({
   }
 
   if (results) {
+    const hasNoMembership = results.some((r) => r.membership_status === "sin_membresia");
+    const hasNoTokens = results.some((r) => !r.ok && r.message.includes("Sin tokens"));
+    const allOk = results.every((r) => r.ok);
+
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-5">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <span className="material-symbols-outlined text-primary text-[48px] mb-3 block">
-              check_circle
+            <span className={`material-symbols-outlined text-[48px] mb-3 block ${allOk ? "text-green-400" : "text-primary"}`}>
+              {allOk ? "check_circle" : "info"}
             </span>
             <h1 className="font-[family-name:var(--font-headline-md)] text-[24px] text-on-surface uppercase">
               Resultado del check-in
@@ -257,6 +261,53 @@ export default function CheckinPage({
               </div>
             ))}
           </div>
+
+          {hasNoMembership && (
+            <div className="mb-6 p-5 bg-surface-container-lowest border border-primary/20 rounded-2xl text-center">
+              <span className="material-symbols-outlined text-primary text-[36px] mb-3 block">card_membership</span>
+              <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase mb-2">
+                Para asistir a clases necesitas
+              </h3>
+              <ol className="text-left space-y-2 mb-5">
+                <li className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-primary text-[16px] mt-0.5">check_circle</span>
+                  <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
+                    Estar matriculado en la academia
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-primary text-[16px] mt-0.5">check_circle</span>
+                  <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
+                    Tener una membresía activa
+                  </span>
+                </li>
+              </ol>
+              <button
+                onClick={() => router.push("/dashboard/membresias")}
+                className="w-full py-3 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] uppercase rounded-lg shadow-[0_0_16px_rgba(229,57,53,0.3)] hover:opacity-90 transition-opacity cursor-pointer"
+              >
+                Comprar membresía
+              </button>
+            </div>
+          )}
+
+          {hasNoTokens && !hasNoMembership && (
+            <div className="mb-6 p-5 bg-surface-container-lowest border border-yellow-500/20 rounded-2xl text-center">
+              <span className="material-symbols-outlined text-yellow-400 text-[36px] mb-3 block">token</span>
+              <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase mb-2">
+                Sin clases restantes
+              </h3>
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mb-4">
+                Tu membresía no tiene tokens disponibles. Renueva o compra una nueva membresía para continuar asistiendo.
+              </p>
+              <button
+                onClick={() => router.push("/dashboard/membresias")}
+                className="w-full py-3 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] uppercase rounded-lg shadow-[0_0_16px_rgba(229,57,53,0.3)] hover:opacity-90 transition-opacity cursor-pointer"
+              >
+                Comprar membresía
+              </button>
+            </div>
+          )}
 
           <button
             onClick={() => {

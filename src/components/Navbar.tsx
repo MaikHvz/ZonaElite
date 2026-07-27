@@ -32,8 +32,10 @@ export default function Navbar() {
     if (!user) return;
     const supabase = createClient();
     supabase
-      .from("notifications")
+      .from("user_notifications")
       .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("read", false)
       .then(({ count }) => setNotifCount(count || 0));
   }, [user]);
 

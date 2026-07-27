@@ -11,11 +11,12 @@ import MembershipReceipt from "@/components/admin/MembershipReceipt";
 import type { ReceiptData } from "@/components/admin/MembershipReceipt";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
+import { getRemainingTokens, getEnrollmentDebt, type TokenInfo, type DebtDetail } from "@/lib/supabase/dashboard";
 
-interface Plan { id: string; name: string; price: number; duration_days: number; category: string; benefits: string[]; active: boolean; }
+interface Plan { id: string; name: string; price: number; duration_days: number; category: string; benefits: string[]; tokens: number | null; active: boolean; }
 interface Membership { id: string; beneficiary_id: string; plan_id: string; purchased_by: string; start_date: string; end_date: string; status: string; created_at: string; membership_plans?: { name: string }; profiles?: { full_name: string }; beneficiaries?: { dependents?: { full_name: string; profiles?: { full_name: string } | null } | null; profiles?: { full_name: string } | null }; }
 
-const emptyPlan = { name: "", price: 0, duration_days: 30, category: "adulto", benefits: [] as string[], active: true };
+const emptyPlan = { name: "", price: 0, duration_days: 30, category: "adulto", benefits: [] as string[], tokens: null as number | null, active: true };
 
 export default function AdminMembresiasPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -36,6 +37,10 @@ export default function AdminMembresiasPage() {
   const [cancelTarget, setCancelTarget] = useState<Membership | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [expandedToken, setExpandedToken] = useState<string | null>(null);
+  const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
+  const [debtDetails, setDebtDetails] = useState<DebtDetail[]>([]);
+  const [loadingTokens, setLoadingTokens] = useState(false);
 
   const load = async () => {
     const supabase = createClient();
@@ -51,7 +56,7 @@ export default function AdminMembresiasPage() {
   useEffect(() => { load(); }, []);
 
   const openCreate = () => { setEditing(null); setForm(emptyPlan); setNewBenefit(""); setModalOpen(true); };
-  const openEdit = (p: Plan) => { setEditing(p); setForm({ name: p.name, price: p.price, duration_days: p.duration_days, category: p.category, benefits: Array.isArray(p.benefits) ? p.benefits : [], active: p.active }); setNewBenefit(""); setModalOpen(true); };
+  const openEdit = (p: Plan) => { setEditing(p); setForm({ name: p.name, price: p.price, duration_days: p.duration_days, category: p.category, benefits: Array.isArray(p.benefits) ? p.benefits : [], tokens: p.tokens, active: p.active }); setNewBenefit(""); setModalOpen(true); };
 
   const addBenefit = () => {
     const text = newBenefit.trim();
@@ -146,6 +151,29 @@ export default function AdminMembresiasPage() {
     return userName || m.profiles?.full_name || "—";
   };
 
+  const toggleTokenDetails = async (m: Membership) => {
+    if (expandedToken === m.id) {
+      setExpandedToken(null);
+      setTokenInfo(null);
+      setDebtDetails([]);
+      return;
+    }
+
+    setExpandedToken(m.id);
+    setLoadingTokens(true);
+    setTokenInfo(null);
+    setDebtDetails([]);
+
+    const [tokenRes, debtRes] = await Promise.all([
+      getRemainingTokens(m.beneficiary_id, m.id),
+      getEnrollmentDebt(m.beneficiary_id, m.id),
+    ]);
+
+    setTokenInfo(tokenRes);
+    setDebtDetails(debtRes);
+    setLoadingTokens(false);
+  };
+
   const getReceiptData = (m: Membership): ReceiptData => {
     const depName = m.beneficiaries?.dependents?.full_name;
     const tutorName = m.beneficiaries?.dependents?.profiles?.full_name;
@@ -197,6 +225,7 @@ export default function AdminMembresiasPage() {
             { key: "price", label: "Precio", render: (p) => `$${p.price.toLocaleString("es-CL")}` },
             { key: "duration_days", label: "Duración", render: (p) => `${p.duration_days} días` },
             { key: "category", label: "Categoría", render: (p) => p.category.charAt(0).toUpperCase() + p.category.slice(1) },
+            { key: "tokens", label: "Tokens", render: (p) => p.tokens === null ? <span className="text-on-surface-variant">Ilimitado</span> : <span className="text-on-surface">{p.tokens}</span> },
             { key: "active", label: "Estado", render: (p) => <StatusBadge status={p.active ? "activo" : "cancelado"} /> },
           ]}
           data={plans}
@@ -206,6 +235,7 @@ export default function AdminMembresiasPage() {
           emptyMessage="No hay planes creados"
         />
       ) : (
+        <>
         <DataTable
           columns={[
             { key: "beneficiary_id", label: "Beneficiario", render: (m) => (
@@ -217,6 +247,29 @@ export default function AdminMembresiasPage() {
             { key: "start_date", label: "Inicio", render: (m) => new Date(m.start_date).toLocaleDateString("es-CL") },
             { key: "end_date", label: "Fin", render: (m) => new Date(m.end_date).toLocaleDateString("es-CL") },
             { key: "status", label: "Estado", render: (m) => <StatusBadge status={m.status} /> },
+            { key: "tokens", label: "Tokens", render: (m) => {
+              if (m.status !== "activa") return <span className="text-on-surface-variant/40 text-[11px]">—</span>;
+              const plan = plans.find((p) => p.id === m.plan_id);
+              if (!plan || plan.tokens === null) {
+                return (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20">
+                    <span className="material-symbols-outlined text-[12px] text-green-400">all_inclusive</span>
+                    <span className="font-[family-name:var(--font-label-sm)] text-[10px] text-green-400">Ilimitado</span>
+                  </span>
+                );
+              }
+              const isExpanded = expandedToken === m.id;
+              return (
+                <button
+                  onClick={() => toggleTokenDetails(m)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border transition-colors cursor-pointer hover:opacity-80 bg-surface-container-high/50 border-on-surface/10"
+                >
+                  <span className="material-symbols-outlined text-[12px] text-on-surface-variant">token</span>
+                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] text-on-surface">{plan.tokens} clases</span>
+                  <span className={`material-symbols-outlined text-[10px] text-on-surface-variant transition-transform ${isExpanded ? "rotate-180" : ""}`}>expand_more</span>
+                </button>
+              );
+            }},
           ]}
           data={memberships}
           loading={loading}
@@ -224,6 +277,108 @@ export default function AdminMembresiasPage() {
           onDelete={setCancelTarget}
           emptyMessage="No hay membresías registradas"
         />
+
+        {expandedToken && (
+          <div className="mt-3 bg-surface-container-lowest border border-on-surface/5 rounded-xl p-5 animate-in slide-in-from-top-2 duration-200">
+            {loadingTokens ? (
+              <div className="flex items-center gap-3 py-4">
+                <div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full" />
+                <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">Cargando tokens...</span>
+              </div>
+            ) : tokenInfo ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary text-[20px]">token</span>
+                    <h4 className="font-[family-name:var(--font-headline-md)] text-[14px] text-on-surface uppercase">
+                      Estado de Tokens
+                    </h4>
+                  </div>
+                  <button onClick={() => setExpandedToken(null)} className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer">
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+
+                {tokenInfo.is_unlimited ? (
+                  <div className="flex items-center gap-3 p-4 bg-green-500/5 border border-green-500/15 rounded-lg">
+                    <span className="material-symbols-outlined text-green-400 text-[24px]">all_inclusive</span>
+                    <div>
+                      <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">Plan ilimitado</p>
+                      <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">Sin restricción de clases</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="p-3 bg-surface-container rounded-lg border border-on-surface/5 text-center">
+                        <p className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider text-on-surface-variant mb-1">Total</p>
+                        <p className="font-[family-name:var(--font-headline-md)] text-[22px] text-on-surface">{tokenInfo.total}</p>
+                      </div>
+                      <div className="p-3 bg-surface-container rounded-lg border border-on-surface/5 text-center">
+                        <p className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider text-on-surface-variant mb-1">Consumidos</p>
+                        <p className="font-[family-name:var(--font-headline-md)] text-[22px] text-on-surface">{tokenInfo.consumed}</p>
+                      </div>
+                      <div className={`p-3 rounded-lg border text-center ${
+                        tokenInfo.remaining !== null && tokenInfo.remaining < 0
+                          ? "bg-red-500/5 border-red-500/15"
+                          : tokenInfo.remaining !== null && tokenInfo.remaining <= 2
+                            ? "bg-yellow-500/5 border-yellow-500/15"
+                            : "bg-green-500/5 border-green-500/15"
+                      }`}>
+                        <p className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider text-on-surface-variant mb-1">Restantes</p>
+                        <p className={`font-[family-name:var(--font-headline-md)] text-[22px] ${
+                          tokenInfo.remaining !== null && tokenInfo.remaining < 0
+                            ? "text-red-400"
+                            : tokenInfo.remaining !== null && tokenInfo.remaining <= 2
+                              ? "text-yellow-400"
+                              : "text-green-400"
+                        }`}>{tokenInfo.remaining}</p>
+                      </div>
+                    </div>
+
+                    {tokenInfo.justified > 0 && (
+                      <div className="flex items-center gap-2 p-3 bg-yellow-500/5 border border-yellow-500/15 rounded-lg">
+                        <span className="material-symbols-outlined text-yellow-400 text-[16px]">info</span>
+                        <span className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
+                          {tokenInfo.justified} clase{tokenInfo.justified > 1 ? "s" : ""} justificada{tokenInfo.justified > 1 ? "s" : ""} — token{tokenInfo.justified > 1 ? "s" : ""} devuelto{tokenInfo.justified > 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    )}
+
+                    {tokenInfo.remaining !== null && tokenInfo.remaining < 0 && debtDetails.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="font-[family-name:var(--font-headline-md)] text-[12px] uppercase tracking-wider text-red-400 flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[14px]">warning</span>
+                          Deuda — {Math.abs(tokenInfo.remaining)} inscripciones exceden el plan
+                        </p>
+                        <div className="space-y-1.5">
+                          {debtDetails.map((d) => (
+                            <div key={d.enrollment_id} className="flex items-center gap-3 p-3 bg-red-500/5 border border-red-500/10 rounded-lg">
+                              <span className="material-symbols-outlined text-red-400/60 text-[16px]">event_busy</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface">
+                                  {d.discipline_name} — {new Date(d.session_date + "T12:00:00").toLocaleDateString("es-CL", { weekday: "short", day: "numeric", month: "short" })}
+                                </p>
+                                <p className="font-[family-name:var(--font-body-sm)] text-[10px] text-on-surface-variant">
+                                  {d.professor_name} · {d.start_time?.slice(0, 5)}-{d.end_time?.slice(0, 5)} · {d.source === "qr" ? "QR" : "Admin"}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant py-4">
+                No se pudo cargar la información de tokens.
+              </p>
+            )}
+          </div>
+        )}
+        </>
       )}
 
       {/* Plan modal */}
@@ -242,6 +397,31 @@ export default function AdminMembresiasPage() {
               <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Duración (días) *</label>
               <input inputMode="numeric" value={form.duration_days || ""} onChange={(e) => setForm({ ...form, duration_days: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
             </div>
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Tokens por periodo</label>
+            <div className="flex items-center gap-3">
+              <input
+                inputMode="numeric"
+                value={form.tokens === null ? "" : form.tokens}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, "");
+                  setForm({ ...form, tokens: val === "" ? null : Number(val) });
+                }}
+                placeholder="Ilimitado"
+                className="flex-1 bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50"
+              />
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, tokens: form.tokens === null ? 12 : null })}
+                className={`px-4 py-2.5 rounded-lg text-[13px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider transition-colors cursor-pointer ${form.tokens === null ? "btn-primary-gradient text-white" : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"}`}
+              >
+                {form.tokens === null ? "Ilimitado" : "Fijo"}
+              </button>
+            </div>
+            <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant/60 mt-1.5">
+              Dejar vacío para planes ilimitados. Número fijo = clases incluidas por periodo.
+            </p>
           </div>
           <div>
             <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Categoría *</label>

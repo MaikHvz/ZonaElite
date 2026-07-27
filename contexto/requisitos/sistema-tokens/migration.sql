@@ -207,3 +207,75 @@ Si remaining < 0, indica deuda (inscripciones exceden los tokens disponibles).';
 COMMENT ON FUNCTION public.get_enrollment_debt(UUID, UUID) IS 
 'Retorna el detalle de las inscripciones que generan deuda cuando los tokens se agotan.
 Solo retorna datos cuando remaining < 0.';
+
+-- =====================================================
+-- 6. TABLA DE NOTIFICACIONES DE USUARIO
+-- =====================================================
+-- Para notificaciones in-app específicas por usuario (ej: devolución de tokens)
+
+CREATE TABLE IF NOT EXISTS public.user_notifications (
+  id UUID DEFAULT gen_random_uuid() NOT NULL,
+  user_id UUID NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  read BOOLEAN DEFAULT false NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+  CONSTRAINT user_notifications_pkey PRIMARY KEY (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_notifications_user_id 
+ON user_notifications(user_id, read, created_at DESC);
+
+COMMENT ON TABLE user_notifications IS 
+'Notificaciones in-app específicas por usuario. Se usa para alertas de devolución de tokens y otros eventos personalizados.';
+
+-- RLS: cada usuario solo ve sus propias notificaciones
+ALTER TABLE user_notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users read own notifications"
+ON user_notifications FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users update own notifications"
+ON user_notifications FOR UPDATE
+USING (auth.uid() = user_id);
+
+-- Service role (admin functions) puede insertar sin restricción
+CREATE POLICY "Service role inserts notifications"
+ON user_notifications FOR INSERT
+WITH CHECK (true);
+
+-- =====================================================
+-- 7. FUNCIÓN PARA ENVIAR NOTIFICACIÓN DE DEVOLUCIÓN DE TOKEN
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION public.notify_token_return(
+  p_user_id UUID,
+  p_beneficiary_name TEXT,
+  p_session_date DATE,
+  p_discipline_name TEXT
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_notification_id UUID;
+BEGIN
+  INSERT INTO public.user_notifications (user_id, title, content)
+  VALUES (
+    p_user_id,
+    'Token devuelto',
+    FORMAT('Se devolvió 1 token por clase justificada el %s — %s para %s',
+           TO_CHAR(p_session_date, 'DD/MM/YYYY'),
+           p_discipline_name,
+           p_beneficiary_name)
+  )
+  RETURNING id INTO v_notification_id;
+  
+  RETURN v_notification_id;
+END;
+$$;
+
+COMMENT ON FUNCTION public.notify_token_return(UUID, TEXT, DATE, TEXT) IS 
+'Envía una notificación in-app al titular cuando se justifica una clase y se devuelve un token.';

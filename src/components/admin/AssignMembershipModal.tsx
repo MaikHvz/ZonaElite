@@ -36,6 +36,8 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [searching, setSearching] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [existingMembership, setExistingMembership] = useState<{ id: string; planName: string; endDate: string } | null>(null);
+  const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -110,6 +112,36 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
     return b?.id || "";
   };
 
+  const checkExistingMembership = async (beneficiaryId: string) => {
+    if (!beneficiaryId) {
+      setExistingMembership(null);
+      return;
+    }
+
+    const supabase = createClient();
+    const today = new Date().toISOString().split("T")[0];
+
+    const { data: membership } = await supabase
+      .from("memberships")
+      .select("id, end_date, membership_plans(name)")
+      .eq("beneficiary_id", beneficiaryId)
+      .eq("status", "activa")
+      .gte("end_date", today)
+      .order("end_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (membership) {
+      setExistingMembership({
+        id: membership.id,
+        planName: (membership.membership_plans as unknown as { name: string })?.name || "—",
+        endDate: membership.end_date,
+      });
+    } else {
+      setExistingMembership(null);
+    }
+  };
+
   const selectedPlan = plans.find((p) => p.id === form.planId);
 
   const handlePlanChange = (planId: string) => {
@@ -124,6 +156,10 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
     const { data: { user } } = await supabase.auth.getUser();
     const plan = plans.find((p) => p.id === form.planId);
     if (!plan) { setSaving(false); return; }
+
+    if (existingMembership) {
+      await supabase.from("memberships").update({ status: "cancelada" }).eq("id", existingMembership.id);
+    }
 
     const endDate = new Date(form.startDate);
     endDate.setDate(endDate.getDate() + plan.duration_days);
@@ -231,7 +267,7 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
             <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Beneficiario *</label>
             <div className="space-y-2">
               <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${form.beneficiaryId === getBeneficiaryId(selectedProfile.id, null) ? "border-primary bg-primary/5" : "border-on-surface/10 hover:border-on-surface/20"}`}>
-                <input type="radio" name="beneficiary" checked={form.beneficiaryId === getBeneficiaryId(selectedProfile.id, null)} onChange={() => setForm({ ...form, beneficiaryId: getBeneficiaryId(selectedProfile.id, null) })} className="accent-primary" />
+                <input type="radio" name="beneficiary" checked={form.beneficiaryId === getBeneficiaryId(selectedProfile.id, null)} onChange={() => { const bId = getBeneficiaryId(selectedProfile.id, null); setForm({ ...form, beneficiaryId: bId }); checkExistingMembership(bId); }} className="accent-primary" />
                 <div>
                   <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">{selectedProfile.full_name}</p>
                   <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">Usuario</p>
@@ -239,7 +275,7 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
               </label>
               {dependents.map((d) => (
                 <label key={d.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${form.beneficiaryId === getBeneficiaryId(selectedProfile.id, d.id) ? "border-primary bg-primary/5" : "border-on-surface/10 hover:border-on-surface/20"}`}>
-                  <input type="radio" name="beneficiary" checked={form.beneficiaryId === getBeneficiaryId(selectedProfile.id, d.id)} onChange={() => setForm({ ...form, beneficiaryId: getBeneficiaryId(selectedProfile.id, d.id) })} className="accent-primary" />
+                  <input type="radio" name="beneficiary" checked={form.beneficiaryId === getBeneficiaryId(selectedProfile.id, d.id)} onChange={() => { const bId = getBeneficiaryId(selectedProfile.id, d.id); setForm({ ...form, beneficiaryId: bId }); checkExistingMembership(bId); }} className="accent-primary" />
                   <div>
                     <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">{d.full_name}</p>
                     <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">Carga de {selectedProfile.full_name}</p>
@@ -247,6 +283,19 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
                 </label>
               ))}
             </div>
+            {existingMembership && (
+              <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-amber-400 text-[18px]">warning</span>
+                  <p className="font-[family-name:var(--font-body-md)] text-[13px] text-amber-200">
+                    Ya tiene una membresía activa: <span className="font-semibold">{existingMembership.planName}</span> hasta {new Date(existingMembership.endDate).toLocaleDateString("es-CL")}
+                  </p>
+                </div>
+                <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-amber-200/70 mt-1">
+                  La membresía anterior será cancelada al asignar la nueva.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

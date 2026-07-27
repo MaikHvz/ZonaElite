@@ -90,6 +90,60 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (!existingEnrollment) {
+      const { data: membership } = await admin
+        .from("memberships")
+        .select("id, plan_id, end_date, status, membership_plans(tokens)")
+        .eq("beneficiary_id", bId)
+        .eq("status", "activa")
+        .order("end_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!membership) {
+        results.push({
+          beneficiary_id: bId,
+          name: bName,
+          ok: false,
+          message: "Sin membresía activa. Debes comprar una membresía para asistir a clases.",
+          membership_status: "sin_membresia",
+        });
+        continue;
+      }
+
+      const today = new Date().toISOString().split("T")[0];
+      if (membership.end_date < today) {
+        results.push({
+          beneficiary_id: bId,
+          name: bName,
+          ok: false,
+          message: "Membresía vencida. Debes renovar tu membresía para asistir a clases.",
+          membership_status: "atrasado",
+        });
+        continue;
+      }
+
+      const planTokens = (membership.membership_plans as unknown as { tokens: number | null })?.tokens;
+      if (planTokens !== null) {
+        const { data: tokenData } = await admin.rpc("get_remaining_tokens", {
+          p_beneficiary_id: bId,
+          p_membership_id: membership.id,
+        });
+
+        if (tokenData && tokenData.length > 0) {
+          const tokenInfo = tokenData[0];
+          if (!tokenInfo.is_unlimited && tokenInfo.remaining !== null && tokenInfo.remaining <= 0) {
+            results.push({
+              beneficiary_id: bId,
+              name: bName,
+              ok: false,
+              message: "Sin tokens disponibles. Tu membresía no tiene clases restantes.",
+              membership_status: "al_dia",
+            });
+            continue;
+          }
+        }
+      }
+
       const { error: enrollErr } = await admin.from("class_enrollments").insert({
         session_id,
         beneficiary_id: bId,
