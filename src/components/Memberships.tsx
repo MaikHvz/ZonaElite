@@ -42,6 +42,9 @@ export default function Memberships() {
     return (
       <section id="membresias" className="py-[64px] md:py-[96px] px-5 md:px-6 max-w-[1280px] mx-auto">
         <div className="text-center mb-16">
+          <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-5">
+            Planes de Entrenamiento
+          </span>
           <h2 className="font-[family-name:var(--font-headline-lg)] text-[32px] leading-[36px] md:text-[48px] md:leading-[52px] md:tracking-[0.02em] text-on-surface uppercase tracking-tighter">
             Membresías <span className="text-primary">ZonaElite</span>
           </h2>
@@ -68,12 +71,17 @@ export default function Memberships() {
     return `/${Math.round(days / 30)} meses`;
   };
 
+  const featuredIndex = plans.length === 3 ? 1 : 0;
+
   return (
     <section
       id="membresias"
       className="py-[64px] md:py-[96px] px-5 md:px-6 max-w-[1280px] mx-auto"
     >
       <div className="text-center mb-16">
+        <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-5">
+          Planes de Entrenamiento
+        </span>
         <h2 className="font-[family-name:var(--font-headline-lg)] text-[32px] leading-[36px] md:text-[48px] md:leading-[52px] md:tracking-[0.02em] text-on-surface uppercase tracking-tighter">
           Membresías{" "}
           <span className="text-primary">ZonaElite</span>
@@ -84,61 +92,65 @@ export default function Memberships() {
         </p>
       </div>
 
-      <div className="flex flex-col md:flex-row flex-wrap justify-center items-stretch gap-6 md:gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-5 items-start max-w-[960px] mx-auto">
         {plans.map((plan, idx) => {
-          const featured = idx === 1 || (plans.length === 3 && idx === 1);
+          const featured = idx === featuredIndex;
           const benefits = Array.isArray(plan.benefits) ? plan.benefits : [];
           return (
             <article
               key={plan.id}
-              className={`flex flex-col rounded-2xl p-8 w-full md:w-[calc(33.333%-16px)] min-w-[280px] transition-all duration-300 ${
+              className={`relative flex flex-col rounded-2xl transition-all duration-300 ${
                 featured
-                  ? "bg-surface-container-lowest border-2 border-primary shadow-[0_12px_40px_rgba(229,57,53,0.15)] md:-translate-y-4 hover:-translate-y-6"
-                  : "bg-surface-container-low border border-on-surface/5 hover:shadow-[0_12px_24px_rgba(0,0,0,0.3)] hover:border-on-surface/10"
+                  ? "bg-surface-container-lowest border border-primary/30 shadow-[0_0_40px_rgba(255,84,76,0.12)] md:-translate-y-3 md:scale-[1.03] z-10"
+                  : "bg-surface-container-low border border-on-surface/5 hover:border-on-surface/10 hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]"
               }`}
             >
               {featured && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[12px] leading-[16px] uppercase py-1.5 px-5 rounded-full tracking-wider whitespace-nowrap shadow-[0_4px_20px_rgba(229,57,53,0.4)]">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[10px] leading-[14px] uppercase py-1 px-4 rounded-full tracking-[0.1em] whitespace-nowrap shadow-[0_4px_20px_rgba(229,57,53,0.4)]">
                   Recomendado
                 </div>
               )}
 
-              <div className={`mb-8 ${featured ? "mt-2" : ""}`}>
-                <h3 className="font-[family-name:var(--font-headline-md)] text-[24px] leading-[28px] text-on-surface uppercase mb-1">
+              <div className={`p-7 pb-5 ${featured ? "pt-9" : ""}`}>
+                <h3 className="font-[family-name:var(--font-headline-md)] text-[18px] leading-[22px] text-on-surface-variant uppercase mb-3">
                   {plan.name}
                 </h3>
-                <div className="flex items-baseline gap-2">
+                <div className="flex items-baseline gap-1.5">
                   <span
-                    className={`font-[family-name:var(--font-headline-lg)] text-[48px] leading-[52px] tracking-[-0.03em] ${
+                    className={`font-[family-name:var(--font-headline-lg)] text-[42px] leading-[44px] tracking-[-0.03em] ${
                       featured ? "text-primary" : "text-on-surface"
                     }`}
                   >
                     {formatPrice(plan.price)}
                   </span>
-                  <span className="font-[family-name:var(--font-body-md)] text-[16px] leading-[24px] text-on-surface-variant">
+                  <span className="font-[family-name:var(--font-body-md)] text-[14px] leading-[20px] text-on-surface-variant">
                     {formatDuration(plan.duration_days)}
                   </span>
                 </div>
               </div>
 
-              <div className="flex-grow">
-                <ul className="space-y-4 mb-8">
+              <div className="px-7 pb-2">
+                <div className={`h-px ${featured ? "bg-primary/15" : "bg-on-surface/5"}`} />
+              </div>
+
+              <div className="flex-grow px-7 pt-5 pb-6">
+                <ul className="space-y-3">
                   {benefits.map((feature: string) => (
-                    <li key={feature} className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-primary mt-0.5">
+                    <li key={feature} className="flex items-start gap-2.5">
+                      <span className={`material-symbols-outlined text-[18px] mt-0.5 ${featured ? "text-primary" : "text-primary/60"}`}>
                         check_circle
                       </span>
-                      <span className="font-[family-name:var(--font-body-md)] text-[16px] leading-[24px] text-on-surface">
+                      <span className="font-[family-name:var(--font-body-md)] text-[14px] leading-[20px] text-on-surface">
                         {feature}
                       </span>
                     </li>
                   ))}
                   {benefits.length === 0 && (
-                    <li className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-primary mt-0.5">
+                    <li className="flex items-start gap-2.5">
+                      <span className={`material-symbols-outlined text-[18px] mt-0.5 ${featured ? "text-primary" : "text-primary/60"}`}>
                         check_circle
                       </span>
-                      <span className="font-[family-name:var(--font-body-md)] text-[16px] leading-[24px] text-on-surface">
+                      <span className="font-[family-name:var(--font-body-md)] text-[14px] leading-[20px] text-on-surface">
                         Acceso a la academia
                       </span>
                     </li>
@@ -146,29 +158,31 @@ export default function Memberships() {
                 </ul>
               </div>
 
-              {user ? (
-                <button
-                  onClick={() => setSelectedPlan(plan)}
-                  className={`w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[14px] leading-[18px] uppercase rounded-[0.25rem] transition-colors duration-200 cursor-pointer ${
-                    featured
-                      ? "btn-primary-gradient text-white shadow-[0_0_20px_rgba(229,57,53,0.3)] hover:opacity-90"
-                      : "border border-on-surface/20 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/40"
-                  }`}
-                >
-                  Comprar
-                </button>
-              ) : (
-                <Link
-                  href="/auth"
-                  className={`w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[14px] leading-[18px] uppercase rounded-[0.25rem] transition-colors duration-200 ${
-                    featured
-                      ? "btn-primary-gradient text-white shadow-[0_0_20px_rgba(229,57,53,0.3)] hover:opacity-90"
-                      : "border border-on-surface/20 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/40"
-                  }`}
-                >
-                  Seleccionar
-                </Link>
-              )}
+              <div className="px-7 pb-7">
+                {user ? (
+                  <button
+                    onClick={() => setSelectedPlan(plan)}
+                    className={`w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[13px] leading-[16px] uppercase rounded-lg transition-all duration-200 cursor-pointer ${
+                      featured
+                        ? "btn-primary-gradient text-white shadow-[0_0_24px_rgba(229,57,53,0.3)] hover:shadow-[0_0_32px_rgba(229,57,53,0.45)] hover:scale-[1.02]"
+                        : "border border-on-surface/15 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/25 hover:scale-[1.01]"
+                    }`}
+                  >
+                    Comprar ahora
+                  </button>
+                ) : (
+                  <Link
+                    href="/auth"
+                    className={`block w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[13px] leading-[16px] uppercase rounded-lg transition-all duration-200 ${
+                      featured
+                        ? "btn-primary-gradient text-white shadow-[0_0_24px_rgba(229,57,53,0.3)] hover:shadow-[0_0_32px_rgba(229,57,53,0.45)] hover:scale-[1.02]"
+                        : "border border-on-surface/15 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/25 hover:scale-[1.01]"
+                    }`}
+                  >
+                    Seleccionar
+                  </Link>
+                )}
+              </div>
             </article>
           );
         })}
