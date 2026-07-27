@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "@/providers/SessionProvider";
 import { createClient } from "@/lib/supabase/client";
+import { getChileToday } from "@/lib/dates";
 import { QRCodeSVG } from "qrcode.react";
 import {
   getUpcomingSessions,
@@ -158,7 +159,7 @@ export default function AdminAsistenciaPage() {
               .limit(1)
               .maybeSingle();
 
-            const today = new Date().toISOString().split("T")[0];
+            const today = getChileToday();
             const isExpired = !membership || membership.end_date < today;
 
             if (isExpired) {
@@ -456,7 +457,7 @@ export default function AdminAsistenciaPage() {
     if (query.length < 2) { setSearchResults([]); return; }
     setSearching(true);
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = getChileToday();
 
     const [profilesRes, depsRes] = await Promise.all([
       supabase
@@ -814,7 +815,7 @@ export default function AdminAsistenciaPage() {
           {Object.entries(groupedByDate)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([date, dateSessions]) => {
-              const isToday = date === new Date().toISOString().split("T")[0];
+              const isToday = date === getChileToday();
               return (
                 <div key={date}>
                   <div className="flex items-center gap-3 mb-3">

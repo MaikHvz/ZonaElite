@@ -1,4 +1,5 @@
 import { createClient } from "./client";
+import { getChileToday } from "../dates";
 
 type SupabaseResult<T> = { data: T | null; error: string | null };
 
@@ -407,7 +408,7 @@ export interface AttendanceBeneficiary {
 export async function getUpcomingSessions() {
   return safeQuery(async () => {
     const supabase = createClient();
-    const today = new Date().toISOString().split("T")[0];
+    const today = getChileToday();
 
     const { data } = await supabase
       .from("class_sessions")
@@ -473,8 +474,8 @@ export async function getAttendanceForSession(sessionId: string) {
       `
       )
       .eq("status", "activa")
-      .lte("start_date", new Date().toISOString().split("T")[0])
-      .gte("end_date", new Date().toISOString().split("T")[0])
+      .lte("start_date", getChileToday())
+      .gte("end_date", getChileToday())
       .in("beneficiary_id", enrolledIds);
 
     const beneficiaryMap = new Map<string, AttendanceBeneficiary>();
@@ -1053,7 +1054,7 @@ export async function getBeneficiaryTokens(
       .select("id")
       .eq("beneficiary_id", bId)
       .eq("status", "activa")
-      .gte("end_date", new Date().toISOString().split("T")[0])
+      .gte("end_date", getChileToday())
       .order("end_date", { ascending: false })
       .limit(1)
       .maybeSingle();

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useSession } from "@/providers/SessionProvider";
 import { createClient } from "@/lib/supabase/client";
+import { getChileToday } from "@/lib/dates";
 
 interface Plan {
   id: string;
@@ -137,7 +138,7 @@ export default function CheckoutModal({
 
       const list: Beneficiary[] = [];
 
-      const today = new Date().toISOString().split("T")[0];
+      const today = getChileToday();
 
       const fetchMembership = async (beneficiaryId: string) => {
         const { data: mem } = await supabase
@@ -365,7 +366,7 @@ export default function CheckoutModal({
       return `Vigente hasta ${formatDate(selectedBeneficiary.enrollmentEndDate || "")}`;
     }
     if (selectedEnrollmentPlan) {
-      const baseDate = selectedBeneficiary.enrollmentEndDate || new Date().toISOString().split("T")[0];
+      const baseDate = selectedBeneficiary.enrollmentEndDate || getChileToday();
       const newEnd = addDays(baseDate, selectedEnrollmentPlan.duration_days);
       return `Vigente hasta ${formatDate(newEnd)}`;
     }

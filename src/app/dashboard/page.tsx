@@ -4,6 +4,7 @@ import { useSession } from "@/providers/SessionProvider";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getChileToday } from "@/lib/dates";
 import {
   getDashboardSummary,
   type DashboardSummary,
@@ -67,7 +68,7 @@ export default function DashboardPage() {
         .eq("profile_id", user.id)
         .maybeSingle();
 
-      const today = new Date().toISOString().split("T")[0];
+      const today = getChileToday();
       const beneficiaryEnrollments: BeneficiaryEnrollment[] = [];
 
       if (ownBen) {

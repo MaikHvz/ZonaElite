@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getChileToday } from "@/lib/dates";
 import FormModal from "@/components/admin/FormModal";
 
 interface Plan { id: string; name: string; price: number; duration_days: number; category: string; }
@@ -20,7 +21,7 @@ const emptyForm = {
   search: "",
   beneficiaryId: "",
   planId: "",
-  startDate: new Date().toISOString().split("T")[0],
+  startDate: getChileToday(),
   method: "transferencia",
   amount: 0,
   notes: "",
@@ -119,7 +120,7 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
     }
 
     const supabase = createClient();
-    const today = new Date().toISOString().split("T")[0];
+    const today = getChileToday();
 
     const { data: membership } = await supabase
       .from("memberships")

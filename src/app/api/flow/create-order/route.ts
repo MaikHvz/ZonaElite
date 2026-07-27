@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
+import { getChileToday } from "@/lib/dates";
 import { createFlowOrder, getFlowConfig, verifyFlowPayment, FLOW_LOG_PREFIX } from "@/lib/flow";
 
 export const dynamic = "force-dynamic";
@@ -148,7 +149,7 @@ export async function POST(request: Request) {
         .select("id")
         .eq("beneficiary_id", beneficiaryId)
         .eq("status", "activa")
-        .gte("end_date", new Date().toISOString().split("T")[0])
+        .gte("end_date", getChileToday())
         .maybeSingle();
 
       if (existingEnrollment) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getChileToday } from "@/lib/dates";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
@@ -151,7 +152,7 @@ export default function AdminInscripcionesPage() {
     if (query.length < 2) { setSearchResults([]); return; }
     setSearching(true);
     const supabase = createClient();
-    const today = new Date().toISOString().split("T")[0];
+    const today = getChileToday();
 
     const { data: profiles } = await supabase
       .from("profiles")

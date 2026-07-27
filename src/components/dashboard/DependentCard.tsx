@@ -1,5 +1,6 @@
 import type { DependentData } from "@/lib/supabase/dashboard";
 import Link from "next/link";
+import { getChileToday } from "@/lib/dates";
 
 function calcAge(birthDate: string) {
   const today = new Date();
@@ -35,7 +36,7 @@ export default function DependentCard({
 
   const activeEnrollment = beneficiaryList
     .flatMap((b) => b.academy_enrollments || [])
-    .find((e) => e.status === "activa" && e.end_date >= new Date().toISOString().split("T")[0]);
+    .find((e) => e.status === "activa" && e.end_date >= getChileToday());
 
   return (
     <div className="bg-surface-container border border-on-surface/5 rounded-2xl p-5 hover:border-primary/30 transition-colors">

@@ -4,6 +4,7 @@ import { useSession } from "@/providers/SessionProvider";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getChileToday } from "@/lib/dates";
 import {
   getUserMemberships,
   type MembershipData,
@@ -47,7 +48,7 @@ export default function MembresiasPage() {
       const { data } = await getUserMemberships(user.id);
       setMemberships(data?.memberships || []);
 
-      const today = new Date().toISOString().split("T")[0];
+      const today = getChileToday();
 
       // Fetch enrollment status for own beneficiary
       const { data: ownBen } = await supabase

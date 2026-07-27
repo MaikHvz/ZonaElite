@@ -430,9 +430,10 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 3. Extraer nombre del plan del concepto
 4. Buscar plan en `membership_plans` (ilike)
 5. Buscar beneficiary (del pago o por user)
-6. Dedup check (10 min window)
-7. Crear membership con fechas calculadas
-8. Link payment → membership
+6. Dedup check (10 min window) - evita duplicados por doble click
+7. Cancelar CUALQUIER membresía "activa" existente para el usuario (sin importar la fecha de fin, ya que la nueva sobrescribe)
+8. Crear membership con fechas calculadas usando `addDaysChile`
+9. Link payment → membership
 
 ---
 
@@ -453,6 +454,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 13. **`membership_plans.category`** = `'adulto'|'nino'`, **`dependents.category`** = `'nino'|'adulto'` (orden invertido).
 14. **`beneficiaries`** no tiene columna `category` — el category viene del `dependent` o se asume `'adulto'`.
 15. **Spanish** en todo el contenido visible.
+16. **Zonas Horarias**: NUNCA usar `new Date().toISOString().split("T")[0]` para calcular "hoy", ya que usa UTC y genera un desfase después de las 20:00 hora Chile. SIEMPRE importar y usar `getChileToday()` y `addDaysChile()` desde `src/lib/dates.ts`.
 
 ---
 

@@ -1,4 +1,5 @@
 import { FLOW_LOG_PREFIX } from "./flow";
+import { getChileToday, addDaysChile } from "./dates";
 
 const HELPERS_LOG = `${FLOW_LOG_PREFIX}/helpers`;
 
@@ -75,7 +76,7 @@ export async function confirmAndCreateMembership(
     return { success: false, error: "Beneficiario no encontrado" };
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getChileToday();
   const dedupWindow = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   const { data: existingMembership } = await supabase
     .from("memberships")
@@ -95,27 +96,27 @@ export async function confirmAndCreateMembership(
     return { success: true, membershipId: existingMembership.id };
   }
 
+  // Cancel ANY active membership for this beneficiary (no end_date filter)
   const { data: currentActiveMembership } = await supabase
     .from("memberships")
     .select("id")
     .eq("beneficiary_id", targetBeneficiaryId)
     .eq("status", "activa")
-    .gte("end_date", today)
+    .neq("id", existingMembership?.id || "")
     .maybeSingle();
 
   if (currentActiveMembership) {
     console.log(HELPERS_LOG, "Deactivating existing membership:", currentActiveMembership.id);
-    await supabase
+    const { error: cancelError } = await supabase
       .from("memberships")
       .update({ status: "cancelada" })
       .eq("id", currentActiveMembership.id);
+    if (cancelError) {
+      console.error(HELPERS_LOG, "Failed to cancel existing membership:", cancelError);
+    }
   }
 
-  const endDate = new Date(
-    Date.now() + plan.duration_days * 86400000
-  )
-    .toISOString()
-    .split("T")[0];
+  const endDate = addDaysChile(today, plan.duration_days);
 
   const { data: membership } = await supabase
     .from("memberships")
@@ -178,7 +179,7 @@ export async function extendEnrollment(
     return { success: false, error: "Plan de inscripción no encontrado" };
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getChileToday();
 
   // Check for existing active enrollment
   const { data: existing } = await supabase
@@ -226,9 +227,7 @@ export async function extendEnrollment(
   } else {
     // Create new enrollment
     startDate = today;
-    endDate = new Date(Date.now() + plan.duration_days * 86400000)
-      .toISOString()
-      .split("T")[0];
+    endDate = addDaysChile(today, plan.duration_days);
 
     const { data: enrollment, error } = await supabase
       .from("academy_enrollments")

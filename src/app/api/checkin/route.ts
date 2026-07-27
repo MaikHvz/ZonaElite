@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { getChileToday } from "@/lib/dates";
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -110,7 +111,7 @@ export async function POST(req: Request) {
         continue;
       }
 
-      const today = new Date().toISOString().split("T")[0];
+      const today = getChileToday();
       if (membership.end_date < today) {
         results.push({
           beneficiary_id: bId,
@@ -206,7 +207,7 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     let membershipStatus: "al_dia" | "atrasado" | "sin_membresia" = "sin_membresia";
-    const today = new Date().toISOString().split("T")[0];
+    const today = getChileToday();
 
     if (membership && membership.end_date >= today) {
       if (enrollment && enrollment.end_date >= today) {

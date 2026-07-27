@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getChileToday } from "@/lib/dates";
 
 interface Schedule {
   id: string;
@@ -82,7 +83,7 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
     setSelected(new Set());
     setSelectedSession(null);
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = getChileToday();
 
     const sessionsRes = await supabase
       .from("class_sessions")

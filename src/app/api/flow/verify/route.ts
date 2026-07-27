@@ -4,6 +4,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { verifyFlowPayment, FLOW_LOG_PREFIX } from "@/lib/flow";
 import {
   confirmAndCreateMembership,
+  extendEnrollment,
   markPaymentAsPaid,
   findPaymentByTokenAndUser,
 } from "@/lib/flow-helpers";
@@ -34,13 +35,19 @@ export async function GET(request: Request) {
 
     const admin = getAdminClient();
 
-    const payment = await findPaymentByTokenAndUser(admin, token, user.id);
+    // Fetch payment with enrollment fields
+    const { data: fullPayment } = await admin
+      .from("payments")
+      .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id, membership_id, include_enrollment, enrollment_plan_id")
+      .eq("flow_token", token)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-    if (!payment) {
+    if (!fullPayment) {
       return NextResponse.json({ status: "not_found" });
     }
 
-    if (payment.status === "pagado") {
+    if (fullPayment.status === "pagado") {
       return NextResponse.json({ status: "pagado" });
     }
 
@@ -50,19 +57,36 @@ export async function GET(request: Request) {
       if (verification.status === 2) {
         await markPaymentAsPaid(
           admin,
-          payment.id,
+          fullPayment.id,
           token,
           verification.flowOrder
         );
 
-        const result = await confirmAndCreateMembership(
-          admin,
-          payment.id,
-          user.id
-        );
+        // Create membership if concept includes "membresía"
+        const hasMembershipConcept = fullPayment.concept && /membres[íi]a/i.test(fullPayment.concept);
+        if (hasMembershipConcept) {
+          const result = await confirmAndCreateMembership(
+            admin,
+            fullPayment.id,
+            user.id
+          );
 
-        if (!result.success) {
-          console.error(VERIFY_LOG, "Membership creation failed:", result.error);
+          if (!result.success) {
+            console.error(VERIFY_LOG, "Membership creation failed:", result.error);
+          }
+        }
+
+        // Handle enrollment extension if included in payment
+        if (fullPayment.include_enrollment && fullPayment.enrollment_plan_id && fullPayment.beneficiary_id) {
+          const enrollResult = await extendEnrollment(
+            admin,
+            fullPayment.id,
+            fullPayment.beneficiary_id,
+            fullPayment.enrollment_plan_id
+          );
+          if (!enrollResult.success) {
+            console.error(VERIFY_LOG, "Enrollment extension failed:", enrollResult.error);
+          }
         }
 
         return NextResponse.json({ status: "pagado" });
@@ -72,13 +96,13 @@ export async function GET(request: Request) {
         await admin
           .from("payments")
           .update({ status: "cancelado" })
-          .eq("id", payment.id);
+          .eq("id", fullPayment.id);
         return NextResponse.json({ status: "cancelado" });
       }
 
-      return NextResponse.json({ status: payment.status });
+      return NextResponse.json({ status: fullPayment.status });
     } catch {
-      return NextResponse.json({ status: payment.status });
+      return NextResponse.json({ status: fullPayment.status });
     }
   } catch {
     return NextResponse.json({ status: "error" });
