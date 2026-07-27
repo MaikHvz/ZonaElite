@@ -62,6 +62,7 @@ DECLARE
   v_plan_tokens INTEGER;
   v_start_date DATE;
   v_end_date DATE;
+  v_created_at TIMESTAMPTZ;
   v_consumed BIGINT;
   v_justified BIGINT;
 BEGIN
@@ -69,11 +70,13 @@ BEGIN
   SELECT 
     mp.tokens,
     m.start_date,
-    m.end_date
+    m.end_date,
+    m.created_at
   INTO 
     v_plan_tokens,
     v_start_date,
-    v_end_date
+    v_end_date,
+    v_created_at
   FROM memberships m
   JOIN membership_plans mp ON m.plan_id = mp.id
   WHERE m.id = p_membership_id
@@ -98,17 +101,20 @@ BEGIN
   JOIN class_sessions cs ON ce.session_id = cs.id
   WHERE ce.beneficiary_id = p_beneficiary_id
     AND cs.session_date >= v_start_date
-    AND cs.session_date <= v_end_date;
+    AND cs.session_date <= v_end_date
+    AND ce.enrolled_at >= v_created_at;
   
   -- Contar justificaciones en el periodo (devuelven token)
   SELECT COUNT(*)
   INTO v_justified
   FROM attendance a
   JOIN class_sessions cs ON a.session_id = cs.id
+  JOIN class_enrollments ce ON ce.session_id = cs.id AND ce.beneficiary_id = a.beneficiary_id
   WHERE a.beneficiary_id = p_beneficiary_id
     AND a.status = 'justificado'
     AND cs.session_date >= v_start_date
-    AND cs.session_date <= v_end_date;
+    AND cs.session_date <= v_end_date
+    AND ce.enrolled_at >= v_created_at;
   
   -- Calcular tokens restantes
   -- remaining = total - (inscripciones - justificaciones)
