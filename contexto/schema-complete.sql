@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS public.academy_settings (
   whatsapp text,
   social_links jsonb,
   integrations jsonb,
+  qr_alert_duration integer DEFAULT 4 NOT NULL,
   updated_at timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT academy_settings_pkey PRIMARY KEY (id)
 );
@@ -165,8 +166,10 @@ CREATE TABLE IF NOT EXISTS public.class_sessions (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   schedule_id uuid NOT NULL,
   session_date date NOT NULL,
+  status text DEFAULT 'cerrada' NOT NULL,
   created_at timestamptz DEFAULT now() NOT NULL,
-  CONSTRAINT class_sessions_pkey PRIMARY KEY (id)
+  CONSTRAINT class_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT class_sessions_status_check CHECK (status IN ('activa', 'cerrada'))
 );
 
 CREATE TABLE IF NOT EXISTS public.class_plans (
@@ -182,7 +185,9 @@ CREATE TABLE IF NOT EXISTS public.class_enrollments (
   beneficiary_id uuid NOT NULL,
   enrolled_at timestamptz DEFAULT now() NOT NULL,
   schedule_id uuid,
-  CONSTRAINT class_enrollments_pkey PRIMARY KEY (id)
+  source text DEFAULT 'horarios' NOT NULL,
+  CONSTRAINT class_enrollments_pkey PRIMARY KEY (id),
+  CONSTRAINT class_enrollments_source_check CHECK (source IN ('horarios', 'admin', 'qr'))
 );
 
 CREATE TABLE IF NOT EXISTS public.dependents (
@@ -477,6 +482,7 @@ CREATE INDEX IF NOT EXISTS idx_schedules_discipline_id ON public.schedules(disci
 CREATE INDEX IF NOT EXISTS idx_schedules_day_of_week ON public.schedules(day_of_week);
 CREATE INDEX IF NOT EXISTS idx_class_sessions_schedule_id ON public.class_sessions(schedule_id);
 CREATE INDEX IF NOT EXISTS idx_class_sessions_session_date ON public.class_sessions(session_date);
+CREATE INDEX IF NOT EXISTS idx_class_sessions_status ON public.class_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_class_enrollments_session_id ON public.class_enrollments(session_id);
 CREATE INDEX IF NOT EXISTS idx_class_enrollments_beneficiary_id ON public.class_enrollments(beneficiary_id);
 CREATE INDEX IF NOT EXISTS idx_class_enrollments_schedule_id ON public.class_enrollments(schedule_id);
@@ -564,6 +570,11 @@ CREATE POLICY "class_enrollments_insert_admin_or_self" ON public.class_enrollmen
     AND EXISTS (SELECT 1 FROM public.memberships m WHERE m.beneficiary_id = class_enrollments.beneficiary_id AND m.status = 'activa' AND m.end_date >= current_date)
   )
 );
+CREATE POLICY "class_enrollments_insert_qr_walkin" ON public.class_enrollments FOR INSERT WITH CHECK (
+  auth.uid() IS NOT NULL
+  AND public.owns_beneficiary(beneficiary_id)
+  AND source = 'qr'
+);
 CREATE POLICY "class_enrollments_delete_admin" ON public.class_enrollments FOR DELETE USING (public.is_admin());
 ALTER TABLE public.dependents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "dependents_select_own_or_admin" ON public.dependents FOR SELECT USING (tutor_id = auth.uid() OR public.is_admin());
@@ -575,6 +586,9 @@ CREATE POLICY "beneficiaries_select_own_or_admin" ON public.beneficiaries FOR SE
 ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "attendance_select_own_or_admin" ON public.attendance FOR SELECT USING (public.owns_beneficiary(beneficiary_id) OR public.is_admin());
 CREATE POLICY "attendance_insert_admin" ON public.attendance FOR INSERT WITH CHECK (public.is_admin());
+CREATE POLICY "attendance_insert_own_beneficiary" ON public.attendance FOR INSERT WITH CHECK (
+  auth.uid() IS NOT NULL AND public.owns_beneficiary(beneficiary_id)
+);
 CREATE POLICY "attendance_update_admin" ON public.attendance FOR UPDATE USING (public.is_admin());
 ALTER TABLE public.membership_plans ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "membership_plans_select_all" ON public.membership_plans FOR SELECT USING (true);

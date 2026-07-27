@@ -13,6 +13,7 @@ interface AcademySettings {
   address: string | null;
   whatsapp: string | null;
   social_links: Record<string, string>;
+  qr_alert_duration: number;
 }
 
 interface GalleryImage {
@@ -63,6 +64,7 @@ export default function AdminConfiguracionPage() {
         address: settings.address,
         whatsapp: settings.whatsapp,
         social_links: settings.social_links,
+        qr_alert_duration: settings.qr_alert_duration,
       }).eq("id", settings.id);
       if (error) {
         setToast({ msg: getSupabaseErrorMessage(error, "Guardar configuración"), type: "error" });
@@ -187,6 +189,21 @@ export default function AdminConfiguracionPage() {
         <div>
           <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">WhatsApp</label>
           <input value={settings.whatsapp || ""} onChange={(e) => setSettings({ ...settings, whatsapp: e.target.value })} placeholder="+56912345678" className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50" />
+        </div>
+        <div>
+          <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Duración del aviso QR (segundos)</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={30}
+            value={settings.qr_alert_duration ?? 4}
+            onChange={(e) => setSettings({ ...settings, qr_alert_duration: parseInt(e.target.value) || 4 })}
+            className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50"
+          />
+          <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant/60 mt-1">
+            Tiempo que se muestra el aviso de membresía vencida en la pantalla del QR
+          </p>
         </div>
         <div>
           <ImageUpload

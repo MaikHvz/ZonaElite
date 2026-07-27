@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "@/providers/SessionProvider";
 import { createClient } from "@/lib/supabase/client";
+import { QRCodeSVG } from "qrcode.react";
 import {
   getUpcomingSessions,
   getAttendanceForSession,
@@ -21,6 +22,7 @@ const STATUS_OPTIONS = [
 
 interface SessionWithCount extends ClassSessionData {
   enrolledCount?: number;
+  status?: string;
 }
 
 interface EnrollableBeneficiary {
@@ -29,6 +31,18 @@ interface EnrollableBeneficiary {
   category: string;
   beneficiary_id: string;
   activePlan: string | null;
+}
+
+interface QrAlert {
+  id: string;
+  name: string;
+  timestamp: number;
+}
+
+interface SummaryAttendee {
+  beneficiary_id: string;
+  full_name: string;
+  marked_at: string;
 }
 
 export default function AdminAsistenciaPage() {
@@ -53,6 +67,17 @@ export default function AdminAsistenciaPage() {
   const [searching, setSearching] = useState(false);
   const [enrolling, setEnrolling] = useState<string | null>(null);
 
+  const [qrSessionId, setQrSessionId] = useState<string | null>(null);
+  const [qrAlerts, setQrAlerts] = useState<QrAlert[]>([]);
+  const alertQueueRef = useRef<QrAlert[]>([]);
+  const alertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alertDurationRef = useRef(4000);
+
+  const [showSummary, setShowSummary] = useState(false);
+  const [summaryAttendees, setSummaryAttendees] = useState<SummaryAttendee[]>([]);
+  const [closingSession, setClosingSession] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
@@ -67,6 +92,115 @@ export default function AdminAsistenciaPage() {
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
+
+  useEffect(() => {
+    supabase
+      .from("academy_settings")
+      .select("qr_alert_duration")
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (data?.qr_alert_duration) {
+          alertDurationRef.current = data.qr_alert_duration * 1000;
+        }
+      });
+  }, [supabase]);
+
+  const processAlertQueue = useCallback(() => {
+    if (alertTimerRef.current) return;
+    const next = alertQueueRef.current.shift();
+    if (!next) return;
+
+    setQrAlerts((prev) => [...prev, next]);
+    alertTimerRef.current = setTimeout(() => {
+      setQrAlerts((prev) => prev.filter((a) => a.id !== next.id));
+      alertTimerRef.current = null;
+      processAlertQueue();
+    }, alertDurationRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!qrSessionId) return;
+
+    let lastCount = 0;
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled) return;
+      const { count } = await supabase
+        .from("attendance")
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", qrSessionId);
+
+      const currentCount = count || 0;
+      if (currentCount > lastCount) {
+        const { data: newRecords } = await supabase
+          .from("attendance")
+          .select("beneficiary_id, marked_at")
+          .eq("session_id", qrSessionId)
+          .order("marked_at", { ascending: false })
+          .limit(currentCount - lastCount);
+
+        lastCount = currentCount;
+
+        if (newRecords) {
+          for (const rec of newRecords) {
+            const { data: membership } = await supabase
+              .from("memberships")
+              .select("end_date")
+              .eq("beneficiary_id", rec.beneficiary_id)
+              .eq("status", "activa")
+              .order("end_date", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            const today = new Date().toISOString().split("T")[0];
+            const isExpired = !membership || membership.end_date < today;
+
+            if (isExpired) {
+              const { data: bInfo } = await supabase
+                .from("beneficiaries")
+                .select("profile:profiles(full_name), dependent:dependents(full_name)")
+                .eq("id", rec.beneficiary_id)
+                .single();
+
+              const name =
+                (bInfo?.dependent as unknown as { full_name: string })?.full_name ||
+                (bInfo?.profile as unknown as { full_name: string })?.full_name ||
+                "Alumno";
+
+              const alert: QrAlert = {
+                id: `${Date.now()}-${Math.random()}`,
+                name,
+                timestamp: Date.now(),
+              };
+              alertQueueRef.current.push(alert);
+              processAlertQueue();
+            }
+          }
+        }
+      }
+    };
+
+    const initPoll = async () => {
+      const { count } = await supabase
+        .from("attendance")
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", qrSessionId);
+      lastCount = count || 0;
+    };
+
+    initPoll();
+    const interval = setInterval(poll, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      if (alertTimerRef.current) clearTimeout(alertTimerRef.current);
+      alertTimerRef.current = null;
+      alertQueueRef.current = [];
+    };
+  }, [qrSessionId, supabase, processAlertQueue]);
 
   const handleGenerateSessions = async () => {
     setGenerating(true);
@@ -89,16 +223,40 @@ export default function AdminAsistenciaPage() {
     if (expandedSession === sessionId) {
       setExpandedSession(null);
       setBeneficiaries([]);
+      setQrSessionId(null);
+      setShowSummary(false);
+      setSummaryAttendees([]);
+      setShowCloseConfirm(false);
       return;
     }
 
     setExpandedSession(sessionId);
     setLoadingAttendance(true);
     setBeneficiaries([]);
+    setShowSummary(false);
+    setSummaryAttendees([]);
+    setShowCloseConfirm(false);
 
     const session = sessions.find((s) => s.id === sessionId);
     if (session) {
       session.enrolledCount = undefined;
+    }
+
+    const { data: sessData } = await supabase
+      .from("class_sessions")
+      .select("status")
+      .eq("id", sessionId)
+      .single();
+
+    const sessionStatus = sessData?.status || "cerrada";
+    if (session) {
+      session.status = sessionStatus;
+    }
+
+    if (sessionStatus === "activa") {
+      setQrSessionId(sessionId);
+    } else {
+      setQrSessionId(null);
     }
 
     const { data } = await getAttendanceForSession(sessionId);
@@ -111,6 +269,81 @@ export default function AdminAsistenciaPage() {
     }
 
     setLoadingAttendance(false);
+  };
+
+  const handleActivateSession = async (sessionId: string) => {
+    const { error } = await supabase
+      .from("class_sessions")
+      .update({ status: "activa" })
+      .eq("id", sessionId);
+
+    if (error) {
+      showToast("Error al activar sesión", "error");
+      return;
+    }
+
+    setSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, status: "activa" } : s))
+    );
+    setQrSessionId(sessionId);
+    showToast("Sesión activada — QR listo", "success");
+  };
+
+  const handleCloseSession = async () => {
+    if (!expandedSession) return;
+    setClosingSession(true);
+
+    const { data: attendData } = await supabase
+      .from("attendance")
+      .select("beneficiary_id, marked_at, beneficiaries(id, profile:profiles(full_name), dependent:dependents(full_name))")
+      .eq("session_id", expandedSession)
+      .eq("status", "presente");
+
+    const { data: qrEnrollments } = await supabase
+      .from("class_enrollments")
+      .select("beneficiary_id")
+      .eq("session_id", expandedSession)
+      .eq("source", "qr");
+
+    const qrBenIds = new Set((qrEnrollments || []).map((e) => e.beneficiary_id));
+
+    const attendees: SummaryAttendee[] = (attendData || [])
+      .filter((a) => qrBenIds.has(a.beneficiary_id))
+      .map((a) => {
+        const b = a.beneficiaries as unknown as {
+          profile?: { full_name: string };
+          dependent?: { full_name: string };
+        } | null;
+        return {
+          beneficiary_id: a.beneficiary_id,
+          full_name:
+            b?.dependent?.full_name || b?.profile?.full_name || "Alumno",
+          marked_at: a.marked_at,
+        };
+      });
+
+    const { error } = await supabase
+      .from("class_sessions")
+      .update({ status: "cerrada" })
+      .eq("id", expandedSession);
+
+    if (error) {
+      showToast("Error al cerrar sesión", "error");
+      setClosingSession(false);
+      return;
+    }
+
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === expandedSession ? { ...s, status: "cerrada" } : s
+      )
+    );
+    setQrSessionId(null);
+    setSummaryAttendees(attendees);
+    setShowSummary(true);
+    setShowCloseConfirm(false);
+    setClosingSession(false);
+    showToast("Sesión finalizada", "success");
   };
 
   const handleMark = (beneficiaryId: string, status: "presente" | "ausente" | "justificado") => {
@@ -243,12 +476,6 @@ export default function AdminAsistenciaPage() {
         .gte("end_date", today)
         .maybeSingle();
 
-      const { data: tutor } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", d.tutor_id)
-        .maybeSingle();
-
       results.push({
         id: d.tutor_id,
         full_name: d.full_name,
@@ -269,6 +496,7 @@ export default function AdminAsistenciaPage() {
     const { error } = await supabase.from("class_enrollments").insert({
       session_id: enrollSessionId,
       beneficiary_id: beneficiaryId,
+      source: "admin",
     });
 
     setEnrolling(null);
@@ -308,7 +536,6 @@ export default function AdminAsistenciaPage() {
 
   return (
     <div>
-      {/* Toast */}
       {toast && (
         <div className="fixed top-4 right-4 z-[60] animate-slide-in-right">
           <div className={`px-4 py-3 rounded-xl border shadow-lg backdrop-blur-sm ${
@@ -326,7 +553,6 @@ export default function AdminAsistenciaPage() {
         </div>
       )}
 
-      {/* Enroll Modal */}
       {showEnrollModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowEnrollModal(false)}>
           <div className="bg-surface-container-lowest border border-on-surface/10 rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -389,7 +615,35 @@ export default function AdminAsistenciaPage() {
         </div>
       )}
 
-      {/* Header */}
+      {showCloseConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowCloseConfirm(false)}>
+          <div className="bg-surface-container-lowest border border-on-surface/10 rounded-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <span className="material-symbols-outlined text-primary text-[40px] mb-3 block">stop_circle</span>
+            <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase mb-2">
+              Finalizar asistencia
+            </h3>
+            <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mb-6">
+              No se podrán recibir más check-ins por QR para esta sesión.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCloseConfirm(false)}
+                className="flex-1 py-2.5 border border-on-surface/15 text-on-surface font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg hover:bg-on-surface/5 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCloseSession}
+                disabled={closingSession}
+                className="flex-1 py-2.5 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg shadow-[0_0_16px_rgba(229,57,53,0.3)] disabled:opacity-50 cursor-pointer"
+              >
+                {closingSession ? "Cerrando..." : "Finalizar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6">
         <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] text-on-surface uppercase tracking-tighter">
           Asistencia
@@ -399,7 +653,6 @@ export default function AdminAsistenciaPage() {
         </p>
       </div>
 
-      {/* Generate Sessions Button */}
       <div className="mb-6">
         <button
           onClick={handleGenerateSessions}
@@ -413,7 +666,6 @@ export default function AdminAsistenciaPage() {
         </button>
       </div>
 
-      {/* Sessions by Date */}
       {loading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
@@ -458,6 +710,7 @@ export default function AdminAsistenciaPage() {
                       const profName = s.schedule?.professor?.full_name || "Sin instructor";
                       const startTime = s.schedule?.start_time?.slice(0, 5) || "";
                       const endTime = s.schedule?.end_time?.slice(0, 5) || "";
+                      const isActive = s.status === "activa";
 
                       return (
                         <div key={s.id} className={`bg-surface-container border rounded-xl transition-all ${isExpanded ? "border-primary/30" : "border-on-surface/5 hover:border-on-surface/15"}`}>
@@ -475,9 +728,17 @@ export default function AdminAsistenciaPage() {
                                 </span>
                               </div>
                               <div>
-                                <p className="font-[family-name:var(--font-headline-md)] text-[15px] text-on-surface uppercase">
-                                  {discName}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-[family-name:var(--font-headline-md)] text-[15px] text-on-surface uppercase">
+                                    {discName}
+                                  </p>
+                                  {isActive && (
+                                    <span className="flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[9px] uppercase text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                      QR activo
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
                                   {startTime} - {endTime} · {profName}
                                 </p>
@@ -497,7 +758,106 @@ export default function AdminAsistenciaPage() {
 
                           {isExpanded && (
                             <div className="px-5 pb-5 border-t border-on-surface/5">
-                              {/* Summary + Actions */}
+                              {/* QR Section */}
+                              {isActive && (
+                                <div className="mt-4 mb-4 p-5 bg-surface-container-lowest rounded-xl border border-on-surface/5">
+                                  <div className="flex flex-col items-center gap-4">
+                                    <div className="bg-white p-4 rounded-xl">
+                                      <QRCodeSVG
+                                        value={`${typeof window !== "undefined" ? window.location.origin : ""}/checkin/${s.id}`}
+                                        size={200}
+                                        level="M"
+                                        includeMargin={false}
+                                      />
+                                    </div>
+                                    <div className="text-center">
+                                      <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">
+                                        Escanear para check-in
+                                      </p>
+                                      <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant/60 mt-1 break-all">
+                                        {`${typeof window !== "undefined" ? window.location.origin : ""}/checkin/${s.id}`}
+                                      </p>
+                                    </div>
+
+                                    {qrAlerts.length > 0 && (
+                                      <div className="w-full space-y-2">
+                                        {qrAlerts.map((alert) => (
+                                          <div
+                                            key={alert.id}
+                                            className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-slide-in-right"
+                                          >
+                                            <span className="material-symbols-outlined text-red-400 text-[18px]">warning</span>
+                                            <span className="font-[family-name:var(--font-body-md)] text-[13px] text-red-300">
+                                              <strong>{alert.name}</strong> — Membresía vencida
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    <button
+                                      onClick={() => setShowCloseConfirm(true)}
+                                      className="flex items-center gap-2 py-2.5 px-6 border border-red-500/30 text-red-400 font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
+                                    >
+                                      <span className="material-symbols-outlined text-[16px]">stop_circle</span>
+                                      Finalizar asistencia
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {!isActive && !showSummary && (
+                                <div className="mt-4 mb-4">
+                                  <button
+                                    onClick={() => handleActivateSession(s.id)}
+                                    className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[12px] uppercase px-5 py-2.5 rounded-lg shadow-[0_0_16px_rgba(229,57,53,0.3)] cursor-pointer"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px]">qr_code_scanner</span>
+                                    Abrir sesión de asistencia QR
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Summary */}
+                              {showSummary && expandedSession === s.id && (
+                                <div className="mt-4 mb-4 p-5 bg-surface-container-lowest rounded-xl border border-on-surface/5">
+                                  <div className="flex items-center gap-2 mb-4">
+                                    <span className="material-symbols-outlined text-primary text-[20px]">list_alt</span>
+                                    <h4 className="font-[family-name:var(--font-headline-md)] text-[15px] text-on-surface uppercase">
+                                      Resumen — Check-ins por QR
+                                    </h4>
+                                  </div>
+                                  {summaryAttendees.length === 0 ? (
+                                    <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant text-center py-4">
+                                      Ningún alumno se registró por QR en esta sesión.
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-2 mb-4">
+                                      {summaryAttendees.map((a) => (
+                                        <div key={a.beneficiary_id} className="flex items-center gap-3 p-3 bg-green-500/5 border border-green-500/15 rounded-lg">
+                                          <span className="material-symbols-outlined text-green-400 text-[18px]">check_circle</span>
+                                          <div>
+                                            <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface block">
+                                              {a.full_name}
+                                            </span>
+                                            <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase text-on-surface-variant">
+                                              Presente ✓
+                                            </span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <button
+                                    onClick={() => handleActivateSession(s.id)}
+                                    className="text-primary font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider hover:underline cursor-pointer"
+                                  >
+                                    Reabrir sesión
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Manual Attendance */}
                               <div className="flex items-center justify-between mt-4 mb-4">
                                 <div className="flex items-center gap-4">
                                   <div className="flex items-center gap-1.5">
@@ -531,7 +891,6 @@ export default function AdminAsistenciaPage() {
                                 </div>
                               </div>
 
-                              {/* Beneficiaries */}
                               {loadingAttendance ? (
                                 <div className="space-y-2">
                                   {[1, 2, 3].map((i) => (
@@ -589,7 +948,6 @@ export default function AdminAsistenciaPage() {
                                     ))}
                                   </div>
 
-                                  {/* Save Button */}
                                   <div className="flex items-center justify-end">
                                     <button
                                       onClick={handleSaveAll}
