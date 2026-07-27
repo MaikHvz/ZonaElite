@@ -21,7 +21,7 @@ const navLinks = [
 const logoUrl = "/logo.png";
 
 export default function Navbar() {
-  const { user, loading } = useSession();
+  const { user, loading, isAdmin } = useSession();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -112,6 +112,14 @@ export default function Navbar() {
                 >
                   Mi Panel
                 </Link>
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    className="text-on-surface hover:text-primary transition-colors duration-300 font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider"
+                  >
+                    Admin
+                  </Link>
+                )}
                 <Link
                   href="/perfil"
                   className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-sm px-6 py-2 rounded-[0.25rem] hover:opacity-80 transition-opacity uppercase tracking-wider shadow-[0_0_20px_rgba(229,57,53,0.3)]"
@@ -184,6 +192,15 @@ export default function Navbar() {
               >
                 Mi Panel
               </Link>
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  onClick={() => setMobileOpen(false)}
+                  className="text-on-surface hover:text-primary font-[family-name:var(--font-headline-md)] text-2xl uppercase"
+                >
+                  Admin
+                </Link>
+              )}
               <Link
                 href="/perfil"
                 onClick={() => setMobileOpen(false)}
