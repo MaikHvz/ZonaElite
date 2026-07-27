@@ -10,7 +10,8 @@
 -- Nota: Supabase no expone ENUMs via PostgREST.
 -- Los valores de texto se usan en lugar de ENUMs nativos:
 --   dependents.category: 'nino' | 'adulto'
---   membership_plans.category: 'adulto' | 'nino'
+-- membership_plans.category: 'adulto' | 'nino'
+-- membership_plans.tokens: NULL = ilimitado, número = clases incluidas
 --   schedules.category: 'ninos' | 'adultos' | 'ambos'
 --   attendance.status: 'presente' | 'ausente' | 'justificado'
 --   blog_posts.status: 'borrador' | 'publicado' | 'programado'
@@ -227,6 +228,7 @@ CREATE TABLE IF NOT EXISTS public.membership_plans (
   duration_days integer NOT NULL,
   category text NOT NULL,
   benefits jsonb,
+  tokens integer, -- NULL = ilimitado, número = clases incluidas
   active boolean DEFAULT true NOT NULL,
   created_at timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT membership_plans_pkey PRIMARY KEY (id)
