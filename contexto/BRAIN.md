@@ -39,6 +39,7 @@ FLOW_API_URL                      # https://sandbox.flow.cl/api
 FLOW_API_KEY                      # API key Flow
 FLOW_SECRET_KEY                   # Secret key Flow (HMAC)
 NEXT_PUBLIC_BASE_URL              # https://zona-elite-six.vercel.app
+RESEND_API_KEY                    # Resend API key para emails transaccionales
 ```
 
 ---
@@ -455,6 +456,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 14. **`beneficiaries`** no tiene columna `category` — el category viene del `dependent` o se asume `'adulto'`.
 15. **Spanish** en todo el contenido visible.
 16. **Zonas Horarias**: NUNCA usar `new Date().toISOString().split("T")[0]` para calcular "hoy", ya que usa UTC y genera un desfase después de las 20:00 hora Chile. SIEMPRE importar y usar `getChileToday()` y `addDaysChile()` desde `src/lib/dates.ts`.
+17. **Guía de trabajo obligatoria**: Antes de implementar CUALQUIER nueva funcionalidad, leer y ejecutar el workflow definido en `documentacion/guia-de-trabajo.md`. Las 4 fases son obligatorias: planificación → análisis de impacto → implementación → documentación post-implementación (incluye actualizar `squema-sql-actualizado.sql`).
 
 ---
 
@@ -465,6 +467,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 | `contexto/BRAIN.md` | Este archivo — contexto completo para IA |
 | `contexto/01-project-context-flow.md` | Detalle de cada funcionalidad y flujo |
 | `contexto/02-database-interaction.md` | Interacciones con BD por módulo, queries, RLS |
+| `documentacion/guia-de-trabajo.md` | **SOP obligatorio** — leer y seguir antes de toda implementación |
 | `contexto/schema-complete.sql` | SQL completo: 26 tablas, 190 cols, 32 FKs, 59 RLS, 33 indexes |
 | `project-context/brain.md` | Contexto legacy (parcialmente obsoleto) |
 | `project-context/changelog.md` | Historial de cambios detallado |

@@ -76,7 +76,24 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
   - **Panel de Horarios (`admin/horarios/page.tsx`)**: Mapea la grilla semanal (Lunes a Domingo) en una matriz visual horizontal con bloques horarios.
   - **Panel de Asistencia (`admin/asistencia/page.tsx`)**: Genera el reporte mensual con tasa de asistencia, presentes, ausentes y justificados.
 
-## 10. Pop-up Modal de Confirmación de Pago Exitoso
+## 10. Creación de Usuarios por Administrador
+**Requisito**: El administrador debe poder crear nuevos usuarios directamente desde el panel admin, con contraseña auto-generada visible una sola vez, y envío de correo de bienvenida con credenciales.
+- **Implementación**:
+  - Botón "Crear Usuario" en `/admin/usuarios` que abre un modal con email, nombre y rol.
+  - `POST /api/admin/create-user` (server-only, usa `getAdminClient()`):
+    1. Verifica que el usuario logueado sea admin (`role_id=1`)
+    2. Genera contraseña aleatoria de 12 caracteres via `crypto.randomBytes()`
+    3. Crea el Auth user con `supabase.auth.admin.createUser()` y `email_confirm: true`
+    4. El trigger `handle_new_user()` crea `profiles` automáticamente
+    5. Si el rol elegido no es `alumno`, actualiza `profiles.role_id`
+    6. Crea `beneficiaries` si el trigger no lo hizo
+    7. Envía email de bienvenida vía Resend con las credenciales
+    8. Registra en `audit_logs`
+  - Modal de resultado muestra la contraseña con botón "Copiar" y advertencia de que solo se ve una vez
+  - El usuario puede iniciar sesión inmediatamente sin confirmar email
+  - Archivos: `src/app/api/admin/create-user/route.ts`, `src/lib/email.ts`
+
+## 11. Pop-up Modal de Confirmación de Pago Exitoso
 **Requisito**: Al completar exitosamente un pago o compra, la plataforma debe desplegar un modal emergente (Pop-up) con animaciones y un desglose detallado de lo obtenido.
 - **Implementación**:
   - `src/components/PaymentSuccessModal.tsx`: Modal flotante responsivo con estética Glassmorphism, animaciones de éxito y tarjeta resumen de la transacción.

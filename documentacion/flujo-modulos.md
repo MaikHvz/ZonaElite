@@ -79,7 +79,8 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
   - **Ventas (`/admin/ventas/page.tsx`)**: Panel de métricas transaccionales con exportador de Excel tipo "Cartola" filtrado por Mes, Año e Histórico.
   - **Exportación General a Excel (`src/lib/excel.ts`)**: Motor del cliente basado en `xlsx` (SheetJS) con auto-ajuste de ancho de columnas y soporte para JSON plano o matrices visuales.
   - **Configuración (`/admin/configuracion/page.tsx`)**: Configuración global del sitio, imágenes, y gestión de `GalleryCarousel.tsx` (subidas en `ImageUpload.tsx`).
-  - **Otros CRUDS**: `/admin/blog`, `/admin/eventos`, `/admin/notificaciones`, `/admin/productos`, `/admin/tipos-clase` (disciplinas). Cada uno usa modales unificados como `FormModal.tsx` y confirmaciones en `DeleteConfirm.tsx`.
+   - **Creación de Usuarios**: Botón "Crear Usuario" en `/admin/usuarios` que permite al admin crear nuevos usuarios con email, nombre y rol. Genera una contraseña aleatoria que se muestra **una sola vez** al admin. El usuario recibe un correo de bienvenida con sus credenciales vía Resend. La API route `POST /api/admin/create-user` utiliza `supabase.auth.admin.createUser()` con `email_confirm: true` para que el usuario pueda iniciar sesión inmediatamente.
+   - **Otros CRUDS**: `/admin/blog`, `/admin/eventos`, `/admin/notificaciones`, `/admin/productos`, `/admin/tipos-clase` (disciplinas). Cada uno usa modales unificados como `FormModal.tsx` y confirmaciones en `DeleteConfirm.tsx`.
 
 ---
 

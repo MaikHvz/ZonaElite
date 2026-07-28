@@ -42,6 +42,13 @@ export default function AdminUsuariosPage() {
   const [exportTimeframe, setExportTimeframe] = useState<"mes" | "ano" | "historico">("historico");
   const [exporting, setExporting] = useState(false);
 
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ email: "", full_name: "", role_id: 4 });
+  const [creating, setCreating] = useState(false);
+  const [resultModalOpen, setResultModalOpen] = useState(false);
+  const [createdUser, setCreatedUser] = useState<{ email: string; full_name: string } | null>(null);
+  const [tempPassword, setTempPassword] = useState("");
+
   const handleExportExcel = async () => {
     setExporting(true);
     try {
@@ -300,6 +307,36 @@ export default function AdminUsuariosPage() {
     setModalOpen(true);
   };
 
+  const handleCreateUser = async () => {
+    if (!createForm.email || !createForm.full_name) {
+      setToast({ msg: "Email y nombre son obligatorios", type: "error" });
+      return;
+    }
+    try {
+      setCreating(true);
+      const res = await fetch("/api/admin/create-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createForm),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setToast({ msg: data.error || "Error al crear usuario", type: "error" });
+        return;
+      }
+      setCreatedUser({ email: data.user.email, full_name: data.user.full_name });
+      setTempPassword(data.tempPassword);
+      setCreateModalOpen(false);
+      setResultModalOpen(true);
+      setCreateForm({ email: "", full_name: "", role_id: 4 });
+      await load();
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "crear usuario"), type: "error" });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!editing) return;
     try {
@@ -334,6 +371,13 @@ export default function AdminUsuariosPage() {
             <option value="ano">Este Año</option>
             <option value="historico">Histórico Completo</option>
           </select>
+          <button
+            onClick={() => setCreateModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase"
+          >
+            <span className="material-symbols-outlined text-[18px]">person_add</span>
+            Crear Usuario
+          </button>
           <button
             onClick={handleExportExcel}
             disabled={exporting}
@@ -401,6 +445,102 @@ export default function AdminUsuariosPage() {
           </div>
         </div>
       </FormModal>
+      <FormModal open={createModalOpen} title="Crear Usuario" onClose={() => setCreateModalOpen(false)}>
+        <div className="space-y-4">
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Email</label>
+            <input
+              type="email"
+              value={createForm.email}
+              onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+              placeholder="usuario@ejemplo.cl"
+              className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 placeholder:text-on-surface/30"
+            />
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Nombre Completo</label>
+            <input
+              type="text"
+              value={createForm.full_name}
+              onChange={(e) => setCreateForm({ ...createForm, full_name: e.target.value })}
+              placeholder="Nombre del usuario"
+              className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 placeholder:text-on-surface/30"
+            />
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Rol</label>
+            <select
+              value={createForm.role_id}
+              onChange={(e) => setCreateForm({ ...createForm, role_id: Number(e.target.value) })}
+              className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 cursor-pointer"
+            >
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>{r.name.charAt(0).toUpperCase() + r.name.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-on-surface/5">
+            <button
+              onClick={() => setCreateModalOpen(false)}
+              className="px-4 py-2.5 rounded-lg border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[14px] cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleCreateUser}
+              disabled={creating}
+              className="px-4 py-2.5 rounded-lg btn-primary-gradient text-white text-[14px] disabled:opacity-50 cursor-pointer"
+            >
+              {creating ? "Creando..." : "Crear Usuario"}
+            </button>
+          </div>
+        </div>
+      </FormModal>
+
+      <FormModal open={resultModalOpen} title="Usuario Creado" onClose={() => setResultModalOpen(false)}>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+            <span className="material-symbols-outlined text-[32px] text-green-400">check_circle</span>
+            <div>
+              <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface font-semibold">Usuario creado exitosamente</p>
+              {createdUser && (
+                <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">{createdUser.full_name} — {createdUser.email}</p>
+              )}
+            </div>
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Contraseña Generada</label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-surface-container border border-on-surface/10 rounded-lg px-4 py-3">
+                <code className="text-[18px] font-[family-name:var(--font-jetbrains)] text-primary tracking-wider select-all">{tempPassword}</code>
+              </div>
+              <button
+                onClick={() => { navigator.clipboard.writeText(tempPassword); setToast({ msg: "Contraseña copiada al portapapeles", type: "success" }); }}
+                className="px-3 py-3 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors cursor-pointer"
+                title="Copiar contraseña"
+              >
+                <span className="material-symbols-outlined text-[20px]">content_copy</span>
+              </button>
+            </div>
+          </div>
+          <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-start gap-2">
+            <span className="material-symbols-outlined text-[18px] text-yellow-400 flex-shrink-0 mt-0.5">warning</span>
+            <p className="font-[family-name:var(--font-body-md)] text-[12px] text-yellow-300/80">
+              Esta contraseña solo se muestra una vez. Cópiala ahora y compártela con el usuario.
+              También se ha enviado un correo de bienvenida a <strong>{createdUser?.email}</strong> con sus credenciales.
+            </p>
+          </div>
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() => setResultModalOpen(false)}
+              className="px-6 py-2.5 rounded-lg btn-primary-gradient text-white text-[14px] cursor-pointer"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </FormModal>
+
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
