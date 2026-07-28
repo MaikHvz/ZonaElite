@@ -13,10 +13,10 @@ import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 import { getRemainingTokens, getEnrollmentDebt, type TokenInfo, type DebtDetail } from "@/lib/supabase/dashboard";
 
-interface Plan { id: string; name: string; price: number; duration_days: number; category: string; benefits: string[]; tokens: number | null; active: boolean; }
+interface Plan { id: string; name: string; price: number; duration_days: number; category: string; benefits: string[]; tokens: number | null; active: boolean; featured?: boolean; }
 interface Membership { id: string; beneficiary_id: string; plan_id: string; purchased_by: string; start_date: string; end_date: string; status: string; created_at: string; membership_plans?: { name: string }; profiles?: { full_name: string }; beneficiaries?: { dependents?: { full_name: string; profiles?: { full_name: string } | null } | null; profiles?: { full_name: string } | null }; }
 
-const emptyPlan = { name: "", price: 0, duration_days: 30, category: "adulto", benefits: [] as string[], tokens: null as number | null, active: true };
+const emptyPlan = { name: "", price: 0, duration_days: 30, category: "adulto", benefits: [] as string[], tokens: null as number | null, active: true, featured: false };
 
 export default function AdminMembresiasPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -56,7 +56,18 @@ export default function AdminMembresiasPage() {
   useEffect(() => { load(); }, []);
 
   const openCreate = () => { setEditing(null); setForm(emptyPlan); setNewBenefit(""); setModalOpen(true); };
-  const openEdit = (p: Plan) => { setEditing(p); setForm({ name: p.name, price: p.price, duration_days: p.duration_days, category: p.category, benefits: Array.isArray(p.benefits) ? p.benefits : [], tokens: p.tokens, active: p.active }); setNewBenefit(""); setModalOpen(true); };
+  const openEdit = (p: Plan) => { setEditing(p); setForm({ name: p.name, price: p.price, duration_days: p.duration_days, category: p.category, benefits: Array.isArray(p.benefits) ? p.benefits : [], tokens: p.tokens, active: p.active, featured: p.featured ?? false }); setNewBenefit(""); setModalOpen(true); };
+
+  const handleSetFeatured = async (plan: Plan) => {
+    const supabase = createClient();
+    // Remove featured from all plans first, then set this one
+    await supabase.from("membership_plans").update({ featured: false }).eq("featured", true);
+    if (!plan.featured) {
+      await supabase.from("membership_plans").update({ featured: true }).eq("id", plan.id);
+    }
+    await load();
+    setToast({ msg: plan.featured ? "Plan ya no es PRO destacado" : `"${plan.name}" marcado como PRO destacado`, type: "success" });
+  };
 
   const addBenefit = () => {
     const text = newBenefit.trim();
@@ -221,11 +232,33 @@ export default function AdminMembresiasPage() {
       {tab === "planes" ? (
         <DataTable
           columns={[
-            { key: "name", label: "Nombre" },
+            { key: "name", label: "Nombre", render: (p) => (
+              <div className="flex items-center gap-2">
+                <span>{p.name}</span>
+                {p.featured && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-[family-name:var(--font-label-sm)] uppercase tracking-wider" style={{ background: "linear-gradient(90deg,#a855f7,#ec4899,#f97316,#eab308,#22c55e,#06b6d4,#a855f7)", backgroundSize: "200%", animation: "prismatic 3s linear infinite", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", border: "1px solid #a855f740" }}>
+                    ⬡ PRO
+                  </span>
+                )}
+              </div>
+            )},
             { key: "price", label: "Precio", render: (p) => `$${p.price.toLocaleString("es-CL")}` },
             { key: "duration_days", label: "Duración", render: (p) => `${p.duration_days} días` },
             { key: "category", label: "Categoría", render: (p) => p.category.charAt(0).toUpperCase() + p.category.slice(1) },
             { key: "tokens", label: "Tokens", render: (p) => p.tokens === null ? <span className="text-on-surface-variant">Ilimitado</span> : <span className="text-on-surface">{p.tokens}</span> },
+            { key: "featured", label: "PRO", render: (p) => (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleSetFeatured(p); }}
+                title={p.featured ? "Quitar destacado PRO" : "Marcar como PRO destacado"}
+                className="cursor-pointer transition-transform hover:scale-110"
+              >
+                {p.featured ? (
+                  <span className="material-symbols-outlined text-[20px]" style={{ background: "linear-gradient(135deg,#a855f7,#ec4899,#f97316)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>star</span>
+                ) : (
+                  <span className="material-symbols-outlined text-[20px] text-on-surface/20 hover:text-on-surface/50">star</span>
+                )}
+              </button>
+            )},
             { key: "active", label: "Estado", render: (p) => <StatusBadge status={p.active ? "activo" : "cancelado"} /> },
           ]}
           data={plans}
@@ -473,10 +506,19 @@ export default function AdminMembresiasPage() {
               </p>
             )}
           </div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} className="accent-primary" />
-            <span className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">Activo</span>
-          </label>
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} className="accent-primary" />
+              <span className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">Activo</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-on-surface/10 hover:border-purple-500/40 transition-colors" style={form.featured ? { borderColor: "#a855f740", background: "linear-gradient(135deg, #a855f710, #ec489910, #f9731610)" } : {}}>
+              <input type="checkbox" checked={form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })} className="accent-purple-500" />
+              <div>
+                <span className="font-[family-name:var(--font-body-md)] text-[14px]" style={form.featured ? { background: "linear-gradient(90deg,#a855f7,#ec4899,#f97316)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: 700 } : { color: "var(--color-on-surface)" }}>⬡ Destacado PRO</span>
+                <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant/60 mt-0.5">Aparece al centro con efecto prismático. Solo 1 plan puede ser PRO.</p>
+              </div>
+            </label>
+          </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-on-surface/5">
             <button onClick={() => setModalOpen(false)} className="px-4 py-2.5 rounded-lg border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[14px] cursor-pointer">Cancelar</button>
             <button onClick={handleSave} disabled={!form.name || saving} className="px-4 py-2.5 rounded-lg btn-primary-gradient text-white text-[14px] disabled:opacity-50 cursor-pointer">{saving ? "Guardando..." : editing ? "Guardar Cambios" : "Crear Plan"}</button>

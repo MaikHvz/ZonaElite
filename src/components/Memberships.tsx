@@ -88,12 +88,10 @@ export default function Memberships() {
     orderedPlans = plans;
   }
 
-  // Fallback featured index if no plan has featured=true
+  // Fallback featured index if no plan has featured=true (only used for ordering, no highlighting)
   const featuredIndex = featuredPlan
     ? orderedPlans.indexOf(featuredPlan)
-    : orderedPlans.length === 3
-    ? 1
-    : 0;
+    : Math.floor(orderedPlans.length / 2);
 
   return (
     <section
@@ -151,8 +149,6 @@ export default function Memberships() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-5 items-start max-w-[960px] mx-auto">
         {orderedPlans.map((plan, idx) => {
           const isPro = !!plan.featured;
-          const isFallbackFeatured = !featuredPlan && idx === featuredIndex;
-          const isHighlighted = isPro || isFallbackFeatured;
           const benefits = Array.isArray(plan.benefits) ? plan.benefits : [];
 
           if (isPro) {
@@ -265,27 +261,15 @@ export default function Memberships() {
           return (
             <article
               key={plan.id}
-              className={`relative flex flex-col rounded-2xl transition-all duration-300 ${
-                isHighlighted
-                  ? "bg-surface-container-lowest border border-primary/30 shadow-[0_0_40px_rgba(255,84,76,0.12)] md:-translate-y-3 md:scale-[1.03] z-10"
-                  : "bg-surface-container-low border border-on-surface/5 hover:border-on-surface/10 hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]"
-              }`}
+              className="relative flex flex-col rounded-2xl transition-all duration-300 bg-surface-container-low border border-on-surface/5 hover:border-on-surface/10 hover:shadow-[0_8px_32px_rgba(0,0,0,0.25)]"
             >
-              {isHighlighted && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[10px] leading-[14px] uppercase py-1 px-4 rounded-full tracking-[0.1em] whitespace-nowrap shadow-[0_4px_20px_rgba(229,57,53,0.4)]">
-                  Recomendado
-                </div>
-              )}
-
-              <div className={`p-7 pb-5 ${isHighlighted ? "pt-9" : ""}`}>
+              <div className="p-7 pb-5">
                 <h3 className="font-[family-name:var(--font-headline-md)] text-[18px] leading-[22px] text-on-surface-variant uppercase mb-3">
                   {plan.name}
                 </h3>
                 <div className="flex items-baseline gap-1.5">
                   <span
-                    className={`font-[family-name:var(--font-headline-lg)] text-[42px] leading-[44px] tracking-[-0.03em] ${
-                      isHighlighted ? "text-primary" : "text-on-surface"
-                    }`}
+                    className="font-[family-name:var(--font-headline-lg)] text-[42px] leading-[44px] tracking-[-0.03em] text-on-surface"
                   >
                     {formatPrice(plan.price)}
                   </span>
@@ -296,14 +280,14 @@ export default function Memberships() {
               </div>
 
               <div className="px-7 pb-2">
-                <div className={`h-px ${isHighlighted ? "bg-primary/15" : "bg-on-surface/5"}`} />
+                <div className="h-px bg-on-surface/5" />
               </div>
 
               <div className="flex-grow px-7 pt-5 pb-6">
                 <ul className="space-y-3">
                   {benefits.map((feature: string) => (
                     <li key={feature} className="flex items-start gap-2.5">
-                      <span className={`material-symbols-outlined text-[18px] mt-0.5 ${isHighlighted ? "text-primary" : "text-primary/60"}`}>
+                      <span className="material-symbols-outlined text-[18px] mt-0.5 text-primary/60">
                         check_circle
                       </span>
                       <span className="font-[family-name:var(--font-body-md)] text-[14px] leading-[20px] text-on-surface">
@@ -313,7 +297,7 @@ export default function Memberships() {
                   ))}
                   {benefits.length === 0 && (
                     <li className="flex items-start gap-2.5">
-                      <span className={`material-symbols-outlined text-[18px] mt-0.5 ${isHighlighted ? "text-primary" : "text-primary/60"}`}>
+                      <span className="material-symbols-outlined text-[18px] mt-0.5 text-primary/60">
                         check_circle
                       </span>
                       <span className="font-[family-name:var(--font-body-md)] text-[14px] leading-[20px] text-on-surface">
@@ -328,22 +312,14 @@ export default function Memberships() {
                 {user ? (
                   <button
                     onClick={() => setSelectedPlan(plan)}
-                    className={`w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[13px] leading-[16px] uppercase rounded-lg transition-all duration-200 cursor-pointer ${
-                      isHighlighted
-                        ? "btn-primary-gradient text-white shadow-[0_0_24px_rgba(229,57,53,0.3)] hover:shadow-[0_0_32px_rgba(229,57,53,0.45)] hover:scale-[1.02]"
-                        : "border border-on-surface/15 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/25 hover:scale-[1.01]"
-                    }`}
+                    className="w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[13px] leading-[16px] uppercase rounded-lg transition-all duration-200 cursor-pointer border border-on-surface/15 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/25 hover:scale-[1.01]"
                   >
                     Comprar ahora
                   </button>
                 ) : (
                   <Link
                     href="/auth"
-                    className={`block w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[13px] leading-[16px] uppercase rounded-lg transition-all duration-200 ${
-                      isHighlighted
-                        ? "btn-primary-gradient text-white shadow-[0_0_24px_rgba(229,57,53,0.3)] hover:shadow-[0_0_32px_rgba(229,57,53,0.45)] hover:scale-[1.02]"
-                        : "border border-on-surface/15 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/25 hover:scale-[1.01]"
-                    }`}
+                    className="block w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[13px] leading-[16px] uppercase rounded-lg transition-all duration-200 border border-on-surface/15 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/25 hover:scale-[1.01]"
                   >
                     Seleccionar
                   </Link>
