@@ -59,3 +59,10 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
   - `Memberships.tsx` hace solicitudes asíncronas para obtener los `membership_plans` desde BD y renderizarlos en tarjetas tridimensionales (Glassmorphism).
   - Las animaciones con `FadeUpObserver.tsx` no bloquean el Render Cycle porque se cargan estrictamente con la API de "Intersection Observer" una vez la UI está lista en cliente.
   - Motor de Blog e interfaz de Torneos/Ceremonias integrado directamente en el Next.js App Router (rutas estáticas paramétricas `/blog/[slug]`), listo para ser posicionado en buscadores con Meta Datos (`sitemap.ts` y `robots.ts` presentes en raíz).
+
+## 8. Membresía Destacada (PRO)
+**Requisito**: Desde el panel de administración, se debe poder marcar un plan de membresía como destacado (PRO), el cual debe tener exclusividad absoluta (solo 1 destacado a la vez) y presentarse en la landing con un diseño prismático especial centrado en la cuadrícula.
+- **Implementación**:
+  - Se agregó la columna `featured` (BOOLEAN) a la tabla `membership_plans` en Supabase, resguardada con un `UNIQUE INDEX ... WHERE (featured = TRUE)`.
+  - El modal de edición del Admin Panel (`admin/membresias/page.tsx`) gestiona el estado a través de la función `handleSetFeatured`, que ejecuta un "bulk update" desmarcando todos los previos antes de marcar el nuevo.
+  - La UI en la landing page (`Memberships.tsx`) reorganiza el arreglo de planes para situar el `featuredPlan` en el índice central del grid. Inyecta keyframes en línea (`@keyframes prismatic-shift`, `diamond-pulse`) aplicando sombras, gradientes (League of Legends Prismatic) y un badge "⬡ PRO" sobre el componente.

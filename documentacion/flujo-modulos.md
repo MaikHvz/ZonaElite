@@ -7,7 +7,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 ## 1. Módulo Público (Frontend - Landing y Contenido)
 **Propósito**: Portal de acceso para usuarios anónimos, venta de membresías y exposición de contenido.
 - **Rutas Principales**:
-  - `/` (`src/app/page.tsx`): Landing principal. Agrupa `Hero.tsx`, `IntroSection.tsx`, `Disciplines.tsx`, `Memberships.tsx`, `GalleryCarousel.tsx`, `Philosophy.tsx`, `Lifestyle.tsx`.
+  - `/` (`src/app/page.tsx`): Landing principal. Agrupa `Hero.tsx`, `IntroSection.tsx`, `Disciplines.tsx`, `Memberships.tsx` (con visualización de membresía destacada PRO), `GalleryCarousel.tsx`, `Philosophy.tsx`, `Lifestyle.tsx`.
   - `/nosotros` (`src/app/nosotros/page.tsx`): Información sobre la academia.
   - `/horarios` (`src/app/horarios/page.tsx`): Tabla interactiva pública generada dinámicamente desde la BD.
   - `/blog`, `/blog/[slug]`: Motor de blog público leyendo desde la tabla `posts`.
@@ -71,7 +71,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
     - Genera sesiones semanales usando el endpoint `/api/admin/generate-sessions/route.ts`.
     - Sistema de Check-in público (QR) soportado por `src/app/checkin/[sessionId]/page.tsx` y el route handler `/api/checkin/route.ts`.
   - **Membresías (`/admin/membresias/page.tsx`)**: 
-    - CRUD de Planes (tabla `membership_plans`).
+    - CRUD de Planes (tabla `membership_plans`). Permite designar un único plan como Destacado (PRO) con exclusividad garantizada en UI y base de datos.
     - Asignación manual usando `AssignMembershipModal.tsx` (replicando la lógica de cancelación y activación que usa Flow).
     - Emisión de recibos usando `@react-pdf/renderer` en `MembershipReceipt.tsx`.
   - **Usuarios (`/admin/usuarios/page.tsx`)**: Visor maestro de perfiles, roles y dependientes por usuario usando `DataTable.tsx`.
