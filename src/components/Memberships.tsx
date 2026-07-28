@@ -110,18 +110,18 @@ export default function Memberships() {
           50%       { opacity: 1;   transform: scale(1.08); }
         }
         .prismatic-text {
-          background: linear-gradient(90deg, #a855f7, #ec4899, #f97316, #eab308, #22c55e, #06b6d4, #a855f7);
-          background-size: 300%;
-          animation: prismatic-shift 4s linear infinite;
+          background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc, #38bdf8);
+          background-size: 200%;
+          animation: prismatic-shift 3s linear infinite;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
         }
         .prismatic-border {
-          background: linear-gradient(#131313, #131313) padding-box,
-                      linear-gradient(135deg, #a855f7, #ec4899, #f97316, #eab308, #22c55e, #06b6d4, #a855f7) border-box;
-          background-size: 100% 100%, 300%;
-          animation: prismatic-shift 4s linear infinite;
+          background: linear-gradient(#1a1a2e, #131313) padding-box,
+                      linear-gradient(135deg, #38bdf8, #818cf8, #c084fc, #38bdf8) border-box;
+          background-size: 200% 200%;
+          animation: prismatic-shift 3s linear infinite;
           border: 2px solid transparent;
         }
         .diamond-aura {
@@ -155,42 +155,45 @@ export default function Memberships() {
             return (
               <article
                 key={plan.id}
-                className="relative flex flex-col rounded-2xl prismatic-border md:-translate-y-4 md:scale-[1.05] z-10 overflow-hidden"
+                className="relative flex flex-col rounded-2xl prismatic-border md:-translate-y-4 md:scale-[1.05] z-10"
                 style={{ background: "linear-gradient(145deg, #1a1a2e, #131313)" }}
               >
-                {/* Diamond aura glow layers */}
-                <div
-                  aria-hidden="true"
-                  className="diamond-aura pointer-events-none absolute inset-0 rounded-2xl"
-                  style={{
-                    background: "linear-gradient(135deg, #a855f720, #ec489915, #f9731610, #eab30810, #22c55e10, #06b6d415)",
-                    filter: "blur(1px)",
-                  }}
-                />
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -top-8 -right-8 w-32 h-32 rounded-full blur-2xl opacity-60"
-                  style={{ background: "radial-gradient(circle, #a855f750, transparent 70%)" }}
-                />
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -bottom-8 -left-8 w-32 h-32 rounded-full blur-2xl opacity-50"
-                  style={{ background: "radial-gradient(circle, #06b6d450, transparent 70%)" }}
-                />
+                {/* Background clip wrapper for the glow layers so they don't bleed out */}
+                <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none z-0">
+                  {/* Diamond aura glow layers */}
+                  <div
+                    aria-hidden="true"
+                    className="diamond-aura absolute inset-0"
+                    style={{
+                      background: "linear-gradient(135deg, #38bdf820, #818cf815, #c084fc15)",
+                      filter: "blur(1px)",
+                    }}
+                  />
+                  <div
+                    aria-hidden="true"
+                    className="absolute -top-8 -right-8 w-32 h-32 rounded-full blur-2xl opacity-60"
+                    style={{ background: "radial-gradient(circle, #38bdf850, transparent 70%)" }}
+                  />
+                  <div
+                    aria-hidden="true"
+                    className="absolute -bottom-8 -left-8 w-32 h-32 rounded-full blur-2xl opacity-50"
+                    style={{ background: "radial-gradient(circle, #818cf850, transparent 70%)" }}
+                  />
+                </div>
 
                 {/* PRO badge */}
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
-                  <span className="prismatic-text font-[family-name:var(--font-label-sm)] text-[11px] leading-[14px] uppercase tracking-[0.12em] bg-[#0d0d1a] border border-purple-500/30 py-1 px-5 rounded-full whitespace-nowrap shadow-[0_0_20px_rgba(168,85,247,0.5)] inline-block">
+                  <span className="prismatic-text font-[family-name:var(--font-label-sm)] text-[11px] leading-[14px] uppercase tracking-[0.12em] bg-[#0d0d1a] border border-[#38bdf8]/40 py-1 px-5 rounded-full whitespace-nowrap shadow-[0_0_20px_rgba(56,189,248,0.5)] inline-block">
                     ⬡ PRO
                   </span>
                 </div>
 
                 <div className="relative z-10 p-7 pb-5 pt-9">
-                  <h3 className="prismatic-text font-[family-name:var(--font-headline-md)] text-[18px] leading-[22px] uppercase mb-3">
+                  <h3 className="font-[family-name:var(--font-headline-md)] text-[18px] leading-[22px] text-on-surface-variant uppercase mb-3">
                     {plan.name}
                   </h3>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="prismatic-text font-[family-name:var(--font-headline-lg)] text-[42px] leading-[44px] tracking-[-0.03em]">
+                    <span className="font-[family-name:var(--font-headline-lg)] text-[42px] leading-[44px] tracking-[-0.03em] text-[#38bdf8]">
                       {formatPrice(plan.price)}
                     </span>
                     <span className="font-[family-name:var(--font-body-md)] text-[14px] leading-[20px] text-on-surface-variant">
@@ -200,14 +203,14 @@ export default function Memberships() {
                 </div>
 
                 <div className="relative z-10 px-7 pb-2">
-                  <div className="h-px" style={{ background: "linear-gradient(90deg, transparent, #a855f740, #ec489940, transparent)" }} />
+                  <div className="h-px" style={{ background: "linear-gradient(90deg, transparent, #38bdf840, #818cf840, transparent)" }} />
                 </div>
 
                 <div className="relative z-10 flex-grow px-7 pt-5 pb-6">
                   <ul className="space-y-3">
                     {benefits.map((feature: string) => (
                       <li key={feature} className="flex items-start gap-2.5">
-                        <span className="prismatic-text material-symbols-outlined text-[18px] mt-0.5 ![-webkit-text-fill-color:unset]" style={{ background: "linear-gradient(135deg,#a855f7,#ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                        <span className="material-symbols-outlined text-[18px] mt-0.5 text-[#38bdf8]">
                           check_circle
                         </span>
                         <span className="font-[family-name:var(--font-body-md)] text-[14px] leading-[20px] text-on-surface">
@@ -217,7 +220,7 @@ export default function Memberships() {
                     ))}
                     {benefits.length === 0 && (
                       <li className="flex items-start gap-2.5">
-                        <span className="material-symbols-outlined text-[18px] mt-0.5" style={{ WebkitTextFillColor: "transparent", background: "linear-gradient(135deg,#a855f7,#ec4899)", WebkitBackgroundClip: "text" }}>check_circle</span>
+                        <span className="material-symbols-outlined text-[18px] mt-0.5 text-[#38bdf8]">check_circle</span>
                         <span className="font-[family-name:var(--font-body-md)] text-[14px] leading-[20px] text-on-surface">Acceso a la academia</span>
                       </li>
                     )}
@@ -230,10 +233,10 @@ export default function Memberships() {
                       onClick={() => setSelectedPlan(plan)}
                       className="w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[13px] leading-[16px] uppercase rounded-lg transition-all duration-200 cursor-pointer text-white hover:scale-[1.02]"
                       style={{
-                        background: "linear-gradient(90deg, #a855f7, #ec4899, #f97316, #eab308, #a855f7)",
-                        backgroundSize: "300%",
-                        animation: "prismatic-shift 4s linear infinite",
-                        boxShadow: "0 0 24px rgba(168,85,247,0.4)",
+                        background: "linear-gradient(90deg, #38bdf8, #818cf8, #c084fc, #38bdf8)",
+                        backgroundSize: "200%",
+                        animation: "prismatic-shift 3s linear infinite",
+                        boxShadow: "0 0 24px rgba(56,189,248,0.4)",
                       }}
                     >
                       Comprar ahora
@@ -243,10 +246,10 @@ export default function Memberships() {
                       href="/auth"
                       className="block w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[13px] leading-[16px] uppercase rounded-lg transition-all duration-200 text-white hover:scale-[1.02]"
                       style={{
-                        background: "linear-gradient(90deg, #a855f7, #ec4899, #f97316, #eab308, #a855f7)",
-                        backgroundSize: "300%",
-                        animation: "prismatic-shift 4s linear infinite",
-                        boxShadow: "0 0 24px rgba(168,85,247,0.4)",
+                        background: "linear-gradient(90deg, #38bdf8, #818cf8, #c084fc, #38bdf8)",
+                        backgroundSize: "200%",
+                        animation: "prismatic-shift 3s linear infinite",
+                        boxShadow: "0 0 24px rgba(56,189,248,0.4)",
                       }}
                     >
                       Seleccionar
