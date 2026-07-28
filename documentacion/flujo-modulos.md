@@ -74,8 +74,10 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
     - CRUD de Planes (tabla `membership_plans`). Permite designar un único plan como Destacado (PRO) con exclusividad garantizada en UI y base de datos.
     - Asignación manual usando `AssignMembershipModal.tsx` (replicando la lógica de cancelación y activación que usa Flow).
     - Emisión de recibos usando `@react-pdf/renderer` en `MembershipReceipt.tsx`.
-  - **Usuarios (`/admin/usuarios/page.tsx`)**: Visor maestro de perfiles, roles y dependientes por usuario usando `DataTable.tsx`.
-  - **Horarios (`/admin/horarios/page.tsx`)**: Interfaz para añadir clases (lunes a domingo, profesor, disciplina). Estos datos alimentan el auto-generador de sesiones.
+  - **Usuarios (`/admin/usuarios/page.tsx`)**: Visor maestro de perfiles, roles y dependientes por usuario usando `DataTable.tsx`. Incluye exportación a Excel con fechas de nacimiento, estado de membresía/inscripción y pestaña especial de gráficos de torta y barras.
+  - **Horarios (`/admin/horarios/page.tsx`)**: Interfaz para añadir clases (lunes a domingo, profesor, disciplina). Estos datos alimentan el auto-generador de sesiones y permiten exportar la mallas horaria en formato visual tipo calendario.
+  - **Ventas (`/admin/ventas/page.tsx`)**: Panel de métricas transaccionales con exportador de Excel tipo "Cartola" filtrado por Mes, Año e Histórico.
+  - **Exportación General a Excel (`src/lib/excel.ts`)**: Motor del cliente basado en `xlsx` (SheetJS) con auto-ajuste de ancho de columnas y soporte para JSON plano o matrices visuales.
   - **Configuración (`/admin/configuracion/page.tsx`)**: Configuración global del sitio, imágenes, y gestión de `GalleryCarousel.tsx` (subidas en `ImageUpload.tsx`).
   - **Otros CRUDS**: `/admin/blog`, `/admin/eventos`, `/admin/notificaciones`, `/admin/productos`, `/admin/tipos-clase` (disciplinas). Cada uno usa modales unificados como `FormModal.tsx` y confirmaciones en `DeleteConfirm.tsx`.
 

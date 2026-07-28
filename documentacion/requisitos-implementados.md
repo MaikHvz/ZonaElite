@@ -66,3 +66,13 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
   - Se agregó la columna `featured` (BOOLEAN) a la tabla `membership_plans` en Supabase, resguardada con un `UNIQUE INDEX ... WHERE (featured = TRUE)`.
   - El modal de edición del Admin Panel (`admin/membresias/page.tsx`) gestiona el estado a través de la función `handleSetFeatured`, que ejecuta un "bulk update" desmarcando todos los previos antes de marcar el nuevo.
   - La UI en la landing page (`Memberships.tsx`) reorganiza el arreglo de planes para situar el `featuredPlan` en el índice central del grid. Inyecta keyframes en línea (`@keyframes prismatic-shift`, `diamond-pulse`) aplicando sombras, gradientes (League of Legends Prismatic) y un badge "⬡ PRO" sobre el componente.
+
+## 9. Exportación a Excel Avanzada en Paneles Administrativos
+**Requisito**: Permitir la descarga de reportes Excel (.xlsx) directamente desde el navegador en los paneles de Ventas, Usuarios, Horarios y Asistencia con filtros temporales y formatos visuales/estadísticos.
+- **Implementación**:
+  - **Motor Global (`src/lib/excel.ts`)**: Implementa `SheetJS` (xlsx) con autofit inteligente (`!cols`) para formatear texto y arreglos matriciales.
+  - **Panel de Ventas (`admin/ventas/page.tsx`)**: Genera "Cartola" de ingresos totales, desglose por método de pago y listado detallado filtrable por Mes, Año e Histórico.
+  - **Panel de Usuarios (`admin/usuarios/page.tsx`)**: Cruza la información de perfiles y cargas (`dependents`) con `memberships` y `academy_enrollments`. Diferencia explícitamente la `Fecha Nacimiento` (`birth_date`) de la `Fecha Registro Ingreso` (`created_at`). Genera además la hoja "Tablas para Gráficos" con matrices estructuradas listas para renderizar gráficos de torta y barras en Excel.
+  - **Panel de Horarios (`admin/horarios/page.tsx`)**: Mapea la grilla semanal (Lunes a Domingo) en una matriz visual horizontal con bloques horarios.
+  - **Panel de Asistencia (`admin/asistencia/page.tsx`)**: Genera el reporte mensual con tasa de asistencia, presentes, ausentes y justificados.
+

@@ -12,7 +12,7 @@ import {
   type ClassSessionData,
   type AttendanceBeneficiary,
 } from "@/lib/supabase/dashboard";
-import { exportMultipleSheetsToExcel, type ExcelSheetData } from "@/lib/excel";
+import { exportProfessionalExcel, type ProfessionalSheetConfig } from "@/lib/excel";
 
 const DAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -630,39 +630,68 @@ export default function AdminAsistenciaPage() {
     const totalPresente = attendanceData.filter((a: any) => a.status === "presente").length;
     const totalAusente = attendanceData.filter((a: any) => a.status === "ausente").length;
     const totalJustificado = attendanceData.filter((a: any) => a.status === "justificado").length;
+    const tasaAsistencia = Math.round((totalPresente / attendanceData.length) * 100);
 
-    const resumenData = [
-      ["Reporte de Asistencia", "ZonaElite"],
-      ["Fecha de Exportación", now.toLocaleString("es-CL")],
-      ["Período", `Desde ${new Date(startDate).toLocaleDateString("es-CL")} a la fecha`],
-      [],
-      ["RESUMEN", ""],
-      ["Total Registros", attendanceData.length],
-      ["Presentes", totalPresente],
-      ["Ausentes", totalAusente],
-      ["Justificados", totalJustificado],
-      ["Tasa de Asistencia", `${Math.round((totalPresente / attendanceData.length) * 100)}%`],
-    ];
-
-    const detalleData = attendanceData.map((a: any) => {
-      const session = a.class_sessions;
-      const ben = a.beneficiaries;
-      const nombre = ben?.profiles?.full_name || ben?.dependents?.full_name || "—";
-      return {
-        "Alumno": nombre,
-        "Estado": a.status,
-        "Fecha Clase": session?.session_date || "—",
-        "Disciplina": session?.schedules?.disciplines?.name || "—",
-        "Instructor": session?.schedules?.profiles?.full_name || "—",
-        "Marcado el": a.marked_at ? new Date(a.marked_at).toLocaleString("es-CL") : "—",
-      };
+    // Disciplina breakdown
+    const disciplinaCounts: Record<string, { presentes: number; ausentes: number; justificados: number }> = {};
+    attendanceData.forEach((a: any) => {
+      const disc = a.class_sessions?.schedules?.disciplines?.name || "Sin disciplina";
+      if (!disciplinaCounts[disc]) disciplinaCounts[disc] = { presentes: 0, ausentes: 0, justificados: 0 };
+      if (a.status === "presente") disciplinaCounts[disc].presentes++;
+      else if (a.status === "ausente") disciplinaCounts[disc].ausentes++;
+      else if (a.status === "justificado") disciplinaCounts[disc].justificados++;
     });
 
-    const sheets: ExcelSheetData[] = [
-      { sheetName: "Resumen", data: resumenData },
-      { sheetName: "Detalle Asistencia", data: detalleData },
-    ];
-    exportMultipleSheetsToExcel(sheets, `Reporte_Asistencia_ZonaElite_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,"0")}`);
+    const periodoLabel = `${new Date(startDate + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })} al ${now.toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })}`;
+
+    const resumenSheet: ProfessionalSheetConfig = {
+      sheetName: "Resumen Asistencia",
+      reportTitle: "Reporte de Asistencia",
+      subtitle: `Período: ${periodoLabel}`,
+      kpiBlocks: [
+        {
+          title: "INDICADORES GENERALES DEL MES",
+          rows: [
+            ["Total Registros de Asistencia", attendanceData.length],
+            ["Alumnos Presentes", totalPresente, true],
+            ["Alumnos Ausentes", totalAusente, totalAusente === 0],
+            ["Justificados (no descuenta token)", totalJustificado],
+            ["Tasa de Asistencia", `${tasaAsistencia}%`, tasaAsistencia >= 70],
+          ],
+        },
+        {
+          title: "ASISTENCIA POR DISCIPLINA",
+          rows: Object.entries(disciplinaCounts).map(([disc, counts]) => [
+            disc,
+            `${counts.presentes} pres. | ${counts.ausentes} aus. | ${counts.justificados} just.`,
+          ]),
+        },
+      ],
+    };
+
+    const detalleSheet: ProfessionalSheetConfig = {
+      sheetName: "Detalle Asistencia",
+      reportTitle: "Detalle de Asistencia",
+      subtitle: `${attendanceData.length} registros en el período`,
+      tableData: attendanceData.map((a: any) => {
+        const session = a.class_sessions;
+        const ben = a.beneficiaries;
+        const nombre = ben?.profiles?.full_name || ben?.dependents?.full_name || "—";
+        return {
+          "Alumno": nombre,
+          "Estado": a.status === "presente" ? "✅ Presente" : a.status === "ausente" ? "❌ Ausente" : "🟡 Justificado",
+          "Fecha Clase": session?.session_date || "—",
+          "Disciplina": session?.schedules?.disciplines?.name || "—",
+          "Instructor": session?.schedules?.profiles?.full_name || "—",
+          "Marcado el": a.marked_at ? new Date(a.marked_at).toLocaleString("es-CL") : "—",
+        };
+      }),
+    };
+
+    await exportProfessionalExcel(
+      [resumenSheet, detalleSheet],
+      `Reporte_Asistencia_ZonaElite_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,"0")}`
+    );
   };
 
   const presentCount = beneficiaries.filter((b) => b.attendance?.status === "presente").length;

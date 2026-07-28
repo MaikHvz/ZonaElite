@@ -8,7 +8,7 @@ import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
-import { exportMultipleSheetsToExcel, exportToExcel, type ExcelSheetData } from "@/lib/excel";
+import { exportProfessionalExcel, type ProfessionalSheetConfig } from "@/lib/excel";
 
 interface Schedule {
   id: string;
@@ -168,12 +168,11 @@ export default function AdminHorariosPage() {
     }
   };
 
-  const handleExportHorario = () => {
-    // Build a visual calendar grid: rows = time slots, cols = days
+  const handleExportHorario = async () => {
+    const now = new Date();
     const days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-    const dayIndexes = [1, 2, 3, 4, 5, 6, 0]; // Mon=1 ... Sun=0
+    const dayIndexes = [1, 2, 3, 4, 5, 6, 0];
 
-    // Collect all unique time slots
     const timeSlots = Array.from(
       new Set(schedules.map(s => `${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}`))  
     ).sort();
@@ -183,7 +182,7 @@ export default function AdminHorariosPage() {
     const rows: any[][] = [header];
 
     timeSlots.forEach(slot => {
-      const [start, end] = slot.split(" - ");
+      const [start] = slot.split(" - ");
       const row: any[] = [slot];
       dayIndexes.forEach(dayNum => {
         const classesInSlot = schedules.filter(s =>
@@ -203,7 +202,6 @@ export default function AdminHorariosPage() {
       rows.push(row);
     });
 
-    // Sheet 2: Flat list with all details
     const flatData = schedules.map(s => ({
       "Día": DAYS[s.day_of_week],
       "Hora Inicio": s.start_time.slice(0, 5),
@@ -217,12 +215,45 @@ export default function AdminHorariosPage() {
       "Descripción": s.description || "",
     }));
 
-    const sheets: ExcelSheetData[] = [
-      { sheetName: "Grilla Semanal", data: rows },
-      { sheetName: "Detalle Clases", data: flatData },
-    ];
+    const totalClases = schedules.length;
+    const totalActivas = schedules.filter(s => s.active).length;
+    const disciplinaCounts: Record<string, number> = {};
+    schedules.forEach(s => {
+      const disc = s.disciplines?.name || "Sin disciplina";
+      disciplinaCounts[disc] = (disciplinaCounts[disc] || 0) + 1;
+    });
 
-    exportMultipleSheetsToExcel(sheets, "Horario_Semanal_ZonaElite");
+    const gridSheet: ProfessionalSheetConfig = {
+      sheetName: "Grilla Semanal",
+      reportTitle: "Grilla de Horarios Semanal",
+      subtitle: `Generado el ${now.toLocaleDateString("es-CL", { dateStyle: "full" })}`,
+      kpiBlocks: [
+        {
+          title: "RESUMEN DE HORARIOS",
+          rows: [
+            ["Total Bloques Horarios", totalClases],
+            ["Bloques Activos", totalActivas, true],
+            ["Bloques Inactivos", totalClases - totalActivas, totalClases - totalActivas === 0],
+            ...Object.entries(disciplinaCounts).map(([disc, count]) => [
+              `Clases de ${disc}`, count
+            ] as [string, number]),
+          ],
+        },
+      ],
+      matrixData: rows,
+    };
+
+    const detalleSheet: ProfessionalSheetConfig = {
+      sheetName: "Detalle Clases",
+      reportTitle: "Detalle de Todas las Clases",
+      subtitle: `${totalActivas} clases activas de ${totalClases} bloques totales`,
+      tableData: flatData,
+    };
+
+    await exportProfessionalExcel(
+      [gridSheet, detalleSheet],
+      `Horario_Semanal_ZonaElite_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`
+    );
   };
 
   const categoryLabel = (c: string) => ({ ninos: "Niños", adultos: "Adultos", ambos: "Ambos" }[c] || c);

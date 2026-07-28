@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import StatusBadge from "@/components/admin/StatusBadge";
-import { exportMultipleSheetsToExcel, type ExcelSheetData } from "@/lib/excel";
+import { exportProfessionalExcel, type ProfessionalSheetConfig } from "@/lib/excel";
 
 interface Payment {
   id: string;
@@ -61,10 +61,10 @@ export default function AdminVentasPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [exportTimeframe, setExportTimeframe] = useState<"mes" | "ano" | "historico">("mes");
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     const now = new Date();
     const filteredForExport = payments.filter((p) => {
-      if (p.status !== "pagado") return false; // Only export actual sales
+      if (p.status !== "pagado") return false;
       const date = new Date(p.created_at);
       if (exportTimeframe === "mes") {
         return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
@@ -72,51 +72,70 @@ export default function AdminVentasPage() {
       if (exportTimeframe === "ano") {
         return date.getFullYear() === now.getFullYear();
       }
-      return true; // historico
+      return true;
     });
 
     const totalIngresos = filteredForExport.reduce((sum, p) => sum + (p.amount || 0), 0);
-    
-    // Cartola Sheet
-    const cartolaData = [
-      ["Reporte de Ventas", "ZonaElite"],
-      ["Fecha de Exportación", new Date().toLocaleString("es-CL")],
-      ["Filtro de Tiempo", exportTimeframe.toUpperCase()],
-      [],
-      ["RESUMEN FINANCIERO", ""],
-      ["Total de Ventas Exitosas", filteredForExport.length],
-      ["Ingreso Total Generado", `$${totalIngresos.toLocaleString("es-CL")}`],
-      [],
-      ["DESGLOSE POR MÉTODO", "Monto"]
-    ];
 
-    const byMethod: Record<string, number> = {};
-    filteredForExport.forEach(p => {
-      byMethod[p.method] = (byMethod[p.method] || 0) + (p.amount || 0);
+    const byMethod: Record<string, { count: number; total: number }> = {};
+    filteredForExport.forEach((p) => {
+      if (!byMethod[p.method]) byMethod[p.method] = { count: 0, total: 0 };
+      byMethod[p.method].count++;
+      byMethod[p.method].total += p.amount || 0;
     });
 
-    Object.entries(byMethod).forEach(([method, total]) => {
-      cartolaData.push([METHOD_LABELS[method] || method, `$${total.toLocaleString("es-CL")}`]);
-    });
+    const periodoLabel =
+      exportTimeframe === "mes"
+        ? now.toLocaleString("es-CL", { month: "long", year: "numeric" })
+        : exportTimeframe === "ano"
+        ? `Año ${now.getFullYear()}`
+        : "Histórico Completo";
 
-    // Transacciones Sheet
-    const transaccionesData = filteredForExport.map((p) => ({
-      "ID Pedido": p.order_id || p.id,
-      "Fecha": new Date(p.created_at).toLocaleString("es-CL"),
-      "Cliente": getUserName(p),
-      "Beneficiario": getBeneficiaryName(p),
-      "Concepto": p.concept || "Membresía",
-      "Método": METHOD_LABELS[p.method] || p.method,
-      "Monto": p.amount,
-      "Estado": p.status,
-    }));
+    const cartolaSheet: ProfessionalSheetConfig = {
+      sheetName: "Cartola de Ventas",
+      reportTitle: "Cartola de Ventas",
+      subtitle: `Período: ${periodoLabel}`,
+      kpiBlocks: [
+        {
+          title: "RESUMEN FINANCIERO",
+          rows: [
+            ["Total Transacciones Exitosas", filteredForExport.length, true],
+            ["Ingreso Total Generado", `$${totalIngresos.toLocaleString("es-CL")}`, true],
+            ["Ticket Promedio por Venta", filteredForExport.length > 0 ? `$${Math.round(totalIngresos / filteredForExport.length).toLocaleString("es-CL")}` : "—"],
+          ],
+        },
+        {
+          title: "DESGLOSE POR MÉTODO DE PAGO",
+          rows: Object.entries(byMethod).map(([method, info]) => [
+            METHOD_LABELS[method] || method,
+            `${info.count} ventas — $${info.total.toLocaleString("es-CL")}`,
+          ]),
+        },
+      ],
+    };
 
-    const sheets: ExcelSheetData[] = [
-      { sheetName: "Cartola Resumen", data: cartolaData },
-      { sheetName: "Transacciones", data: transaccionesData }
-    ];
+    const transaccionesSheet: ProfessionalSheetConfig = {
+      sheetName: "Transacciones Detalle",
+      reportTitle: "Transacciones",
+      subtitle: `Período: ${periodoLabel} — Total: ${filteredForExport.length} registros`,
+      tableData: filteredForExport.map((p) => ({
+        "Fecha": p.paid_at
+          ? new Date(p.paid_at).toLocaleString("es-CL")
+          : new Date(p.created_at).toLocaleString("es-CL"),
+        "N° Orden": p.order_id || p.commerce_order || p.id.slice(0, 8),
+        "Cliente": getUserName(p),
+        "Beneficiario": getBeneficiaryName(p),
+        "Concepto": p.concept || "Membresía",
+        "Método de Pago": METHOD_LABELS[p.method] || p.method,
+        "Monto ($)": p.amount,
+        "Estado": p.status,
+      })),
+    };
 
-    exportMultipleSheetsToExcel(sheets, `Reporte_Ventas_ZonaElite_${exportTimeframe}`);
+    await exportProfessionalExcel(
+      [cartolaSheet, transaccionesSheet],
+      `Reporte_Ventas_ZonaElite_${exportTimeframe}_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`
+    );
   };
 
   const supabase = createClient();

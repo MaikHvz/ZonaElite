@@ -7,7 +7,7 @@ import FormModal from "@/components/admin/FormModal";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
-import { exportMultipleSheetsToExcel, type ExcelSheetData } from "@/lib/excel";
+import { exportProfessionalExcel, type ProfessionalSheetConfig } from "@/lib/excel";
 
 interface UserRow {
   id: string;
@@ -17,10 +17,11 @@ interface UserRow {
   role_id: number;
   active: boolean;
   created_at: string;
+  birth_date?: string | null;
   _isDependent?: boolean;
   _tutorName?: string;
   _tutorId?: string;
-  _birthDate?: string;
+  _birthDate?: string | null;
   _category?: string;
 }
 
@@ -47,11 +48,22 @@ export default function AdminUsuariosPage() {
       const supabase = createClient();
       const now = new Date();
 
-      // Get all active memberships with plan info
+      // 1. Obtain all beneficiaries mapping
+      const { data: beneficiariesData } = await supabase
+        .from("beneficiaries")
+        .select("id, profile_id, dependent_id");
+
+      const benByProfile = new Map<string, string>();
+      const benByDependent = new Map<string, string>();
+      (beneficiariesData || []).forEach((b: any) => {
+        if (b.profile_id) benByProfile.set(b.profile_id, b.id);
+        if (b.dependent_id) benByDependent.set(b.dependent_id, b.id);
+      });
+
+      // 2. Query memberships
       let mQuery = supabase
         .from("memberships")
-        .select(`id, beneficiary_id, start_date, end_date, status, created_at, membership_plans(name, price)`)
-        .eq("status", "activa");
+        .select(`id, beneficiary_id, start_date, end_date, status, created_at, membership_plans(name, price)`);
 
       if (exportTimeframe === "mes") {
         const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -64,57 +76,176 @@ export default function AdminUsuariosPage() {
       }
 
       const { data: memberships } = await mQuery;
-      const membershipsByBeneficiary = new Map<string, any>();
-      (memberships || []).forEach((m: any) => membershipsByBeneficiary.set(m.beneficiary_id, m));
+      const activeMembershipsByBen = new Map<string, any>();
+      (memberships || []).forEach((m: any) => {
+        if (m.status === "activa" || !activeMembershipsByBen.has(m.beneficiary_id)) {
+          activeMembershipsByBen.set(m.beneficiary_id, m);
+        }
+      });
+
+      // 3. Query academy enrollments (inscripciones)
+      let eQuery = supabase
+        .from("academy_enrollments")
+        .select(`id, beneficiary_id, start_date, end_date, status, created_at, enrollment_plans(name)`);
+
+      if (exportTimeframe === "mes") {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+        eQuery = eQuery.gte("start_date", start).lte("start_date", end);
+      } else if (exportTimeframe === "ano") {
+        const start = new Date(now.getFullYear(), 0, 1).toISOString();
+        const end = new Date(now.getFullYear(), 11, 31).toISOString();
+        eQuery = eQuery.gte("start_date", start).lte("start_date", end);
+      }
+
+      const { data: enrollments } = await eQuery;
+      const activeEnrollmentsByBen = new Map<string, any>();
+      (enrollments || []).forEach((e: any) => {
+        if (e.status === "activa" || !activeEnrollmentsByBen.has(e.beneficiary_id)) {
+          activeEnrollmentsByBen.set(e.beneficiary_id, e);
+        }
+      });
 
       // Build report data
       const reportData: any[] = [];
-      const alumnos = users.filter(u => !u._isDependent && u.role_id === 4);
-      const cargas = users.filter(u => u._isDependent);
+      let totalConMembresia = 0;
+      let totalConInscripcion = 0;
+      let totalActivosAmbos = 0;
+      const rolCounts: Record<string, number> = {
+        "Administrador": 0,
+        "Instructor": 0,
+        "Recepción": 0,
+        "Alumno": 0,
+        "Carga (Niño)": 0,
+        "Carga (Adulto)": 0,
+      };
 
-      // Sheet 1: Summary stats
-      const resumenData = [
-        ["Reporte de Usuarios", "ZonaElite"],
-        ["Fecha de Exportación", now.toLocaleString("es-CL")],
-        ["Filtro Temporal", exportTimeframe.toUpperCase()],
-        [],
-        ["RESUMEN", ""],
-        ["Total Perfiles", users.filter(u => !u._isDependent).length],
-        ["Total Alumnos", alumnos.length],
-        ["Total Cargas/Dependientes", cargas.length],
-        ["Usuarios con Membresía Activa", membershipsByBeneficiary.size],
-        [],
-        ["DESGLOSE POR ROL", "Cantidad"],
-        ...[1,2,3,4].map(roleId => [
-          ROLE_LABELS[roleId] || `Rol ${roleId}`,
-          users.filter(u => !u._isDependent && u.role_id === roleId).length
-        ])
-      ];
-
-      // Sheet 2: Users with membership status
       users.forEach(u => {
-        const membership = membershipsByBeneficiary.get(u.id);
+        const benId = u._isDependent ? benByDependent.get(u.id) : benByProfile.get(u.id);
+        const membership = benId ? activeMembershipsByBen.get(benId) : null;
+        const enrollment = benId ? activeEnrollmentsByBen.get(benId) : null;
+
+        const tieneMembresia = !!membership && membership.status === "activa";
+        const tieneInscripcion = !!enrollment && enrollment.status === "activa";
+
+        if (tieneMembresia) totalConMembresia++;
+        if (tieneInscripcion) totalConInscripcion++;
+        if (tieneMembresia && tieneInscripcion) totalActivosAmbos++;
+
+        const rolTipo = u._isDependent
+          ? `Carga (${u._category === "nino" ? "Niño" : "Adulto"})`
+          : ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`;
+
+        if (rolCounts[rolTipo] !== undefined) rolCounts[rolTipo]++;
+
+        const fechaNacimiento = u._isDependent
+          ? (u._birthDate ? new Date(u._birthDate + "T12:00:00").toLocaleDateString("es-CL") : "—")
+          : (u.birth_date ? new Date(u.birth_date + "T12:00:00").toLocaleDateString("es-CL") : "—");
+
+        const fechaRegistro = new Date(u.created_at).toLocaleDateString("es-CL");
+
         reportData.push({
           "Nombre": u.full_name,
           "Email": u.email,
           "Teléfono": u.phone || "—",
-          "Rol / Tipo": u._isDependent
-            ? `Carga (${u._category === "nino" ? "Niño" : "Adulto"})`
-            : ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`,
+          "Rol / Tipo": rolTipo,
           "Tutor (si es carga)": u._tutorName || "—",
+          "Fecha Nacimiento": fechaNacimiento,
+          "Fecha Registro Ingreso": fechaRegistro,
           "Estado Cuenta": u._isDependent ? "—" : (u.active ? "Activo" : "Inactivo"),
-          "Plan Activo": membership ? (membership.membership_plans as any)?.name || "—" : "Sin membresía",
-          "Vence el": membership ? new Date(membership.end_date).toLocaleDateString("es-CL") : "—",
-          "Registro": new Date(u.created_at).toLocaleDateString("es-CL"),
+          "Membresía Activa": tieneMembresia ? ((membership.membership_plans as any)?.name || "Sí") : "Sin membresía",
+          "Vencimiento Membresía": tieneMembresia ? new Date(membership.end_date).toLocaleDateString("es-CL") : "—",
+          "Estado Inscripción": tieneInscripcion ? `Vigente (${(enrollment.enrollment_plans as any)?.name || "Inscripción"})` : "Sin inscripción",
+          "Vencimiento Inscripción": tieneInscripcion ? new Date(enrollment.end_date).toLocaleDateString("es-CL") : "—",
         });
       });
 
-      const sheets: ExcelSheetData[] = [
-        { sheetName: "Resumen", data: resumenData },
-        { sheetName: "Usuarios Detalle", data: reportData }
-      ];
+      const alumnos = users.filter(u => !u._isDependent && u.role_id === 4);
+      const cargas = users.filter(u => u._isDependent);
+      const periodoLabel =
+        exportTimeframe === "mes"
+          ? now.toLocaleString("es-CL", { month: "long", year: "numeric" })
+          : exportTimeframe === "ano"
+          ? `Año ${now.getFullYear()}`
+          : "Histórico Completo";
 
-      exportMultipleSheetsToExcel(sheets, `Reporte_Usuarios_ZonaElite_${exportTimeframe}`);
+      const resumenSheet: ProfessionalSheetConfig = {
+        sheetName: "Resumen Ejecutivo",
+        reportTitle: "Reporte de Usuarios y Alumnos",
+        subtitle: `Período: ${periodoLabel}`,
+        kpiBlocks: [
+          {
+            title: "INDICADORES GENERALES",
+            rows: [
+              ["Total Perfiles Registrados", users.filter(u => !u._isDependent).length],
+              ["Total Alumnos Directos", alumnos.length],
+              ["Total Cargas / Dependientes", cargas.length],
+              ["Total General Registros", users.length],
+            ],
+          },
+          {
+            title: "ESTADO DE PLANES Y MEMBRESÍAS",
+            rows: [
+              ["Con Membresía Activa", totalConMembresia, true],
+              ["Sin Membresía Activa", users.length - totalConMembresia, users.length - totalConMembresia === 0],
+              ["Con Inscripción Vigente", totalConInscripcion, true],
+              ["Sin Inscripción Vigente", users.length - totalConInscripcion, users.length - totalConInscripcion === 0],
+              ["Al Día (Membresía + Inscripción)", totalActivosAmbos, true],
+            ],
+          },
+          {
+            title: "DISTRIBUCIÓN POR ROL Y TIPO",
+            rows: [
+              ["Administradores", rolCounts["Administrador"] || 0],
+              ["Instructores", rolCounts["Instructor"] || 0],
+              ["Personal Recepción", rolCounts["Recepción"] || 0],
+              ["Alumnos Titulares", rolCounts["Alumno"] || 0],
+              ["Cargas (Niños)", rolCounts["Carga (Niño)"] || 0],
+              ["Cargas (Adultos)", rolCounts["Carga (Adulto)"] || 0],
+            ],
+          },
+        ],
+      };
+
+      const detalleSheet: ProfessionalSheetConfig = {
+        sheetName: "Usuarios Detalle",
+        reportTitle: "Listado Completo de Usuarios",
+        subtitle: `Período: ${periodoLabel} — ${users.length} registros totales`,
+        tableData: reportData,
+      };
+
+      const graficosSheet: ProfessionalSheetConfig = {
+        sheetName: "Tablas para Gráficos",
+        reportTitle: "Datos para Gráficos Visuales",
+        subtitle: "Seleccione los rangos de datos y use Insertar > Gráfico en Excel para generar gráficos",
+        kpiBlocks: [
+          {
+            title: "TABLA 1: DISTRIBUCIÓN POR TIPO DE USUARIO — Para Gráfico de Torta",
+            rows: [
+              ["Administradores", rolCounts["Administrador"] || 0],
+              ["Instructores", rolCounts["Instructor"] || 0],
+              ["Personal Recepción", rolCounts["Recepción"] || 0],
+              ["Alumnos Titulares", rolCounts["Alumno"] || 0],
+              ["Cargas Niños", rolCounts["Carga (Niño)"] || 0],
+              ["Cargas Adultos", rolCounts["Carga (Adulto)"] || 0],
+            ],
+          },
+          {
+            title: "TABLA 2: ESTADO DE PLANES — Para Gráfico de Barras Comparativas",
+            rows: [
+              ["Membresías Activas", totalConMembresia, true],
+              ["Sin Membresía", users.length - totalConMembresia, false],
+              ["Inscripciones Vigentes", totalConInscripcion, true],
+              ["Sin Inscripción", users.length - totalConInscripcion, false],
+            ],
+          },
+        ],
+      };
+
+      await exportProfessionalExcel(
+        [resumenSheet, detalleSheet, graficosSheet],
+        `Reporte_Usuarios_ZonaElite_${exportTimeframe}_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`
+      );
     } finally {
       setExporting(false);
     }
@@ -125,14 +256,13 @@ export default function AdminUsuariosPage() {
     const [uRes, rRes, dRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("roles").select("*").order("id"),
-      supabase.from("dependents").select("id, full_name, tutor_id, birth_date, category"),
+      supabase.from("dependents").select("id, full_name, tutor_id, birth_date, category, created_at"),
     ]);
 
     const profiles = (uRes.data as UserRow[]) || [];
     const deps = (dRes.data as Dependent[]) || [];
     setRoles((rRes.data as Role[]) || []);
 
-    const profileMap = new Map(profiles.map((p) => [p.id, p]));
     const rows: UserRow[] = [];
 
     for (const p of profiles) {
@@ -146,7 +276,8 @@ export default function AdminUsuariosPage() {
           phone: null,
           role_id: 0,
           active: true,
-          created_at: d.birth_date || p.created_at,
+          created_at: (d as any).created_at || p.created_at,
+          birth_date: d.birth_date,
           _isDependent: true,
           _tutorName: p.full_name,
           _tutorId: p.id,
