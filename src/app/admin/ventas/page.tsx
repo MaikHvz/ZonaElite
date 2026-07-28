@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import StatusBadge from "@/components/admin/StatusBadge";
+import { exportMultipleSheetsToExcel, type ExcelSheetData } from "@/lib/excel";
 
 interface Payment {
   id: string;
@@ -58,6 +59,65 @@ export default function AdminVentasPage() {
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [methodFilter, setMethodFilter] = useState<string>("todos");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [exportTimeframe, setExportTimeframe] = useState<"mes" | "ano" | "historico">("mes");
+
+  const handleExportExcel = () => {
+    const now = new Date();
+    const filteredForExport = payments.filter((p) => {
+      if (p.status !== "pagado") return false; // Only export actual sales
+      const date = new Date(p.created_at);
+      if (exportTimeframe === "mes") {
+        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+      }
+      if (exportTimeframe === "ano") {
+        return date.getFullYear() === now.getFullYear();
+      }
+      return true; // historico
+    });
+
+    const totalIngresos = filteredForExport.reduce((sum, p) => sum + (p.amount || 0), 0);
+    
+    // Cartola Sheet
+    const cartolaData = [
+      ["Reporte de Ventas", "ZonaElite"],
+      ["Fecha de Exportación", new Date().toLocaleString("es-CL")],
+      ["Filtro de Tiempo", exportTimeframe.toUpperCase()],
+      [],
+      ["RESUMEN FINANCIERO", ""],
+      ["Total de Ventas Exitosas", filteredForExport.length],
+      ["Ingreso Total Generado", `$${totalIngresos.toLocaleString("es-CL")}`],
+      [],
+      ["DESGLOSE POR MÉTODO", "Monto"]
+    ];
+
+    const byMethod: Record<string, number> = {};
+    filteredForExport.forEach(p => {
+      byMethod[p.method] = (byMethod[p.method] || 0) + (p.amount || 0);
+    });
+
+    Object.entries(byMethod).forEach(([method, total]) => {
+      cartolaData.push([METHOD_LABELS[method] || method, `$${total.toLocaleString("es-CL")}`]);
+    });
+
+    // Transacciones Sheet
+    const transaccionesData = filteredForExport.map((p) => ({
+      "ID Pedido": p.order_id || p.id,
+      "Fecha": new Date(p.created_at).toLocaleString("es-CL"),
+      "Cliente": getUserName(p),
+      "Beneficiario": getBeneficiaryName(p),
+      "Concepto": p.concept || "Membresía",
+      "Método": METHOD_LABELS[p.method] || p.method,
+      "Monto": p.amount,
+      "Estado": p.status,
+    }));
+
+    const sheets: ExcelSheetData[] = [
+      { sheetName: "Cartola Resumen", data: cartolaData },
+      { sheetName: "Transacciones", data: transaccionesData }
+    ];
+
+    exportMultipleSheetsToExcel(sheets, `Reporte_Ventas_ZonaElite_${exportTimeframe}`);
+  };
 
   const supabase = createClient();
 
@@ -150,6 +210,24 @@ export default function AdminVentasPage() {
           <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mt-1">
             Resumen de pagos y seguimiento de ventas
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={exportTimeframe}
+            onChange={(e) => setExportTimeframe(e.target.value as any)}
+            className="bg-surface-container border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] font-[family-name:var(--font-body-md)] text-on-surface focus:outline-none focus:border-primary/50"
+          >
+            <option value="mes">Este Mes</option>
+            <option value="ano">Este Año</option>
+            <option value="historico">Histórico Completo</option>
+          </select>
+          <button
+            onClick={handleExportExcel}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600/10 text-green-500 border border-green-500/20 hover:bg-green-600/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase"
+          >
+            <span className="material-symbols-outlined text-[18px]">download</span>
+            Excel
+          </button>
         </div>
       </div>
 

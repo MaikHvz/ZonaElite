@@ -12,6 +12,7 @@ import {
   type ClassSessionData,
   type AttendanceBeneficiary,
 } from "@/lib/supabase/dashboard";
+import { exportMultipleSheetsToExcel, type ExcelSheetData } from "@/lib/excel";
 
 const DAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -612,6 +613,58 @@ export default function AdminAsistenciaPage() {
       month: "long",
     });
 
+  const handleExportAsistencia = async () => {
+    const supabase = createClient();
+    const now = new Date();
+    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+
+    const { data: attendanceData } = await supabase
+      .from("attendance")
+      .select("id, status, marked_at, beneficiary_id, class_sessions(session_date, schedules(disciplines(name), profiles(full_name))), beneficiaries(profiles(full_name), dependents(full_name))")
+      .gte("marked_at", startDate)
+      .order("marked_at", { ascending: false })
+      .limit(2000);
+
+    if (!attendanceData || attendanceData.length === 0) return;
+
+    const totalPresente = attendanceData.filter((a: any) => a.status === "presente").length;
+    const totalAusente = attendanceData.filter((a: any) => a.status === "ausente").length;
+    const totalJustificado = attendanceData.filter((a: any) => a.status === "justificado").length;
+
+    const resumenData = [
+      ["Reporte de Asistencia", "ZonaElite"],
+      ["Fecha de Exportación", now.toLocaleString("es-CL")],
+      ["Período", `Desde ${new Date(startDate).toLocaleDateString("es-CL")} a la fecha`],
+      [],
+      ["RESUMEN", ""],
+      ["Total Registros", attendanceData.length],
+      ["Presentes", totalPresente],
+      ["Ausentes", totalAusente],
+      ["Justificados", totalJustificado],
+      ["Tasa de Asistencia", `${Math.round((totalPresente / attendanceData.length) * 100)}%`],
+    ];
+
+    const detalleData = attendanceData.map((a: any) => {
+      const session = a.class_sessions;
+      const ben = a.beneficiaries;
+      const nombre = ben?.profiles?.full_name || ben?.dependents?.full_name || "—";
+      return {
+        "Alumno": nombre,
+        "Estado": a.status,
+        "Fecha Clase": session?.session_date || "—",
+        "Disciplina": session?.schedules?.disciplines?.name || "—",
+        "Instructor": session?.schedules?.profiles?.full_name || "—",
+        "Marcado el": a.marked_at ? new Date(a.marked_at).toLocaleString("es-CL") : "—",
+      };
+    });
+
+    const sheets: ExcelSheetData[] = [
+      { sheetName: "Resumen", data: resumenData },
+      { sheetName: "Detalle Asistencia", data: detalleData },
+    ];
+    exportMultipleSheetsToExcel(sheets, `Reporte_Asistencia_ZonaElite_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,"0")}`);
+  };
+
   const presentCount = beneficiaries.filter((b) => b.attendance?.status === "presente").length;
   const absentCount = beneficiaries.filter((b) => b.attendance?.status === "ausente").length;
   const justifiedCount = beneficiaries.filter((b) => b.attendance?.status === "justificado").length;
@@ -769,13 +822,22 @@ export default function AdminAsistenciaPage() {
         </div>
       )}
 
-      <div className="mb-6">
-        <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] text-on-surface uppercase tracking-tighter">
-          Asistencia
-        </h1>
-        <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface-variant mt-1">
-          Gestiona las sesiones de clase y marca la asistencia de los alumnos.
-        </p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] text-on-surface uppercase tracking-tighter">
+            Asistencia
+          </h1>
+          <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface-variant mt-1">
+            Gestiona las sesiones de clase y marca la asistencia de los alumnos.
+          </p>
+        </div>
+        <button
+          onClick={handleExportAsistencia}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600/10 text-green-500 border border-green-500/20 hover:bg-green-600/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase"
+        >
+          <span className="material-symbols-outlined text-[18px]">download</span>
+          Excel
+        </button>
       </div>
 
       <div className="mb-6">

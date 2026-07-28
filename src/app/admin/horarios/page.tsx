@@ -8,6 +8,7 @@ import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
+import { exportMultipleSheetsToExcel, exportToExcel, type ExcelSheetData } from "@/lib/excel";
 
 interface Schedule {
   id: string;
@@ -167,6 +168,63 @@ export default function AdminHorariosPage() {
     }
   };
 
+  const handleExportHorario = () => {
+    // Build a visual calendar grid: rows = time slots, cols = days
+    const days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+    const dayIndexes = [1, 2, 3, 4, 5, 6, 0]; // Mon=1 ... Sun=0
+
+    // Collect all unique time slots
+    const timeSlots = Array.from(
+      new Set(schedules.map(s => `${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}`))  
+    ).sort();
+
+    // Build grid matrix
+    const header = ["Horario", ...days];
+    const rows: any[][] = [header];
+
+    timeSlots.forEach(slot => {
+      const [start, end] = slot.split(" - ");
+      const row: any[] = [slot];
+      dayIndexes.forEach(dayNum => {
+        const classesInSlot = schedules.filter(s =>
+          s.day_of_week === dayNum &&
+          s.start_time.slice(0,5) === start
+        );
+        if (classesInSlot.length === 0) {
+          row.push("");
+        } else {
+          row.push(
+            classesInSlot.map(s =>
+              `${s.disciplines?.name || "Clase"} | ${s.profiles?.full_name || ""} | Cupos: ${s.capacity}`
+            ).join("\n")
+          );
+        }
+      });
+      rows.push(row);
+    });
+
+    // Sheet 2: Flat list with all details
+    const flatData = schedules.map(s => ({
+      "Día": DAYS[s.day_of_week],
+      "Hora Inicio": s.start_time.slice(0, 5),
+      "Hora Fin": s.end_time.slice(0, 5),
+      "Disciplina": s.disciplines?.name || "—",
+      "Instructor": s.profiles?.full_name || "—",
+      "Categoría": ({ ninos: "Niños", adultos: "Adultos", ambos: "Ambos" }[s.category] || s.category),
+      "Cupos": s.capacity,
+      "Sala": s.room || "—",
+      "Activo": s.active ? "Sí" : "No",
+      "Descripción": s.description || "",
+    }));
+
+    const sheets: ExcelSheetData[] = [
+      { sheetName: "Grilla Semanal", data: rows },
+      { sheetName: "Detalle Clases", data: flatData },
+    ];
+
+    exportMultipleSheetsToExcel(sheets, "Horario_Semanal_ZonaElite");
+  };
+
   const categoryLabel = (c: string) => ({ ninos: "Niños", adultos: "Adultos", ambos: "Ambos" }[c] || c);
   const activeDisciplines = disciplines.filter((d) => d.active);
 
@@ -174,10 +232,19 @@ export default function AdminHorariosPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] text-on-surface uppercase tracking-tighter">Horarios</h1>
-        <button onClick={openCreate} className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] px-5 py-2.5 rounded-lg uppercase tracking-wider hover:opacity-90 transition-opacity cursor-pointer">
-          <span className="material-symbols-outlined text-[18px]">add</span>
-          Nueva Clase
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportHorario}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600/10 text-green-500 border border-green-500/20 hover:bg-green-600/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase"
+          >
+            <span className="material-symbols-outlined text-[18px]">download</span>
+            Excel
+          </button>
+          <button onClick={openCreate} className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] px-5 py-2.5 rounded-lg uppercase tracking-wider hover:opacity-90 transition-opacity cursor-pointer">
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Nueva Clase
+          </button>
+        </div>
       </div>
 
       <DataTable

@@ -7,6 +7,7 @@ import FormModal from "@/components/admin/FormModal";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
+import { exportMultipleSheetsToExcel, type ExcelSheetData } from "@/lib/excel";
 
 interface UserRow {
   id: string;
@@ -37,6 +38,87 @@ export default function AdminUsuariosPage() {
   const [form, setForm] = useState({ role_id: 4, active: true });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [exportTimeframe, setExportTimeframe] = useState<"mes" | "ano" | "historico">("historico");
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const supabase = createClient();
+      const now = new Date();
+
+      // Get all active memberships with plan info
+      let mQuery = supabase
+        .from("memberships")
+        .select(`id, beneficiary_id, start_date, end_date, status, created_at, membership_plans(name, price)`)
+        .eq("status", "activa");
+
+      if (exportTimeframe === "mes") {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+        mQuery = mQuery.gte("start_date", start).lte("start_date", end);
+      } else if (exportTimeframe === "ano") {
+        const start = new Date(now.getFullYear(), 0, 1).toISOString();
+        const end = new Date(now.getFullYear(), 11, 31).toISOString();
+        mQuery = mQuery.gte("start_date", start).lte("start_date", end);
+      }
+
+      const { data: memberships } = await mQuery;
+      const membershipsByBeneficiary = new Map<string, any>();
+      (memberships || []).forEach((m: any) => membershipsByBeneficiary.set(m.beneficiary_id, m));
+
+      // Build report data
+      const reportData: any[] = [];
+      const alumnos = users.filter(u => !u._isDependent && u.role_id === 4);
+      const cargas = users.filter(u => u._isDependent);
+
+      // Sheet 1: Summary stats
+      const resumenData = [
+        ["Reporte de Usuarios", "ZonaElite"],
+        ["Fecha de Exportación", now.toLocaleString("es-CL")],
+        ["Filtro Temporal", exportTimeframe.toUpperCase()],
+        [],
+        ["RESUMEN", ""],
+        ["Total Perfiles", users.filter(u => !u._isDependent).length],
+        ["Total Alumnos", alumnos.length],
+        ["Total Cargas/Dependientes", cargas.length],
+        ["Usuarios con Membresía Activa", membershipsByBeneficiary.size],
+        [],
+        ["DESGLOSE POR ROL", "Cantidad"],
+        ...[1,2,3,4].map(roleId => [
+          ROLE_LABELS[roleId] || `Rol ${roleId}`,
+          users.filter(u => !u._isDependent && u.role_id === roleId).length
+        ])
+      ];
+
+      // Sheet 2: Users with membership status
+      users.forEach(u => {
+        const membership = membershipsByBeneficiary.get(u.id);
+        reportData.push({
+          "Nombre": u.full_name,
+          "Email": u.email,
+          "Teléfono": u.phone || "—",
+          "Rol / Tipo": u._isDependent
+            ? `Carga (${u._category === "nino" ? "Niño" : "Adulto"})`
+            : ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`,
+          "Tutor (si es carga)": u._tutorName || "—",
+          "Estado Cuenta": u._isDependent ? "—" : (u.active ? "Activo" : "Inactivo"),
+          "Plan Activo": membership ? (membership.membership_plans as any)?.name || "—" : "Sin membresía",
+          "Vence el": membership ? new Date(membership.end_date).toLocaleDateString("es-CL") : "—",
+          "Registro": new Date(u.created_at).toLocaleDateString("es-CL"),
+        });
+      });
+
+      const sheets: ExcelSheetData[] = [
+        { sheetName: "Resumen", data: resumenData },
+        { sheetName: "Usuarios Detalle", data: reportData }
+      ];
+
+      exportMultipleSheetsToExcel(sheets, `Reporte_Usuarios_ZonaElite_${exportTimeframe}`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const load = async () => {
     const supabase = createClient();
@@ -105,10 +187,31 @@ export default function AdminUsuariosPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] text-on-surface uppercase tracking-tighter">
-          Usuarios
-        </h1>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] text-on-surface uppercase tracking-tighter">
+            Usuarios
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={exportTimeframe}
+            onChange={(e) => setExportTimeframe(e.target.value as any)}
+            className="bg-surface-container border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] font-[family-name:var(--font-body-md)] text-on-surface focus:outline-none focus:border-primary/50"
+          >
+            <option value="mes">Este Mes</option>
+            <option value="ano">Este Año</option>
+            <option value="historico">Histórico Completo</option>
+          </select>
+          <button
+            onClick={handleExportExcel}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600/10 text-green-500 border border-green-500/20 hover:bg-green-600/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-[18px]">{exporting ? "hourglass_empty" : "download"}</span>
+            {exporting ? "Generando..." : "Excel"}
+          </button>
+        </div>
       </div>
 
       <DataTable
