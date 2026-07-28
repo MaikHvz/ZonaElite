@@ -129,97 +129,71 @@ function kpiValueStyle(rowIndex: number, isPositive?: boolean): Partial<ExcelJS.
 }
 
 // ============================================================
-// LOGO EMBEDDER (fetches logo from public folder)
+// CABECERA CORPORATIVA (Rows 1-4, luego datos desde Row 5)
 // ============================================================
-async function addLogo(workbook: ExcelJS.Workbook, worksheet: ExcelJS.Worksheet): Promise<void> {
-  try {
-    const response = await fetch("/logo-black-contraste.png");
-    if (!response.ok) return;
-    const arrayBuffer = await response.arrayBuffer();
-    const imageId = workbook.addImage({
-      buffer: arrayBuffer,
-      extension: "png",
-    });
-    worksheet.addImage(imageId, {
-      tl: { col: 0, row: 0 },
-      ext: { width: 160, height: 60 },
-    });
-  } catch {
-    // Si no hay logo disponible, continúa sin él
-  }
-}
-
-// ============================================================
-// CABECERA CORPORATIVA (Rows 1-5, luego datos desde Row 6)
-// ============================================================
-async function addCorporateHeader(
-  workbook: ExcelJS.Workbook,
+function addCorporateHeader(
   worksheet: ExcelJS.Worksheet,
   reportTitle: string,
   subtitle: string,
   totalColumns: number
-): Promise<void> {
-  // Row 1: Logo row (height para el logo)
-  const logoRow = worksheet.getRow(1);
-  logoRow.height = 50;
-
-  // Row 2: Título del reporte
-  const titleRow = worksheet.getRow(2);
-  titleRow.height = 28;
-  const titleCell = worksheet.getCell("A2");
-  titleCell.value = `⬡ ZONA ELITE — ${reportTitle.toUpperCase()}`;
+): void {
+  // Row 1: Título del reporte con Banner Limpio
+  const titleRow = worksheet.getRow(1);
+  titleRow.height = 32;
+  const titleCell = worksheet.getCell("A1");
+  titleCell.value = `ZONA ELITE  |  ${reportTitle.toUpperCase()}`;
   titleCell.style = {
-    font: { name: FONT.nameHeadline, bold: true, size: 16, color: { argb: COLORS.headerFont } },
+    font: { name: FONT.nameHeadline, bold: true, size: 14, color: { argb: COLORS.headerFont } },
     fill: { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.headerBg } },
-    alignment: { horizontal: "center", vertical: "middle" },
+    alignment: { horizontal: "left", vertical: "middle", indent: 1 },
   };
-  worksheet.mergeCells(2, 1, 2, totalColumns);
+  worksheet.mergeCells(1, 1, 1, totalColumns);
 
-  // Row 3: Subtítulo
-  const subtitleRow = worksheet.getRow(3);
+  // Row 2: Subtítulo
+  const subtitleRow = worksheet.getRow(2);
   subtitleRow.height = 18;
-  const subtitleCell = worksheet.getCell("A3");
+  const subtitleCell = worksheet.getCell("A2");
   subtitleCell.value = subtitle;
   subtitleCell.style = {
     font: { name: FONT.name, italic: true, size: 10, color: { argb: COLORS.headerFont } },
     fill: { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.accentBg } },
-    alignment: { horizontal: "center", vertical: "middle" },
+    alignment: { horizontal: "left", vertical: "middle", indent: 1 },
   };
-  worksheet.mergeCells(3, 1, 3, totalColumns);
+  worksheet.mergeCells(2, 1, 2, totalColumns);
 
-  // Row 4: Metadata row
+  // Row 3: Metadata row
   const now = new Date();
-  const metaRow = worksheet.getRow(4);
+  const metaRow = worksheet.getRow(3);
   metaRow.height = 16;
-  const metaCell = worksheet.getCell("A4");
+  const metaCell = worksheet.getCell("A3");
   metaCell.value = `Generado: ${now.toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" })}   |   Sistema ZonaElite`;
   metaCell.style = {
     font: { name: FONT.name, italic: true, size: 9, color: { argb: COLORS.textMuted } },
     fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EDF8" } },
     alignment: { horizontal: "right", vertical: "middle" },
   };
-  worksheet.mergeCells(4, 1, 4, totalColumns);
+  worksheet.mergeCells(3, 1, 3, totalColumns);
 
-  // Row 5: Spacer
-  const spacer = worksheet.getRow(5);
+  // Row 4: Spacer
+  const spacer = worksheet.getRow(4);
   spacer.height = 6;
-
-  // Embed logo (Row 1, Col A)
-  await addLogo(workbook, worksheet);
 }
 
 // ============================================================
-// AUTOFIT COLUMNS
+// AUTOFIT COLUMNS (Control estricto de anchos para UX)
 // ============================================================
-function autofitColumns(worksheet: ExcelJS.Worksheet, minWidth = 10, maxWidth = 50): void {
+function autofitColumns(worksheet: ExcelJS.Worksheet, minWidth = 12, maxWidth = 30): void {
   worksheet.columns.forEach((column) => {
     if (!column) return;
     let maxLen = minWidth;
     column.eachCell?.({ includeEmpty: false }, (cell) => {
+      // Ignorar celdas combinadas grandes (como los títulos de cabecera en fila 1-4)
+      if (Number(cell.row) < 5) return;
       const val = cell.value !== null && cell.value !== undefined ? String(cell.value) : "";
       if (val.length > maxLen) maxLen = val.length;
     });
-    column.width = Math.min(maxLen + 2, maxWidth);
+    // Limitar ancho razonable para evitar scroll horizontal excesivo
+    column.width = Math.min(Math.max(maxLen + 2, minWidth), maxWidth);
   });
 }
 
@@ -313,6 +287,8 @@ export interface ProfessionalSheetConfig {
   matrixData?: (string | number | null)[][];
   /** Custom column widths override (in chars) */
   columnWidths?: number[];
+  /** Indica si se debe agregar soporte visual estructurado para gráficos */
+  isChartSheet?: boolean;
 }
 
 // ============================================================
@@ -349,25 +325,26 @@ export async function exportProfessionalExcel(
     } else if (config.matrixData && config.matrixData.length > 0) {
       numCols = Math.max(...config.matrixData.map((r) => r.length));
     }
-    numCols = Math.max(numCols, 6); // Mínimo 6 columnas para que el header quede bien
+    numCols = Math.max(numCols, 6);
 
-    // Cabecera corporativa (rows 1-5)
-    await addCorporateHeader(workbook, worksheet, config.reportTitle, config.subtitle, numCols);
+    // Cabecera corporativa limpia (Rows 1-4)
+    addCorporateHeader(worksheet, config.reportTitle, config.subtitle, numCols);
 
-    let currentRow = 6;
+    let currentRow = 5;
 
     // KPI Blocks
     if (config.kpiBlocks && config.kpiBlocks.length > 0) {
       for (const block of config.kpiBlocks) {
         currentRow = writeKpiBlock(worksheet, block.title, block.rows, currentRow, numCols);
       }
-      // Spacer before data table
       worksheet.getRow(currentRow).height = 10;
       currentRow++;
     }
 
     // Main data table
+    let dataHeaderRow = 0;
     if (config.tableData && config.tableData.length > 0) {
+      dataHeaderRow = currentRow;
       const headers = Object.keys(config.tableData[0]);
       currentRow = writeDataTable(worksheet, headers, config.tableData, currentRow);
     }
@@ -384,7 +361,6 @@ export async function exportProfessionalExcel(
           if (isHeader) {
             cell.style = headerStyle();
           } else if (colIdx === 0) {
-            // First col = time label
             cell.style = {
               font: { name: FONT.name, bold: true, size: 9, color: { argb: COLORS.headerFont } },
               fill: { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.sectionBg } },
@@ -414,7 +390,7 @@ export async function exportProfessionalExcel(
       });
     }
 
-    // Apply column widths
+    // Apply column widths with reasonable limit
     if (config.columnWidths) {
       config.columnWidths.forEach((w, i) => {
         if (worksheet.getColumn(i + 1)) {
@@ -422,11 +398,15 @@ export async function exportProfessionalExcel(
         }
       });
     } else {
-      autofitColumns(worksheet);
+      autofitColumns(worksheet, 12, 28);
     }
 
-    // Freeze header rows + data table header
-    worksheet.views = [{ state: "frozen", xSplit: 0, ySplit: 7 }];
+    // Congelar filas de manera inteligente (solo congelar cabecera de datos si existe)
+    if (dataHeaderRow > 0) {
+      worksheet.views = [{ state: "frozen", xSplit: 0, ySplit: dataHeaderRow }];
+    } else {
+      worksheet.views = [{ state: "frozen", xSplit: 0, ySplit: 4 }];
+    }
   }
 
   // Generate and trigger download
