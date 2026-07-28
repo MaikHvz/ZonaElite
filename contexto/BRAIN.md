@@ -39,7 +39,11 @@ FLOW_API_URL                      # https://sandbox.flow.cl/api
 FLOW_API_KEY                      # API key Flow
 FLOW_SECRET_KEY                   # Secret key Flow (HMAC)
 NEXT_PUBLIC_BASE_URL              # https://zona-elite-six.vercel.app
-RESEND_API_KEY                    # Resend API key para emails transaccionales
+SMTP_HOST                         # smtp.gmail.com
+SMTP_PORT                         # 587
+SMTP_USER                         # Tu correo Gmail
+SMTP_PASS                         # App Password de Gmail (16 caracteres)
+SMTP_FROM                         # "ZonaElite <tucorreo@gmail.com>"
 ```
 
 ---

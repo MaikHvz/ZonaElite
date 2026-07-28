@@ -1,8 +1,16 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = new Resend(process.env.RESEND_API_KEY || "");
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: Number(process.env.SMTP_PORT) || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
 
-const FROM_EMAIL = "ZonaElite <no-reply@zonaelite.cl>";
+const FROM_EMAIL = process.env.SMTP_FROM || "ZonaElite <no-reply@zonaelite.cl>";
 
 export async function sendWelcomeEmail(email: string, name: string, tempPassword: string) {
   const academyName = "ZONAELITE";
@@ -57,15 +65,10 @@ export async function sendWelcomeEmail(email: string, name: string, tempPassword
 </html>
   `;
 
-  const { error } = await resend.emails.send({
+  await transporter.sendMail({
     from: FROM_EMAIL,
     to: email,
     subject: `Bienvenido a ${academyName} — Tus credenciales de acceso`,
     html,
   });
-
-  if (error) {
-    console.error("[EMAIL] Error sending welcome email:", error);
-    throw new Error(`No se pudo enviar el email de bienvenida: ${error.message}`);
-  }
 }
