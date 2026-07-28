@@ -50,7 +50,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Flujo de Suscripciones**:
   - `src/components/CheckoutModal.tsx`: El modal captura al beneficiario seleccionado, el plan a comprar, e inyecta la cuota de "Inscripción/Matrícula" (Academia Enrollment) si es requerido.
   - **Iniciador de Pago**: `src/app/api/flow/create-order/route.ts` usa funciones de `src/lib/flow.ts` para crear el payload firmado con HMAC-SHA256 y comunicarse con el Sandbox/Producción de Flow.
-  - **Verificador**: `src/app/api/flow/verify/route.ts` y componente visual `PurchaseSuccessBanner.tsx`.
+  - **Verificador**: `src/app/api/flow/verify/route.ts` retorna el resumen de la compra y despliega el modal emergente `PaymentSuccessModal.tsx` con el desglose del producto, beneficiario, monto y fecha.
 - **Manejador Asíncrono (Webhook)**:
   - `src/app/api/flow/confirmation/route.ts`: Captura el HTTP POST automático de Flow.
   - Se ejecuta en background (`after()` de Next 15+) enviando datos a `confirmAndCreateMembership()` dentro de `src/lib/flow-helpers.ts`.

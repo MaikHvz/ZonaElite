@@ -9,6 +9,9 @@ import {
 } from "@/lib/supabase/dashboard";
 import PaymentRow from "@/components/dashboard/PaymentRow";
 import { PaymentRowSkeleton } from "@/components/dashboard/DashboardSkeleton";
+import PaymentSuccessModal, {
+  type PaymentSuccessDetails,
+} from "@/components/PaymentSuccessModal";
 import PurchaseSuccessBanner, {
   PurchaseFailedBanner,
 } from "@/components/PurchaseSuccessBanner";
@@ -27,6 +30,8 @@ export default function PagosPage() {
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState<"success" | "failed" | null>(null);
+  const [successDetails, setSuccessDetails] = useState<PaymentSuccessDetails | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const verifyingRef = useRef(false);
   const pageSize = 20;
   const totalPages = Math.ceil(total / pageSize);
@@ -67,6 +72,10 @@ export default function PagosPage() {
       .then((result) => {
         if (result.status === "pagado") {
           setVerified("success");
+          if (result.payment) {
+            setSuccessDetails(result.payment);
+          }
+          setModalOpen(true);
         } else if (result.status === "not_found") {
           setVerified("failed");
         } else {
@@ -102,6 +111,12 @@ export default function PagosPage() {
 
   return (
     <div className="space-y-6">
+      <PaymentSuccessModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        details={successDetails}
+      />
+
       <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[40px] text-on-surface uppercase tracking-tighter">
         Mis <span className="text-primary">Pagos</span>
       </h1>
@@ -128,7 +143,11 @@ export default function PagosPage() {
         </div>
       )}
 
-      {!verifying && verified === "success" && <PurchaseSuccessBanner />}
+      {!verifying && verified === "success" && (
+        <div onClick={() => setModalOpen(true)} className="cursor-pointer">
+          <PurchaseSuccessBanner />
+        </div>
+      )}
       {!verifying && verified === "failed" && <PurchaseFailedBanner />}
       {!verifying && !verified && statusParam === "success" && (
         <PurchaseSuccessBanner />

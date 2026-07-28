@@ -76,3 +76,12 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
   - **Panel de Horarios (`admin/horarios/page.tsx`)**: Mapea la grilla semanal (Lunes a Domingo) en una matriz visual horizontal con bloques horarios.
   - **Panel de Asistencia (`admin/asistencia/page.tsx`)**: Genera el reporte mensual con tasa de asistencia, presentes, ausentes y justificados.
 
+## 10. Pop-up Modal de Confirmación de Pago Exitoso
+**Requisito**: Al completar exitosamente un pago o compra, la plataforma debe desplegar un modal emergente (Pop-up) con animaciones y un desglose detallado de lo obtenido.
+- **Implementación**:
+  - `src/components/PaymentSuccessModal.tsx`: Modal flotante responsivo con estética Glassmorphism, animaciones de éxito y tarjeta resumen de la transacción.
+  - Muestra el **Concepto Adquirido** (ej: Membresía Adulto / Inscripción), **Beneficiario**, **Monto Pagado** ($XX.XXX CLP), **Fecha** y **N° de Orden**.
+  - `src/app/api/flow/verify/route.ts`: Retorna los detalles del pago de la BD para alimentar dinámicamente el modal.
+  - Integrado automáticamente en la experiencia del usuario tras retornar de Flow.cl en `/dashboard/pagos`.
+
+

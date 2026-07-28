@@ -35,10 +35,36 @@ export async function GET(request: Request) {
 
     const admin = getAdminClient();
 
+    // Helper to get summary response
+    const buildSuccessResponse = async (payment: any) => {
+      let beneficiaryName = "Titular";
+      if (payment.beneficiary_id) {
+        const { data: ben } = await admin
+          .from("beneficiaries")
+          .select("profiles(full_name), dependents(full_name)")
+          .eq("id", payment.beneficiary_id)
+          .maybeSingle();
+        if (ben) {
+          beneficiaryName = (ben.profiles as any)?.full_name || (ben.dependents as any)?.full_name || "Titular";
+        }
+      }
+
+      return NextResponse.json({
+        status: "pagado",
+        payment: {
+          concept: payment.concept || "Membresía Academia",
+          amount: payment.amount,
+          orderId: payment.order_id || payment.commerce_order || payment.id.slice(0, 8),
+          paidAt: payment.paid_at || payment.created_at,
+          beneficiaryName,
+        },
+      });
+    };
+
     // Fetch payment with enrollment fields
     const { data: fullPayment } = await admin
       .from("payments")
-      .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id, membership_id, include_enrollment, enrollment_plan_id")
+      .select("id, user_id, commerce_order, order_id, amount, status, concept, paid_at, created_at, flow_token, flow_order, beneficiary_id, membership_id, include_enrollment, enrollment_plan_id")
       .eq("flow_token", token)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -48,7 +74,7 @@ export async function GET(request: Request) {
     }
 
     if (fullPayment.status === "pagado") {
-      return NextResponse.json({ status: "pagado" });
+      return await buildSuccessResponse(fullPayment);
     }
 
     try {
@@ -89,7 +115,7 @@ export async function GET(request: Request) {
           }
         }
 
-        return NextResponse.json({ status: "pagado" });
+        return await buildSuccessResponse(fullPayment);
       }
 
       if (verification.status === 4) {
