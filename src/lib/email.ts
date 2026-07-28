@@ -53,6 +53,7 @@ export async function sendWelcomeEmail(email: string, name: string, tempPassword
         <div class="value">${tempPassword}</div>
       </div>
       <p style="color:rgba(255,180,172,0.7);font-size:13px;">Te recomendamos cambiar tu contraseña después de iniciar sesión por primera vez.</p>
+      <p style="color:rgba(255,180,172,0.5);font-size:12px;font-style:italic;">⚠️ Si no encuentras este correo en tu bandeja principal, revisa la carpeta de Spam o Correo no deseado.</p>
       <div style="text-align:center;">
         <a href="${loginUrl}" class="btn">Iniciar Sesión</a>
       </div>
