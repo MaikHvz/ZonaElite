@@ -229,7 +229,14 @@ export default function CheckoutModal({
       }
 
       setBeneficiaries(list);
-      if (list.length === 1) setSelectedId(list[0].id);
+      // Auto-select: in enrollment-only mode pick first without active enrollment,
+      // otherwise just pick the first one if there's only one.
+      if (mode === "enrollment-only") {
+        const first = list.find((b) => !b.hasActiveEnrollment);
+        if (first) setSelectedId(first.id);
+      } else if (list.length === 1) {
+        setSelectedId(list[0].id);
+      }
       } catch {
         setError("Error al cargar datos. Intenta de nuevo.");
       } finally {
@@ -449,43 +456,54 @@ export default function CheckoutModal({
               </p>
             ) : (
               <div className="space-y-2">
-                {beneficiaries.map((b) => (
-                  <label
-                    key={b.id}
-                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                      selectedId === b.id
-                        ? "border-primary bg-primary/5"
-                        : "border-on-surface/10 hover:border-on-surface/20"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="checkout-beneficiary"
-                      checked={selectedId === b.id}
-                      onChange={() => setSelectedId(b.id)}
-                      className="accent-primary"
-                    />
-                    <div className="flex-1">
-                      <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">
-                        {b.label}
-                      </p>
-                      <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
-                        {b.sublabel}
-                      </p>
-                    </div>
-                    {b.hasActiveEnrollment ? (
-                      <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-green-400 flex items-center gap-1 flex-shrink-0">
-                        <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                        Inscrito
-                      </span>
-                    ) : (
-                      <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-red-400 flex items-center gap-1 flex-shrink-0">
-                        <span className="material-symbols-outlined text-[14px]">cancel</span>
-                        Sin inscripción
-                      </span>
-                    )}
-                  </label>
-                ))}
+                {beneficiaries.map((b) => {
+                  const isDisabledInEnrollMode = mode === "enrollment-only" && b.hasActiveEnrollment;
+                  return (
+                    <label
+                      key={b.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                        isDisabledInEnrollMode
+                          ? "border-on-surface/5 opacity-50 cursor-not-allowed"
+                          : selectedId === b.id
+                          ? "border-primary bg-primary/5 cursor-pointer"
+                          : "border-on-surface/10 hover:border-on-surface/20 cursor-pointer"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="checkout-beneficiary"
+                        checked={selectedId === b.id}
+                        disabled={isDisabledInEnrollMode}
+                        onChange={() => !isDisabledInEnrollMode && setSelectedId(b.id)}
+                        className="accent-primary"
+                      />
+                      <div className="flex-1">
+                        <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">
+                          {b.label}
+                        </p>
+                        <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
+                          {b.sublabel}
+                        </p>
+                        {isDisabledInEnrollMode && b.enrollmentEndDate && (
+                          <p className="font-[family-name:var(--font-body-md)] text-[11px] text-green-400/80 mt-0.5">
+                            Inscripción vigente hasta {new Date(b.enrollmentEndDate + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })}
+                          </p>
+                        )}
+                      </div>
+                      {b.hasActiveEnrollment ? (
+                        <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-green-400 flex items-center gap-1 flex-shrink-0">
+                          <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                          Inscrito
+                        </span>
+                      ) : (
+                        <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-red-400 flex items-center gap-1 flex-shrink-0">
+                          <span className="material-symbols-outlined text-[14px]">cancel</span>
+                          Sin inscripción
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>

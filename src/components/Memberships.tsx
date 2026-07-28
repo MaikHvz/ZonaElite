@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSession } from "@/providers/SessionProvider";
 import CheckoutModal from "@/components/CheckoutModal";
+import EnrollmentBanner from "@/components/EnrollmentBanner";
 
 interface MembershipPlan {
   id: string;
@@ -91,6 +92,9 @@ export default function Memberships() {
           diseñados para cada nivel de compromiso.
         </p>
       </div>
+
+      {/* Enrollment Banner */}
+      <EnrollmentBanner />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-5 items-start max-w-[960px] mx-auto">
         {plans.map((plan, idx) => {
