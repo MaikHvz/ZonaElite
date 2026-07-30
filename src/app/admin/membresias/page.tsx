@@ -12,6 +12,7 @@ import type { ReceiptData } from "@/components/admin/MembershipReceipt";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 import { getRemainingTokens, getEnrollmentDebt, type TokenInfo, type DebtDetail } from "@/lib/supabase/dashboard";
+import { getChileToday, addDaysChile } from "@/lib/dates";
 
 interface Plan { id: string; name: string; price: number; duration_days: number; category: string; benefits: string[]; tokens: number | null; active: boolean; featured?: boolean; }
 interface Membership { id: string; beneficiary_id: string; plan_id: string; purchased_by: string; start_date: string; end_date: string; status: string; created_at: string; membership_plans?: { name: string }; profiles?: { full_name: string }; beneficiaries?: { dependents?: { full_name: string; profiles?: { full_name: string } | null } | null; profiles?: { full_name: string } | null }; }
@@ -41,6 +42,7 @@ export default function AdminMembresiasPage() {
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
   const [debtDetails, setDebtDetails] = useState<DebtDetail[]>([]);
   const [loadingTokens, setLoadingTokens] = useState(false);
+  const [filter, setFilter] = useState<"todas" | "activas" | "proximas-vencer" | "vencidas">("todas");
 
   const load = async () => {
     const supabase = createClient();
@@ -201,6 +203,25 @@ export default function AdminMembresiasPage() {
     };
   };
 
+  const today = getChileToday();
+  const in7Days = addDaysChile(today, 7);
+
+  const filterCounts = {
+    todas: memberships.length,
+    activas: memberships.filter((m) => m.status === "activa" && m.end_date >= today).length,
+    proximasVencer: memberships.filter((m) => m.status === "activa" && m.end_date >= today && m.end_date <= in7Days).length,
+    vencidas: memberships.filter((m) => m.status === "vencida" || m.end_date < today).length,
+  };
+
+  const filteredMemberships = filter === "todas" ? memberships : memberships.filter((m) => {
+    switch (filter) {
+      case "activas": return m.status === "activa" && m.end_date >= today;
+      case "proximas-vencer": return m.status === "activa" && m.end_date >= today && m.end_date <= in7Days;
+      case "vencidas": return m.status === "vencida" || m.end_date < today;
+      default: return true;
+    }
+  });
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -269,6 +290,39 @@ export default function AdminMembresiasPage() {
         />
       ) : (
         <>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {([
+            { key: "todas", label: "Todas" },
+            { key: "activas", label: "Activas" },
+            { key: "proximas-vencer", label: "Próximas a vencer" },
+            { key: "vencidas", label: "Vencidas" },
+          ] as const).map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                filter === f.key
+                  ? f.key === "vencidas"
+                    ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+                    : f.key === "proximas-vencer"
+                      ? "bg-orange-500/10 text-orange-400 border-orange-500/30"
+                      : f.key === "activas"
+                        ? "bg-green-500/10 text-green-400 border-green-500/30"
+                        : "btn-primary-gradient text-white"
+                  : "border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+              }`}
+            >
+              {f.label}
+              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] ${
+                filter === f.key
+                  ? "bg-black/20"
+                  : "bg-on-surface/10"
+              }`}>
+                {filterCounts[f.key as keyof typeof filterCounts]}
+              </span>
+            </button>
+          ))}
+        </div>
         <DataTable
           columns={[
             { key: "beneficiary_id", label: "Beneficiario", render: (m) => (
@@ -304,11 +358,11 @@ export default function AdminMembresiasPage() {
               );
             }},
           ]}
-          data={memberships}
+          data={filteredMemberships}
           loading={loading}
           onEdit={openEditMembership}
           onDelete={setCancelTarget}
-          emptyMessage="No hay membresías registradas"
+          emptyMessage={filter === "todas" ? "No hay membresías registradas" : `No hay membresías ${filter === "activas" ? "activas" : filter === "proximas-vencer" ? "próximas a vencer" : "vencidas"}`}
         />
 
         {expandedToken && (
