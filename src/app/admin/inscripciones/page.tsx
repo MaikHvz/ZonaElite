@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { getChileToday } from "@/lib/dates";
+import { getChileToday, addDaysChile } from "@/lib/dates";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
@@ -55,6 +55,7 @@ export default function AdminInscripcionesPage() {
   const [enrollments, setEnrollments] = useState<AcademyEnrollment[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"planes" | "inscripciones">("planes");
+  const [filter, setFilter] = useState<"todas" | "activas" | "proximas-vencer" | "vencidas">("todas");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<EnrollmentPlan | null>(null);
@@ -298,6 +299,25 @@ export default function AdminInscripcionesPage() {
 
   const formatCLP = (n: number) => "$" + n.toLocaleString("es-CL");
 
+  const today = getChileToday();
+  const in7Days = addDaysChile(today, 7);
+
+  const filterCounts = {
+    todas: enrollments.length,
+    activas: enrollments.filter((e) => e.status === "activa" && e.end_date >= today).length,
+    proximasVencer: enrollments.filter((e) => e.status === "activa" && e.end_date >= today && e.end_date <= in7Days).length,
+    vencidas: enrollments.filter((e) => e.status === "vencida" || e.end_date < today).length,
+  };
+
+  const filteredEnrollments = filter === "todas" ? enrollments : enrollments.filter((e) => {
+    switch (filter) {
+      case "activas": return e.status === "activa" && e.end_date >= today;
+      case "proximas-vencer": return e.status === "activa" && e.end_date >= today && e.end_date <= in7Days;
+      case "vencidas": return e.status === "vencida" || e.end_date < today;
+      default: return true;
+    }
+  });
+
   const planColumns = [
     { key: "name", label: "Nombre" },
     { key: "price", label: "Precio", render: (plan: EnrollmentPlan) => formatCLP(plan.price) },
@@ -379,7 +399,38 @@ export default function AdminInscripcionesPage() {
               Asignar Inscripción
             </button>
           </div>
-          <DataTable columns={enrollmentColumns} data={enrollments} loading={loading} />
+          <div className="flex flex-wrap gap-2 mb-4">
+            {([
+              { key: "todas", label: "Todas" },
+              { key: "activas", label: "Activas" },
+              { key: "proximas-vencer", label: "Próximas a vencer" },
+              { key: "vencidas", label: "Vencidas" },
+            ] as const).map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                  filter === f.key
+                    ? f.key === "vencidas"
+                      ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+                      : f.key === "proximas-vencer"
+                        ? "bg-orange-500/10 text-orange-400 border-orange-500/30"
+                        : f.key === "activas"
+                          ? "bg-green-500/10 text-green-400 border-green-500/30"
+                          : "btn-primary-gradient text-white"
+                    : "border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+                }`}
+              >
+                {f.label}
+                <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] ${
+                  filter === f.key ? "bg-black/20" : "bg-on-surface/10"
+                }`}>
+                  {filterCounts[f.key as keyof typeof filterCounts]}
+                </span>
+              </button>
+            ))}
+          </div>
+          <DataTable columns={enrollmentColumns} data={filteredEnrollments} loading={loading} />
         </>
       )}
 
