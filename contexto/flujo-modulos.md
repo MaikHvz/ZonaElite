@@ -58,9 +58,17 @@ Por cada beneficiario, en orden:
 | `005` | `get_remaining_tokens` atado a membresía (ventana) |
 | `006` | Tabla `debts` + RLS restringidas (B-013) + drop constraint legacy (B-014) |
 | `007` | Columna `events.location_url` (B-016) |
+| `008` | Tabla `reglamento_interno` + RLS (admin edita, usuarios leen) |
 
 ## 7. Eventos (`/admin/eventos`, `/eventos`)
 
 - Crear/editar un evento inserta `type, title, description, image, location_name, location_url, event_date`.
 - `location_url` guarda el link de Google Maps o dirección; `/eventos/[id]` genera el embed vía `extractGoogleMapsEmbed` y `EventCard` muestra nombre/lugar.
 - `events` (tras migración 007): `type, title, description, image, location_name, location_url, location_lat, location_lng, event_date, extra, created_at`.
+
+## 8. Reglamento Interno (`/admin/reglamento`, `/dashboard/reglamento`)
+
+- Contenido único en la tabla `reglamento_interno` (1 fila: `content`, `updated_at`, `updated_by`).
+- **Admin**: `/admin/reglamento` edita el texto (textarea grande); al guardar crea la fila si no existe o actualiza la existente (con `updated_by` = admin).
+- **Usuarios**: tab "Reglamento" en el panel → `/dashboard/reglamento` muestra el texto como párrafos (patrón `content.split("\n")`, igual que el blog). Sin contenido → "El reglamento aún no ha sido publicado".
+- **RLS**: SELECT para todos los autenticados; INSERT/UPDATE/DELETE solo `is_admin()`. Los usuarios no pueden modificar el reglamento.

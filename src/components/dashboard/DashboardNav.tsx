@@ -10,6 +10,7 @@ const tabs = [
   { label: "Cargas", href: "/dashboard/cargas", icon: "group" },
   { label: "Asistencia", href: "/dashboard/asistencia", icon: "fact_check" },
   { label: "Alertas", href: "/dashboard/notificaciones", icon: "notifications" },
+  { label: "Reglamento", href: "/dashboard/reglamento", icon: "rule" },
 ];
 
 export default function DashboardNav() {

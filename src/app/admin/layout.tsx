@@ -4,17 +4,26 @@ import AdminGuard from "@/components/admin/AdminGuard";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import { useSession } from "@/providers/SessionProvider";
 import Link from "next/link";
+import { useState } from "react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile } = useSession();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <AdminGuard>
       <div className="flex min-h-screen bg-background">
-        <AdminSidebar />
+        <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 flex flex-col">
-          <header className="flex items-center justify-between px-6 py-4 border-b border-on-surface/5 bg-surface/80 backdrop-blur-xl">
+          <header className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-on-surface/5 bg-surface/80 backdrop-blur-xl">
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="md:hidden text-on-surface-variant hover:text-on-surface transition-colors p-1 cursor-pointer"
+                aria-label="Abrir menú"
+              >
+                <span className="material-symbols-outlined text-[24px]">menu</span>
+              </button>
               <span className="material-symbols-outlined text-primary text-[24px]">shield_person</span>
               <span className="font-[family-name:var(--font-headline-md)] text-[14px] text-on-surface uppercase tracking-wider">
                 Panel de Administración
@@ -37,7 +46,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
             </div>
           </header>
-          <main className="flex-1 p-6 overflow-auto">{children}</main>
+          <main className="flex-1 p-4 md:p-6 overflow-auto">{children}</main>
         </div>
       </div>
     </AdminGuard>

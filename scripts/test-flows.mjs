@@ -816,6 +816,64 @@ ok("B-016: EventCard tipa location_url",
   /location_url: string \| null/.test(eventCard));
 
 // ============================================================
+// J. Reglamento Interno (migración 008 + páginas admin/dashboard)
+// ============================================================
+section("J. Reglamento interno (admin editable, usuarios leen)");
+
+const migration008 = readFileSync(join(ROOT, "contexto", "migrations", "008_reglamento_interno.sql"), "utf8");
+const adminReglamento = readFileSync(join(ROOT, "src", "app", "admin", "reglamento", "page.tsx"), "utf8");
+const dashReglamento = readFileSync(join(ROOT, "src", "app", "dashboard", "reglamento", "page.tsx"), "utf8");
+
+ok("J: migración 008 define reglamento_interno",
+  /CREATE TABLE IF NOT EXISTS public\.reglamento_interno \(/.test(migration008) &&
+  /content text NOT NULL DEFAULT ''/.test(migration008) &&
+  /updated_at timestamptz NOT NULL DEFAULT now\(\)/.test(migration008) &&
+  /updated_by uuid REFERENCES public\.profiles\(id\)/.test(migration008));
+ok("J: RLS de reglamento (SELECT all, admin ALL)",
+  /reglamento_interno_select_all[\s\S]*?FOR SELECT USING \(true\)/.test(migration008) &&
+  /reglamento_interno_admin_all[\s\S]*?FOR ALL USING \(public\.is_admin\(\)\)/.test(migration008));
+ok("J: esquema refleja 1:1 la tabla reglamento_interno",
+  /CREATE TABLE IF NOT EXISTS public\.reglamento_interno \([\s\S]*?content text NOT NULL DEFAULT ''[\s\S]*?updated_by uuid REFERENCES public\.profiles\(id\)/.test(schema) &&
+  /"reglamento_interno_select_all"/.test(schema) &&
+  /"reglamento_interno_admin_all"/.test(schema));
+ok("J: admin/reglamento carga y guarda (update o insert)",
+  adminReglamento.includes("from(\"reglamento_interno\")") &&
+  adminReglamento.includes("update({ content, updated_by") &&
+  adminReglamento.includes(".insert({ content, updated_by"));
+ok("J: dashboard/reglamento renderiza párrafos del contenido",
+  dashReglamento.includes("from(\"reglamento_interno\")") &&
+  dashReglamento.includes("content.split(\"\\n\")"));
+ok("J: DashboardNav incluye tab Reglamento",
+  /href: "\/dashboard\/reglamento"/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "DashboardNav.tsx"), "utf8")));
+ok("J: AdminSidebar incluye link Reglamento",
+  /href: "\/admin\/reglamento"/.test(readFileSync(join(ROOT, "src", "components", "admin", "AdminSidebar.tsx"), "utf8")));
+
+// ============================================================
+// K. Navbar admin móvil (drawer + hamburguesa)
+// ============================================================
+section("K. Navbar admin en móvil (drawer)");
+
+const adminLayout = readFileSync(join(ROOT, "src", "app", "admin", "layout.tsx"), "utf8");
+const adminSidebar = readFileSync(join(ROOT, "src", "components", "admin", "AdminSidebar.tsx"), "utf8");
+
+ok("K: layout admin tiene botón hamburguesa visible en móvil",
+  adminLayout.includes('aria-label="Abrir menú"') &&
+  adminLayout.includes("md:hidden") &&
+  adminLayout.includes("setSidebarOpen(true)"));
+ok("K: AdminSidebar recibe open/onClose (drawer)",
+  /AdminSidebar\(\{ open, onClose \}/.test(adminSidebar) ||
+  /open: boolean; onClose/.test(adminSidebar));
+ok("K: AdminSidebar se oculta/desliza en móvil y es estático en desktop",
+  /-translate-x-full/.test(adminSidebar) &&
+  /md:static md:translate-x-0/.test(adminSidebar));
+ok("K: AdminSidebar cierra al navegar o con botón close",
+  /onClick=\{onClose\}[\s\S]*?aria-label="Cerrar menú"/.test(adminSidebar) &&
+  /onClick=\{onClose\}[\s\S]*?aria-label="Cerrar menú"/.test(adminSidebar) &&
+  adminSidebar.includes("Link") && adminSidebar.includes("onClick={onClose}"));
+ok("K: labels del drawer se muestran en móvil aunque esté colapsado en desktop",
+  /font-\[family-name:var\(--font-body-md\)\] text-\[14px\] \$\{collapsed \? "md:hidden" : ""\}/.test(adminSidebar));
+
+// ============================================================
 // RESULTADO
 // ============================================================
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

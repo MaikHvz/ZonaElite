@@ -734,6 +734,21 @@ CREATE POLICY "debts_staff_read" ON public.debts FOR SELECT USING (public.is_sta
 CREATE POLICY "debts_user_read_own" ON public.debts FOR SELECT USING (public.owns_beneficiary(beneficiary_id));
 
 -- =====================================================
+-- TABLA: reglamento_interno (contenido único editable por admin)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.reglamento_interno (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  content text NOT NULL DEFAULT '',
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  updated_by uuid REFERENCES public.profiles(id),
+  CONSTRAINT reglamento_interno_pkey PRIMARY KEY (id)
+);
+
+ALTER TABLE public.reglamento_interno ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "reglamento_interno_select_all" ON public.reglamento_interno FOR SELECT USING (true);
+CREATE POLICY "reglamento_interno_admin_all" ON public.reglamento_interno FOR ALL USING (public.is_admin());
+
+-- =====================================================
 -- SEED DATA: enrollment plans
 -- =====================================================
 INSERT INTO public.enrollment_plans (name, price, duration_days, active, sort_order)

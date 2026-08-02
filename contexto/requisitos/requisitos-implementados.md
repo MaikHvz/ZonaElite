@@ -43,3 +43,22 @@
 - Espejo 1:1 actualizado en `documentacion/squema-sql-actualizado.sql` (`location_url text,` en el DDL de `events`).
 - La UI (admin/eventos), `EventCard` y `/eventos/[id]` ya usaban la columna; ahora existe en BD.
 - Verificación: suite **161 passed, 0 failed**, build verde.
+
+---
+
+## Reglamento Interno (2026-08-02)
+
+- Migración `contexto/migrations/008_reglamento_interno.sql`: tabla `reglamento_interno` (contenido único: `content`, `updated_at`, `updated_by`) + RLS (`reglamento_interno_select_all` FOR SELECT true, `reglamento_interno_admin_all` FOR ALL `is_admin()`).
+- Admin: `/admin/reglamento` edita el contenido (textarea; crea la fila si no existe o la actualiza, con `updated_by` = admin). Link en `AdminSidebar`.
+- Usuarios: tab "Reglamento" en `DashboardNav` → `/dashboard/reglamento` renderiza el contenido en párrafos (mismo patrón que el blog); si no hay contenido, muestra "aún no publicado".
+- Espejo 1:1 actualizado en `documentacion/squema-sql-actualizado.sql`.
+- Verificación: suite **168 passed, 0 failed**, build verde. ⚠️ Migración `008` pendiente de aplicar en Supabase.
+
+---
+
+## Navbar admin en móvil (2026-08-02)
+
+- El sidebar del panel admin era `hidden md:flex` y el layout no tenía navegación móvil (el menú no se veía en celulares).
+- Fix: botón hamburguesa en el header (`md:hidden`) que abre el sidebar como **drawer deslizable** en móvil (overlay con backdrop, cierra al navegar o con el botón close); en desktop sigue estático y con colapso.
+- Los labels del drawer se muestran siempre en móvil aunque el sidebar esté colapsado en desktop.
+- Verificación: suite **173 passed, 0 failed** (sección K), build verde.
