@@ -53,6 +53,12 @@ Por cada beneficiario, en orden:
   - `status 1` → pago queda `pendiente`; el callback asíncrono de Flow puede completarlo después.
 - **Feedback al usuario** en `/dashboard/pagos` tras el retorno de Flow: overlay verde `PaymentSuccessModal` con botón **OK** (`pagado`), overlay rojo `PaymentErrorModal` con botón **OK** (`rechazado`, `cancelado`, `not_found` o error de verificación) o banner ámbar "Tu pago está pendiente" (`pendiente`). Aplica a membresías, inscripciones y cualquier pago.
 - **Ventas admin** (`/admin/ventas`): filtro de estado "Rechazado" + tarjeta de conteo de rechazados.
+- **Notificaciones al usuario (`user_notifications`)** — helper `notifyUserPaymentStatus` en `flow-helpers.ts` (best-effort, nunca lanza, dedup por `payment.id` en `content`):
+  - **Aprobado** (membresía o inscripción asignada): "Pago aprobado — Se asignó {concept} a {beneficiario}". Se dispara en `confirmation`, `verify` y `force-confirm` SOLO si la membresía/inscripción se asignó (`assignedSomething`).
+  - **Rechazado**: "Pago rechazado — Tu pago de {concept} para {beneficiario} fue rechazado. No se realizó ningún cargo."
+  - **Anulado**: "Pago anulado — … fue anulado. No se realizó ningún cargo."
+  - **Pendiente**: "Pago pendiente — … está pendiente de confirmación."
+  - Se muestran en la campana del navbar y en `/dashboard/notificaciones` (filtro "Personales"). `create-order` NO notifica (evita ruido/duplicados).
 
 ## 6. Registro de BD (migraciones aplicadas)
 

@@ -253,6 +253,106 @@ export async function notifyPaymentWithoutMembership(
   }
 }
 
+export type PaymentNotificationOutcome =
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "pending";
+
+/**
+ * Notificación al usuario sobre el resultado de un pago (membresía/inscripción).
+ * Se dispara al aprobarse el pago (con la asignación y el beneficiario) o cuando
+ * el pago queda rechazado/anulado/pendiente. Best-effort: nunca lanza ni
+ * bloquea el flujo de cobro.
+ *
+ * Dedup: se busca una notificación previa del mismo pago (marcador `Ref:` en el
+ * content) para no duplicar entre confirmation/verify/force-confirm.
+ */
+export async function notifyUserPaymentStatus(
+  supabase: SupabaseClient,
+  payment: {
+    id: string;
+    user_id: string;
+    concept?: string | null;
+    beneficiary_id?: string | null;
+  },
+  outcome: PaymentNotificationOutcome
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: existing } = await supabase
+      .from("user_notifications")
+      .select("id")
+      .eq("user_id", payment.user_id)
+      .ilike("content", `%${payment.id}%`)
+      .maybeSingle();
+
+    if (existing) {
+      console.log(HELPERS_LOG, "Payment already notified, skipping:", payment.id);
+      return { success: true };
+    }
+
+    let beneficiaryName = "Titular";
+    if (payment.beneficiary_id) {
+      const { data: ben } = await supabase
+        .from("beneficiaries")
+        .select("profiles(full_name), dependents(full_name)")
+        .eq("id", payment.beneficiary_id)
+        .maybeSingle();
+      if (ben) {
+        beneficiaryName =
+          (ben.profiles as { full_name?: string } | null)?.full_name ||
+          (ben.dependents as { full_name?: string } | null)?.full_name ||
+          "Titular";
+      }
+    }
+
+    const concept = payment.concept || "Pago ZONAELITE";
+    const ref = `\nRef: ${payment.id}`;
+
+    const messages: Record<
+      PaymentNotificationOutcome,
+      { title: string; content: string }
+    > = {
+      approved: {
+        title: "Pago aprobado",
+        content: `Se asignó ${concept} a ${beneficiaryName}.${ref}`,
+      },
+      rejected: {
+        title: "Pago rechazado",
+        content: `Tu pago de ${concept} para ${beneficiaryName} fue rechazado. No se realizó ningún cargo.${ref}`,
+      },
+      cancelled: {
+        title: "Pago anulado",
+        content: `Tu pago de ${concept} para ${beneficiaryName} fue anulado. No se realizó ningún cargo.${ref}`,
+      },
+      pending: {
+        title: "Pago pendiente",
+        content: `Tu pago de ${concept} para ${beneficiaryName} está pendiente de confirmación.${ref}`,
+      },
+    };
+
+    const msg = messages[outcome];
+
+    const { error } = await supabase.from("user_notifications").insert({
+      user_id: payment.user_id,
+      title: msg.title,
+      content: msg.content,
+      read: false,
+    });
+
+    if (error) {
+      console.error(HELPERS_LOG, "Failed to insert user notification:", error);
+      return { success: false, error: "No se pudo insertar notificación" };
+    }
+
+    console.log(HELPERS_LOG, "User notified about payment:", payment.id, outcome);
+    return { success: true };
+  } catch (err) {
+    console.error(HELPERS_LOG, "User notification insert threw:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
 export async function markPaymentAsPaid(
   supabase: SupabaseClient,
   paymentId: string,

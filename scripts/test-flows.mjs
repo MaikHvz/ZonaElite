@@ -666,15 +666,15 @@ ok("B-008: sent_by resuelto al primer admin (role_id=1)", notif && notif.sent_by
 
 ok("B-008: confirmation/route notifica al admin si la membresía falla",
   confirmationRoute.includes("notifyPaymentWithoutMembership") &&
-  /if \(!result\.success\) \{[\s\S]*?notifyPaymentWithoutMembership/.test(confirmationRoute));
+  /result\.success\) \{[\s\S]*?\} else \{[\s\S]*?notifyPaymentWithoutMembership/.test(confirmationRoute));
 ok("B-008: verify/route notifica al admin si la membresía falla",
   verifyRoute.includes("notifyPaymentWithoutMembership") &&
-  /if \(!result\.success\) \{[\s\S]*?notifyPaymentWithoutMembership/.test(verifyRoute));
+  /result\.success\) \{[\s\S]*?\} else \{[\s\S]*?notifyPaymentWithoutMembership/.test(verifyRoute));
 
 const forceConfirmRoute = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
 ok("B-008: force-confirm notifica al admin si la membresía falla",
   forceConfirmRoute.includes("notifyPaymentWithoutMembership") &&
-  /if \(!result\.success\) \{[\s\S]*?notifyPaymentWithoutMembership/.test(forceConfirmRoute));
+  /result\.success\) \{[\s\S]*?\} else \{[\s\S]*?notifyPaymentWithoutMembership/.test(forceConfirmRoute));
 
 const flowHelpers = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
 const assignModal = readFileSync(join(ROOT, "src", "components", "admin", "AssignMembershipModal.tsx"), "utf8");
@@ -987,6 +987,45 @@ ok("N: CheckoutModal maneja already_paid → redirige a /dashboard/pagos",
   checkoutModal.includes('window.location.href = `/dashboard/pagos?token='));
 ok("N: CheckoutModal avisa si la sesión expiró (401)",
   /res\.status === 401[\s\S]*?Tu sesión expiró/.test(checkoutModal));
+
+// ============================================================
+// O. Notificaciones al usuario sobre pagos/membresías/inscripciones
+// ============================================================
+section("O. Notificaciones de pago al usuario (aprobado/rechazado/anulado/pendiente)");
+
+const flowHelpersO = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
+const confirmRouteO = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
+const verifyRouteO = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
+const forceConfirmRouteO = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
+
+ok("O: existe helper notifyUserPaymentStatus en flow-helpers",
+  /export async function notifyUserPaymentStatus/.test(flowHelpers) &&
+  /user_notifications/.test(flowHelpers));
+ok("O: notifica QUÉ se asignó y A QUIÉN (concept + beneficiario)",
+  /Se asignó \$\{concept\} a \$\{beneficiaryName\}/.test(flowHelpers));
+ok("O: mensajes de rechazado/anulado/pendiente con feedback",
+  /fue rechazado\. No se realizó ningún cargo/.test(flowHelpers) &&
+  /fue anulado\. No se realizó ningún cargo/.test(flowHelpers) &&
+  /está pendiente de confirmación/.test(flowHelpers));
+ok("O: helper deduplica por payment_id (Ref en content)",
+  /ilike\("content", `%\$\{payment\.id\}%`\)/.test(flowHelpers));
+ok("O: helper nunca lanza (best-effort, try/catch)",
+  /export async function notifyUserPaymentStatus[\s\S]*?try \{[\s\S]*?\} catch \(err\) \{[\s\S]*?\}/.test(flowHelpers));
+ok("O: confirmation notifica rechazado/anulado/pendiente en status !== 2",
+  /notifyUserPaymentStatus\(supabase, payment, "rejected"\)/.test(confirmRouteO) &&
+  /notifyUserPaymentStatus\(supabase, payment, "cancelled"\)/.test(confirmRouteO) &&
+  /notifyUserPaymentStatus\(supabase, payment, "pending"\)/.test(confirmRouteO));
+ok("O: confirmation notifica aprobado solo si se asignó algo",
+  /let assignedSomething = false;[\s\S]*?if \(assignedSomething\) \{[\s\S]*?notifyUserPaymentStatus\(supabase, payment, "approved"\)/.test(confirmRouteO));
+ok("O: verify notifica rechazado/anulado/pendiente y aprobado",
+  /notifyUserPaymentStatus\(admin, fullPayment, "rejected"\)/.test(verifyRouteO) &&
+  /notifyUserPaymentStatus\(admin, fullPayment, "cancelled"\)/.test(verifyRouteO) &&
+  /notifyUserPaymentStatus\(admin, fullPayment, "pending"\)/.test(verifyRouteO) &&
+  /notifyUserPaymentStatus\(admin, fullPayment, "approved"\)/.test(verifyRouteO));
+ok("O: force-confirm notifica aprobado",
+  /notifyUserPaymentStatus\(admin, payment, "approved"\)/.test(forceConfirmRouteO));
+ok("O: create-order no notifica (evita duplicar/noise)",
+  !createOrderRoute.includes("notifyUserPaymentStatus"));
 
 // ============================================================
 // RESULTADO

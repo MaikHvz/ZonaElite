@@ -9,6 +9,7 @@ import {
   extendEnrollment,
   isVerificationOrderMatch,
   notifyPaymentWithoutMembership,
+  notifyUserPaymentStatus,
 } from "@/lib/flow-helpers";
 import { after } from "next/server";
 
@@ -113,6 +114,15 @@ async function processInBackground(token: string) {
         console.error(L, "Failed to mark payment as rejected/cancelled:", err);
       }
     }
+
+    // Notificar al usuario qué pasó con su pago (best-effort, nunca lanza)
+    if (mapped === "rechazado") {
+      await notifyUserPaymentStatus(supabase, payment, "rejected");
+    } else if (mapped === "cancelado") {
+      await notifyUserPaymentStatus(supabase, payment, "cancelled");
+    } else {
+      await notifyUserPaymentStatus(supabase, payment, "pending");
+    }
     return;
   }
 
@@ -141,10 +151,13 @@ async function processInBackground(token: string) {
 
   // Only call confirmAndCreateMembership if there's a membership plan in the concept
   const hasMembershipConcept = payment.concept && /membres[íi]a/i.test(payment.concept);
+  let assignedSomething = false;
   if (hasMembershipConcept) {
     try {
       const result = await confirmAndCreateMembership(supabase, payment.id, payment.user_id);
-      if (!result.success) {
+      if (result.success) {
+        assignedSomething = true;
+      } else {
         console.error(L, "Membership creation failed:", result.error);
         await notifyPaymentWithoutMembership(supabase, payment, result.error || "Error al crear membresía");
       }
@@ -163,11 +176,17 @@ async function processInBackground(token: string) {
         payment.beneficiary_id,
         payment.enrollment_plan_id
       );
-      if (!enrollResult.success) {
+      if (enrollResult.success) {
+        assignedSomething = true;
+      } else {
         console.error(L, "Enrollment extension failed:", enrollResult.error);
       }
     }
   } catch (err) {
     console.error(L, "Enrollment extension threw:", err);
+  }
+
+  if (assignedSomething) {
+    await notifyUserPaymentStatus(supabase, payment, "approved");
   }
 }

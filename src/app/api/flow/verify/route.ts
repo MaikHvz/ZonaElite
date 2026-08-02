@@ -9,6 +9,7 @@ import {
   findPaymentByTokenAndUser,
   isVerificationOrderMatch,
   notifyPaymentWithoutMembership,
+  notifyUserPaymentStatus,
 } from "@/lib/flow-helpers";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +102,7 @@ export async function GET(request: Request) {
 
         // Create membership if concept includes "membresía"
         const hasMembershipConcept = fullPayment.concept && /membres[íi]a/i.test(fullPayment.concept);
+        let assignedSomething = false;
         if (hasMembershipConcept) {
           const result = await confirmAndCreateMembership(
             admin,
@@ -108,7 +110,9 @@ export async function GET(request: Request) {
             user.id
           );
 
-          if (!result.success) {
+          if (result.success) {
+            assignedSomething = true;
+          } else {
             console.error(VERIFY_LOG, "Membership creation failed:", result.error);
             await notifyPaymentWithoutMembership(admin, fullPayment, result.error || "Error al crear membresía");
           }
@@ -122,9 +126,15 @@ export async function GET(request: Request) {
             fullPayment.beneficiary_id,
             fullPayment.enrollment_plan_id
           );
-          if (!enrollResult.success) {
+          if (enrollResult.success) {
+            assignedSomething = true;
+          } else {
             console.error(VERIFY_LOG, "Enrollment extension failed:", enrollResult.error);
           }
+        }
+
+        if (assignedSomething) {
+          await notifyUserPaymentStatus(admin, fullPayment, "approved");
         }
 
         return await buildSuccessResponse(fullPayment);
@@ -138,6 +148,15 @@ export async function GET(request: Request) {
           .from("payments")
           .update({ status: mapped })
           .eq("id", fullPayment.id);
+      }
+
+      // Notificar al usuario qué pasó con su pago (best-effort, nunca lanza)
+      if (mapped === "rechazado") {
+        await notifyUserPaymentStatus(admin, fullPayment, "rejected");
+      } else if (mapped === "cancelado") {
+        await notifyUserPaymentStatus(admin, fullPayment, "cancelled");
+      } else {
+        await notifyUserPaymentStatus(admin, fullPayment, "pending");
       }
 
       return NextResponse.json({ status: mapped });

@@ -99,3 +99,16 @@
   - `src/components/CheckoutModal.tsx`: `handlePay`/`handleConfirmOverwrite` refactorizados en un único helper `doCreateOrder` con `AbortController` timeout **~20 s**; el botón nunca queda en "Procesando..." (`setProcessing(false)` en `finally`). Maneja `already_paid` (redirige a `/dashboard/pagos?token=...`), `401` ("Tu sesión expiró...") y timeout ("El pago tardó demasiado. Intenta de nuevo.").
 - Sin migración SQL. Sesión **no** se perdía: los `304` eran caché y el `303 → /auth` es el redirect normal del middleware.
 - Verificación: suite **206 passed, 0 failed** (sección N), build verde. Ver `contexto/requisitos/fix-reuso-pago-rechazado.md`.
+
+---
+
+## Notificaciones de pago al usuario (membresías/inscripciones) (2026-08-02)
+
+- **Requisito:** al aprobarse un pago, notificar al usuario **qué** membresía/inscripción se asignó y **a quién** (beneficiario); si el pago es rechazado/anulado/pendiente, notificar qué pasó. Sin tocar el flujo de cobro.
+- **Fix:** helper `notifyUserPaymentStatus(supabase, payment, outcome)` en `src/lib/flow-helpers.ts` (best-effort, nunca lanza, dedup por `payment.id` en `content` para no duplicar entre confirmation/verify/force-confirm en carrera). Resuelve el nombre del beneficiario (nested `profiles`/`dependents`).
+  - `approved` → "Pago aprobado — Se asignó {concept} a {beneficiario}" (solo si la membresía/inscripción se asignó de verdad).
+  - `rejected` → "Pago rechazado — … fue rechazado. No se realizó ningún cargo."
+  - `cancelled` → "Pago anulado — … fue anulado. No se realizó ningún cargo."
+  - `pending` → "Pago pendiente — … está pendiente de confirmación."
+- **Puntos de disparo:** `confirmation/route.ts`, `verify/route.ts` y `force-confirm/route.ts` (aprobado solo cuando `assignedSomething`). `create-order` no notifica (evita ruido). Las notificaciones aparecen en la campana del navbar y en `/dashboard/notificaciones` (filtro "Personales") — tabla `user_notifications` ya existía, sin migración SQL.
+- Verificación: suite **216 passed, 0 failed** (sección O), build verde. Ver `contexto/requisitos/notificaciones-pago-usuario.md`.
