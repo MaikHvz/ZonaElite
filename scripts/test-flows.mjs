@@ -905,6 +905,7 @@ ok("M: mapFlowStatus(2) == pagado", mapFlowStatus(2) === "pagado");
 ok("M: mapFlowStatus(3) == rechazado", mapFlowStatus(3) === "rechazado");
 ok("M: mapFlowStatus(4) == cancelado", mapFlowStatus(4) === "cancelado");
 ok("M: mapFlowStatus(desconocido) == pendiente", mapFlowStatus(99) === "pendiente");
+ok("M: mapFlowStatus tolera string (API Flow puede devolverlo así)", mapFlowStatus("2") === "pagado" && mapFlowStatus("3") === "rechazado" && mapFlowStatus("4") === "cancelado" && mapFlowStatus("1") === "pendiente" && mapFlowStatus("x") === "pendiente");
 
 const verifyRouteM = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
 const confirmRouteM = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
@@ -958,6 +959,34 @@ ok("M: pagos abre PaymentErrorModal al rechazar/anular/fallar",
 ok("M: PaymentSuccessModal tiene botón OK verde",
   /OK\s*</.test(readFileSync(join(ROOT, "src", "components", "PaymentSuccessModal.tsx"), "utf8")) &&
   /from-green-600 to-emerald-500/.test(readFileSync(join(ROOT, "src", "components", "PaymentSuccessModal.tsx"), "utf8")));
+
+// ============================================================
+// N. Recompra tras rechazo: no reutilizar token muerto (B-019)
+// ============================================================
+section("N. Recompra tras rechazo/anulación (B-019)");
+
+const createOrderRoute = readFileSync(join(ROOT, "src", "app", "api", "flow", "create-order", "route.ts"), "utf8");
+const checkoutModal = readFileSync(join(ROOT, "src", "components", "CheckoutModal.tsx"), "utf8");
+
+ok("N: create-order usa mapFlowStatus en el bloque existingPending",
+  createOrderRoute.includes("mapFlowStatus"));
+ok("N: status 3/4 descartan el token y crean orden nueva (no reutilizan)",
+  /mapped === "rechazado" \|\| mapped === "cancelado"/.test(createOrderRoute) &&
+  /update\(\{ status: mapped \}\)/.test(createOrderRoute));
+ok("N: create-order responde already_paid cuando el pago ya se confirmó",
+  createOrderRoute.includes('status: "already_paid"'));
+ok("N: create-order solo reutiliza token si sigue pendiente (status 1)",
+  /mapped === "pagado"[\s\S]*?return NextResponse\.json\(\{[\s\S]*?status: "already_paid"/.test(createOrderRoute));
+ok("N: CheckoutModal nunca queda bloqueado (timeout AbortController)",
+  checkoutModal.includes("AbortController") &&
+  checkoutModal.includes("controller.abort()") &&
+  /setProcessing\(false\);\s*}/.test(checkoutModal) &&
+  checkoutModal.includes("finally"));
+ok("N: CheckoutModal maneja already_paid → redirige a /dashboard/pagos",
+  checkoutModal.includes('data.status === "already_paid"') &&
+  checkoutModal.includes('window.location.href = `/dashboard/pagos?token='));
+ok("N: CheckoutModal avisa si la sesión expiró (401)",
+  /res\.status === 401[\s\S]*?Tu sesión expiró/.test(checkoutModal));
 
 // ============================================================
 // RESULTADO

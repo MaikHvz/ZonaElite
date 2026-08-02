@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { getChileToday } from "@/lib/dates";
-import { createFlowOrder, getFlowConfig, verifyFlowPayment, FLOW_LOG_PREFIX } from "@/lib/flow";
+import { createFlowOrder, getFlowConfig, verifyFlowPayment, mapFlowStatus, FLOW_LOG_PREFIX } from "@/lib/flow";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
@@ -181,24 +181,53 @@ export async function POST(request: Request) {
     if (existingPending?.flow_token) {
       try {
         const verifyRes = await verifyFlowPayment(existingPending.flow_token);
-        if (verifyRes.status === 2) {
+        const mapped = mapFlowStatus(verifyRes.status);
+
+        if (mapped === "pagado") {
+          // Ya fue confirmado por el callback (race) — mostrar el éxito, no pagar de nuevo.
           await supabase
             .from("payments")
             .update({ status: "pagado", paid_at: new Date().toISOString() })
             .eq("id", existingPending.id);
+          return NextResponse.json({
+            status: "already_paid",
+            token: existingPending.flow_token,
+          });
+        }
+
+        if (mapped === "rechazado" || mapped === "cancelado") {
+          // B-018/B-019: el token fue rechazado/anulado en Flow — no reutilizarlo.
+          // Marcarlo y crear una orden NUEVA abajo.
+          console.warn(ROUTE_LOG, "Descartando pago pendiente con token muerto:", {
+            paymentId: existingPending.id,
+            flowStatus: verifyRes.status,
+          });
+          await supabase
+            .from("payments")
+            .update({ status: mapped })
+            .eq("id", existingPending.id);
+        } else {
+          // status 1 (sigue pendiente) — continuar pagando el mismo token.
+          const { apiUrl } = getFlowConfig();
+          const flowPaymentUrl = apiUrl.replace(/\/api\/?$/, "/payment") + "?token=" + encodeURIComponent(existingPending.flow_token);
+
+          return NextResponse.json({
+            url: flowPaymentUrl,
+            token: existingPending.flow_token,
+            reused: true,
+          });
         }
       } catch {
-        // Keep as pending
+        // No se pudo verificar — mantener como pendiente y reutilizar (comportamiento original).
+        const { apiUrl } = getFlowConfig();
+        const flowPaymentUrl = apiUrl.replace(/\/api\/?$/, "/payment") + "?token=" + encodeURIComponent(existingPending.flow_token);
+
+        return NextResponse.json({
+          url: flowPaymentUrl,
+          token: existingPending.flow_token,
+          reused: true,
+        });
       }
-
-      const { apiUrl } = getFlowConfig();
-      const flowPaymentUrl = apiUrl.replace(/\/api\/?$/, "/payment") + "?token=" + encodeURIComponent(existingPending.flow_token);
-
-      return NextResponse.json({
-        url: flowPaymentUrl,
-        token: existingPending.flow_token,
-        reused: true,
-      });
     }
 
     // Create payment record (store enrollment info directly — Flow doesn't return 'optional' on getStatus)

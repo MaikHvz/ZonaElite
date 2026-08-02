@@ -273,18 +273,9 @@ export default function CheckoutModal({
   const totalAmount = (mode === "membership" && plan ? plan.price : 0) +
     (showEnrollmentSection && selectedEnrollmentPlan ? selectedEnrollmentPlan.price : 0);
 
-  const handlePay = async () => {
-    if (!selectedId) return;
-    if (mode === "membership" && !plan) return;
-    if (mode === "enrollment-only" && !selectedEnrollmentPlanId) return;
-
-    if (mode === "membership" && selectedBeneficiary?.hasActiveMembership) {
-      setShowOverwriteWarning(true);
-      return;
-    }
-
-    setProcessing(true);
-    setError(null);
+  const doCreateOrder = async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
       const body: Record<string, unknown> = {
@@ -304,67 +295,60 @@ export default function CheckoutModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Error al procesar pago");
-        setProcessing(false);
+        if (res.status === 401) {
+          setError("Tu sesión expiró. Inicia sesión nuevamente para pagar.");
+        } else {
+          setError(data.error || "Error al procesar pago");
+        }
+        return;
+      }
+
+      if (data.status === "already_paid") {
+        window.location.href = `/dashboard/pagos?token=${encodeURIComponent(data.token)}`;
         return;
       }
 
       const flowUrl = new URL(data.url);
       flowUrl.searchParams.set("token", data.token);
       window.location.href = flowUrl.toString();
-    } catch {
-      setError("Error de conexión. Intenta de nuevo.");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("El pago tardó demasiado. Intenta de nuevo.");
+      } else {
+        setError("Error de conexión. Intenta de nuevo.");
+      }
+    } finally {
+      clearTimeout(timeoutId);
       setProcessing(false);
     }
+  };
+
+  const handlePay = async () => {
+    if (!selectedId) return;
+    if (mode === "membership" && !plan) return;
+    if (mode === "enrollment-only" && !selectedEnrollmentPlanId) return;
+
+    if (mode === "membership" && selectedBeneficiary?.hasActiveMembership) {
+      setShowOverwriteWarning(true);
+      return;
+    }
+
+    setProcessing(true);
+    setError(null);
+    await doCreateOrder();
   };
 
   const handleConfirmOverwrite = () => {
     setShowOverwriteWarning(false);
     setProcessing(true);
     setError(null);
-
-    (async () => {
-      try {
-        const body: Record<string, unknown> = {
-          beneficiaryId: selectedId,
-        };
-
-        if (mode === "membership" && plan) {
-          body.planId = plan.id;
-        }
-
-        if (showEnrollmentSection && selectedEnrollmentPlan) {
-          body.includeEnrollment = true;
-          body.enrollmentPlanId = selectedEnrollmentPlan.id;
-        }
-
-        const res = await fetch("/api/flow/create-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          setError(data.error || "Error al procesar pago");
-          setProcessing(false);
-          return;
-        }
-
-        const flowUrl = new URL(data.url);
-        flowUrl.searchParams.set("token", data.token);
-        window.location.href = flowUrl.toString();
-      } catch {
-        setError("Error de conexión. Intenta de nuevo.");
-        setProcessing(false);
-      }
-    })();
+    void doCreateOrder();
   };
 
   const getEnrollmentLabel = () => {

@@ -423,6 +423,40 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 
 ---
 
+## B-019 — La recompra tras un pago rechazado reutiliza el token muerto (y el botón queda en "Procesando...")
+
+| Campo | Valor |
+|-------|-------|
+| **Estado** | 🟢 RESUELTO (2026-08-02) |
+| **Severidad** | 🟠 Alto (bloquea la recompra; el usuario queda sin forma de pagar de nuevo) |
+| **Módulo** | Pago Flow / Recompra |
+| **Fuente** | Reporte del usuario (recompra post-rechazo en sandbox) |
+
+**Descripción:** tras pagar con una tarjeta **rechazada** en sandbox, al comprar de nuevo dentro de los 5 min el botón "Pagar con Flow" quedaba en **"Procesando..."** o enviaba al usuario a Flow con un **token ya rechazado** (página de error de Flow).
+
+**Causa raíz:** `src/app/api/flow/create-order/route.ts` — bloque "Prevent duplicate pending payments (5 min window)":
+- Busca un pago del usuario con `status='pendiente'` creado hace < 5 min y llama `verifyFlowPayment(token)`, pero **solo maneja `status === 2`** (lo marca pagado).
+- Para `status === 3` (rechazada) o `4` (anulada) caía al final del bloque y **reutilizaba el token muerto** → Flow muestra error.
+- Si `verifyFlowPayment` se colgaba (Flow lento), el route no respondía y el botón quedaba en "Procesando..." indefinidamente (el cliente no tenía timeout).
+
+**Análisis de "sesión perdida" (logs de Vercel):** los `304` a `/dashboard`, `/admin`, `/perfil` son `Not Modified` (caché), no errores de auth; el `303` a `/auth` es el redirect **normal** del middleware (`src/lib/supabase/middleware.ts:53-57`) cuando un usuario YA autenticado visita `/auth`. La sesión **no se perdió**.
+
+**Solución aplicada:**
+1. **`create-order/route.ts`** — el bloque `existingPending` usa `mapFlowStatus`:
+   - `2` (pagado, race del callback) → marca `pagado` y responde `{ status: "already_paid", token }` para que el cliente muestre el éxito sin volver a cobrar.
+   - `3`/`4` → marca el pago `rechazado`/`cancelado` en BD y **NO reutiliza**: continúa y crea una **orden nueva** con token fresco.
+   - `1` (sigue pendiente) → reutiliza el mismo token (comportamiento original).
+   - Error de `verifyFlowPayment` → mantiene el comportamiento original (reutiliza como pendiente).
+2. **`CheckoutModal.tsx`** — refactor de `handlePay`/`handleConfirmOverwrite` a un helper único `doCreateOrder` con `AbortController` timeout **~20 s** (el botón **nunca** queda en "Procesando..."): maneja `data.status === "already_paid"` redirigiendo a `/dashboard/pagos?token=...`, mensaje específico para `401` ("Tu sesión expiró...") y para timeout ("El pago tardó demasiado. Intenta de nuevo."), y `setProcessing(false)` garantizado en `finally`.
+
+**Verificación:** suite **206 passed, 0 failed** (sección N nueva: scan de `create-order` + `CheckoutModal` + unit de `mapFlowStatus` tolerando string), `npm run build` verde. Sin migración SQL.
+
+**Nota producción (pagos reales):** `mapFlowStatus` normaliza el status de Flow (`number | string`) para que `"3"`/`"4"` (la API real puede devolverlo como string) nunca caigan en `pendiente` y reutilicen un token muerto con dinero real.
+
+**Referencias:** `api/flow/create-order/route.ts:169-235`, `components/CheckoutModal.tsx:doCreateOrder`, `contexto/requisitos/fix-reuso-pago-rechazado.md`.
+
+---
+
 | Fecha | Acción |
 |-------|--------|
 | 2026-08-01 | Creación del informe con hallazgos de la auditoría de flujos críticos + verificación de BD en vivo. |
@@ -440,3 +474,4 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 | 2026-08-02 | **B-017 resuelto:** navbar público oculto en `/admin` (antes tapaba el ☰ del admin y se abría el menú del sitio). Suite en verde (178 tests). Sin migración. |
 | 2026-08-02 | **B-018 resuelto:** pagos Flow rechazados/anulados se marcan en BD y el usuario recibe feedback diferenciado (rechazado/cancelado/pendiente) en `/dashboard/pagos` + filtro "Rechazado" en `/admin/ventas`. Suite en verde (195 tests). Sin migración. |
 | 2026-08-02 | **B-018 ampliado:** overlays centrados con botón OK — `PaymentErrorModal` rojo para rechazado/anulado/error y `PaymentSuccessModal` verde con OK primario para pago exitoso. Suite en verde (198 tests). |
+| 2026-08-02 | **B-019 resuelto:** la recompra post-rechazo ya no reutiliza el token muerto (`create-order` usa `mapFlowStatus`: `3`/`4` → marca y crea orden nueva, `2` → `already_paid`) y `CheckoutModal` nunca queda bloqueado (timeout `AbortController` 20 s). Suite en verde (206 tests). Sin migración. |

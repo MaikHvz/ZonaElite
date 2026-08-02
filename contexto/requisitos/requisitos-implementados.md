@@ -88,3 +88,14 @@
   - `src/app/admin/ventas/page.tsx`: filtro de estado "Rechazado" + tarjeta de conteo de rechazados.
 - Sin migración SQL (`payments.status` es `text` sin CHECK; `StatusBadge` ya soportaba `rechazado`). Esquema actualizado solo en el comentario de documentación.
 - Verificación: suite **198 passed, 0 failed** (sección M), build verde. Ver `contexto/requisitos/feedback-pagos-flow.md`.
+
+---
+
+## B-019 — Recompra tras pago rechazado no reutiliza el token muerto (2026-08-02)
+
+- **Problema:** tras un pago rechazado (`3`) o anulado (`4`) en Flow, comprar de nuevo dentro de los 5 min reutilizaba el `flow_token` ya muerto (página de error de Flow) y, si `verifyFlowPayment` se colgaba, el botón quedaba en "Procesando..." sin timeout.
+- **Fix:**
+  - `src/app/api/flow/create-order/route.ts`: el bloque `existingPending` ahora usa `mapFlowStatus` — `2` → marca `pagado` y responde `{ status: "already_paid", token }` (race del callback); `3`/`4` → marca `rechazado`/`cancelado` en BD y **NO reutiliza** (crea una orden nueva con token fresco); `1` → reutiliza el token pendiente; error de verificación → comportamiento original. `mapFlowStatus` tolera el status como string (la API real puede devolverlo así).
+  - `src/components/CheckoutModal.tsx`: `handlePay`/`handleConfirmOverwrite` refactorizados en un único helper `doCreateOrder` con `AbortController` timeout **~20 s**; el botón nunca queda en "Procesando..." (`setProcessing(false)` en `finally`). Maneja `already_paid` (redirige a `/dashboard/pagos?token=...`), `401` ("Tu sesión expiró...") y timeout ("El pago tardó demasiado. Intenta de nuevo.").
+- Sin migración SQL. Sesión **no** se perdía: los `304` eran caché y el `303 → /auth` es el redirect normal del middleware.
+- Verificación: suite **206 passed, 0 failed** (sección N), build verde. Ver `contexto/requisitos/fix-reuso-pago-rechazado.md`.

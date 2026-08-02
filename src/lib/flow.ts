@@ -234,9 +234,11 @@ export function verifyFlowCallbackSignature(
  * (B-018)
  */
 export function mapFlowStatus(
-  status: number
+  status: number | string
 ): "pendiente" | "pagado" | "rechazado" | "cancelado" {
-  switch (status) {
+  const s = typeof status === "number" ? status : Number(status);
+  if (Number.isNaN(s)) return "pendiente";
+  switch (s) {
     case 2:
       return "pagado";
     case 3:
