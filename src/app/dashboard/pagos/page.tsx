@@ -12,6 +12,7 @@ import { PaymentRowSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import PaymentSuccessModal, {
   type PaymentSuccessDetails,
 } from "@/components/PaymentSuccessModal";
+import PaymentErrorModal from "@/components/PaymentErrorModal";
 import PurchaseSuccessBanner, {
   PurchaseFailedBanner,
   PurchasePendingBanner,
@@ -35,6 +36,10 @@ export default function PagosPage() {
   >(null);
   const [successDetails, setSuccessDetails] = useState<PaymentSuccessDetails | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [errorModal, setErrorModal] = useState<{
+    title: string;
+    description: string;
+  } | null>(null);
   const verifyingRef = useRef(false);
   const pageSize = 20;
   const totalPages = Math.ceil(total / pageSize);
@@ -81,14 +86,34 @@ export default function PagosPage() {
           setModalOpen(true);
         } else if (result.status === "rechazado") {
           setVerified("rechazado");
+          setErrorModal({
+            title: "El pago fue rechazado por tu banco o proveedor.",
+            description:
+              "No se realizó ningún cargo. Puedes intentar pagar nuevamente o usar otro método de pago.",
+          });
         } else if (result.status === "cancelado") {
           setVerified("cancelado");
+          setErrorModal({
+            title: "El pago fue anulado o cancelado.",
+            description:
+              "No se realizó ningún cargo. Puedes intentar pagar nuevamente cuando quieras.",
+          });
         } else if (result.status === "pendiente") {
           setVerified("pendiente");
         } else if (result.status === "not_found") {
           setVerified("failed");
+          setErrorModal({
+            title: "No pudimos confirmar tu pago.",
+            description:
+              "Si el problema persiste, contacta a la academia con tu número de orden.",
+          });
         } else {
           setVerified("failed");
+          setErrorModal({
+            title: "El pago no pudo ser procesado.",
+            description:
+              "Si el problema persiste, contacta a la academia.",
+          });
         }
         router.replace("/dashboard/pagos");
         fetchPayments();
@@ -96,6 +121,11 @@ export default function PagosPage() {
       .catch((err) => {
         console.error("[flow-verify] Client verification error:", err);
         setVerified("failed");
+        setErrorModal({
+          title: "No pudimos verificar tu pago.",
+          description:
+            "Revisa tu historial de pagos o contacta a la academia si necesitas ayuda.",
+        });
         router.replace("/dashboard/pagos");
       })
       .finally(() => {
@@ -124,6 +154,12 @@ export default function PagosPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         details={successDetails}
+      />
+      <PaymentErrorModal
+        open={!!errorModal}
+        onClose={() => setErrorModal(null)}
+        title={errorModal?.title || ""}
+        description={errorModal?.description || ""}
       />
 
       <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[40px] text-on-surface uppercase tracking-tighter">

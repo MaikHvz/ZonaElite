@@ -145,18 +145,18 @@ export default function PaymentSuccessModal({
 
           {/* Botones de acción */}
           <div className="w-full flex flex-col sm:flex-row gap-3 mt-6">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-600 to-emerald-500 text-white font-[family-name:var(--font-headline-md)] text-[12px] uppercase tracking-wider text-center font-bold shadow-lg shadow-green-500/20 hover:brightness-110 transition-all cursor-pointer"
+            >
+              OK
+            </button>
             <a
               href="/dashboard/membresias"
-              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-600 to-emerald-500 text-white font-[family-name:var(--font-headline-md)] text-[12px] uppercase tracking-wider text-center font-bold shadow-lg shadow-green-500/20 hover:brightness-110 transition-all cursor-pointer"
+              className="py-3 px-5 rounded-xl border border-on-surface/15 text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5 font-[family-name:var(--font-headline-md)] text-[12px] uppercase tracking-wider text-center transition-colors cursor-pointer"
             >
               Ver Membresías
             </a>
-            <button
-              onClick={onClose}
-              className="py-3 px-5 rounded-xl border border-on-surface/15 text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5 font-[family-name:var(--font-headline-md)] text-[12px] uppercase tracking-wider transition-colors cursor-pointer"
-            >
-              Entendido
-            </button>
           </div>
         </div>
       </div>

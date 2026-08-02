@@ -414,11 +414,12 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 3. **`confirmation/route.ts`** — en el callback server, si `status !== 2` marca el pago como `rechazado`/`cancelado` en BD (ya no queda pendiente) y retorna sin crear membresía.
 4. **`PurchaseSuccessBanner.tsx`** — `PurchaseFailedBanner` acepta `title`/`description`; nuevo `PurchasePendingBanner` (tinte ámbar) para pagos pendientes.
 5. **`/dashboard/pagos`** — feedback diferenciado: `rechazado` → "Pago rechazado. No se realizó ningún cargo", `cancelado` → "Pago anulado/cancelado", `pendiente` → "Tu pago está pendiente de confirmación". Aplica a membresías, inscripciones y cualquier pago (mismo flujo verify).
-6. **`/admin/ventas`** — filtro de estado **Rechazado** + tarjeta de conteo de rechazados.
+6. **Overlays centrados (feedback explícito con botón OK):** nuevo `PaymentErrorModal` (panel rojo al centro de la pantalla con botón **OK** que lo cierra) para `rechazado`, `cancelado`, `not_found` y errores de verificación; `PaymentSuccessModal` (verde, ya existente) ahora tiene botón **OK** verde como acción primaria ("Ver Membresías" queda secundario).
+7. **`/admin/ventas`** — filtro de estado **Rechazado** + tarjeta de conteo de rechazados.
 
-**Verificación:** suite **195 passed, 0 failed** (sección M nueva: unit de `mapFlowStatus` + scans de routes/pagos/ventas/banner/esquema), `npm run build` verde. Sin migración SQL (`payments.status` es `text` sin CHECK; `StatusBadge` ya soportaba `rechazado`).
+**Verificación:** suite **198 passed, 0 failed** (sección M nueva: unit de `mapFlowStatus` + scans de routes/pagos/ventas/banner/esquema + overlays), `npm run build` verde. Sin migración SQL (`payments.status` es `text` sin CHECK; `StatusBadge` ya soportaba `rechazado`).
 
-**Referencias:** `flow.ts:mapFlowStatus`, `api/flow/verify/route.ts:133-143`, `api/flow/confirmation/route.ts:100-114`, `PurchaseSuccessBanner.tsx`, `dashboard/pagos/page.tsx`, `admin/ventas/page.tsx`, `contexto/requisitos/feedback-pagos-flow.md`.
+**Referencias:** `flow.ts:mapFlowStatus`, `api/flow/verify/route.ts:133-143`, `api/flow/confirmation/route.ts:100-114`, `PurchaseSuccessBanner.tsx`, `PaymentErrorModal.tsx`, `PaymentSuccessModal.tsx`, `dashboard/pagos/page.tsx`, `admin/ventas/page.tsx`, `contexto/requisitos/feedback-pagos-flow.md`.
 
 ---
 
@@ -438,3 +439,4 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 | 2026-08-02 | **B-016 resuelto:** columna `location_url` agregada a `events` (migración `007`). Suite en verde (161 tests). Migración `007_add_events_location_url.sql` pendiente de aplicar en Supabase. |
 | 2026-08-02 | **B-017 resuelto:** navbar público oculto en `/admin` (antes tapaba el ☰ del admin y se abría el menú del sitio). Suite en verde (178 tests). Sin migración. |
 | 2026-08-02 | **B-018 resuelto:** pagos Flow rechazados/anulados se marcan en BD y el usuario recibe feedback diferenciado (rechazado/cancelado/pendiente) en `/dashboard/pagos` + filtro "Rechazado" en `/admin/ventas`. Suite en verde (195 tests). Sin migración. |
+| 2026-08-02 | **B-018 ampliado:** overlays centrados con botón OK — `PaymentErrorModal` rojo para rechazado/anulado/error y `PaymentSuccessModal` verde con OK primario para pago exitoso. Suite en verde (198 tests). |

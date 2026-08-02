@@ -82,7 +82,9 @@
   - `src/app/api/flow/verify/route.ts`: para `status !== 2` actualiza el pago según `mapFlowStatus` y responde `{ status: mapped }` al cliente (`3`→`rechazado`, `4`→`cancelado`, `1`→`pendiente`).
   - `src/app/api/flow/confirmation/route.ts`: el callback server marca `rechazado`/`cancelado` en BD cuando el pago no fue aprobado (ya no lo deja pendiente); nunca crea membresía si no es `status 2`.
   - `src/components/PurchaseSuccessBanner.tsx`: `PurchaseFailedBanner` acepta `title`/`description`; nuevo `PurchasePendingBanner` (ámbar).
-  - `src/app/dashboard/pagos/page.tsx`: banners diferenciados por resultado (`rechazado`, `cancelado`, `pendiente`) — aplica a membresías, inscripciones y cualquier pago (mismo flujo verify).
+  - `src/components/PaymentErrorModal.tsx` (nuevo): overlay rojo centrado con botón **OK** que cierra; se abre en `/dashboard/pagos` para `rechazado`, `cancelado`, `not_found` y errores de verificación.
+  - `src/components/PaymentSuccessModal.tsx`: botón **OK** verde como acción primaria (antes "Entendido" secundario); "Ver Membresías" queda secundario.
+  - `src/app/dashboard/pagos/page.tsx`: banners diferenciados por resultado (`rechazado`, `cancelado`, `pendiente`) + overlays — aplica a membresías, inscripciones y cualquier pago (mismo flujo verify).
   - `src/app/admin/ventas/page.tsx`: filtro de estado "Rechazado" + tarjeta de conteo de rechazados.
 - Sin migración SQL (`payments.status` es `text` sin CHECK; `StatusBadge` ya soportaba `rechazado`). Esquema actualizado solo en el comentario de documentación.
-- Verificación: suite **195 passed, 0 failed** (sección M), build verde. Ver `contexto/requisitos/feedback-pagos-flow.md`.
+- Verificación: suite **198 passed, 0 failed** (sección M), build verde. Ver `contexto/requisitos/feedback-pagos-flow.md`.

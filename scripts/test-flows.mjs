@@ -946,6 +946,19 @@ ok("M: ventas admin filtra por 'rechazado'",
 ok("M: esquema documenta status 'rechazado' en payments",
   /payments\.status: 'pendiente' \| 'pagado' \| 'rechazado'/.test(schemaSqlM));
 
+const errorModalSrc = readFileSync(join(ROOT, "src", "components", "PaymentErrorModal.tsx"), "utf8");
+ok("M: existe PaymentErrorModal (overlay rojo centrado con botón OK)",
+  errorModalSrc.includes("fixed inset-0 z-[100]") &&
+  errorModalSrc.includes("border-red-500/30") &&
+  />\s*OK\s*</.test(errorModalSrc));
+ok("M: pagos abre PaymentErrorModal al rechazar/anular/fallar",
+  pagosPageM.includes("PaymentErrorModal") &&
+  pagosPageM.includes('setErrorModal({') &&
+  /verified === "rechazado"/.test(pagosPageM));
+ok("M: PaymentSuccessModal tiene botón OK verde",
+  /OK\s*</.test(readFileSync(join(ROOT, "src", "components", "PaymentSuccessModal.tsx"), "utf8")) &&
+  /from-green-600 to-emerald-500/.test(readFileSync(join(ROOT, "src", "components", "PaymentSuccessModal.tsx"), "utf8")));
+
 // ============================================================
 // RESULTADO
 // ============================================================

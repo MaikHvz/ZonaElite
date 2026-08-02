@@ -21,14 +21,15 @@ En sandbox, al probar con una tarjeta que **rechaza el pago**, el usuario no rec
    - `status === 4` → actualizar pago a `cancelado` (ya existía).
    - `status === 1` (o desconocido) → devolver `{ status: "pendiente" }` (el pago puede completarse vía callback asíncrono).
 3. **`src/app/api/flow/confirmation/route.ts`** — cuando `status !== 2`, actualizar el pago según `mapFlowStatus` (rechazado/cancelado) y retornar (no crear membresía).
-4. **`src/components/PurchaseSuccessBanner.tsx`** — `PurchaseFailedBanner` acepta props opcionales `title`/`description` para mensajes específicos.
-5. **`src/app/dashboard/pagos/page.tsx`** — feedback diferenciado por resultado de `/api/flow/verify`:
-   - `pagado` → modal de éxito (existente).
-   - `rechazado` → banner rojo "Pago rechazado: no se realizó ningún cargo, intenta nuevamente".
-   - `cancelado` → banner rojo "Pago anulado/cancelado".
+4. **`src/components/PurchaseSuccessBanner.tsx`** — `PurchaseFailedBanner` acepta props opcionales `title`/`description` para mensajes específicos; nuevo `PurchasePendingBanner` (ámbar).
+5. **`src/components/PaymentErrorModal.tsx`** (nuevo) — overlay rojo centrado con botón **OK** que cierra el popup.
+6. **`src/app/dashboard/pagos/page.tsx`** — feedback diferenciado por resultado de `/api/flow/verify` con **overlays centrados + botón OK**:
+   - `pagado` → overlay verde `PaymentSuccessModal` (botón **OK** primario + "Ver Membresías" secundario).
+   - `rechazado` → overlay rojo "El pago fue rechazado… No se realizó ningún cargo" con **OK**.
+   - `cancelado` → overlay rojo "El pago fue anulado o cancelado…" con **OK**.
+   - `not_found`/error → overlay rojo con **OK**.
    - `pendiente` → banner ámbar "Tu pago está pendiente, se confirmará cuando Flow lo procese".
-   - `not_found`/error → banner genérico (existente).
-6. **`src/app/admin/ventas/page.tsx`** — agregar filtro de estado **Rechazado** para que el admin pueda ver los pagos rechazados.
+7. **`src/app/admin/ventas/page.tsx`** — agregar filtro de estado **Rechazado** para que el admin pueda ver los pagos rechazados.
 
 ## Impacto
 - Sin cambios de BD: `payments.status` es `text` sin CHECK constraint; "rechazado" ya existe en `StatusBadge`. Solo se actualiza la documentación del esquema (comentario de status).

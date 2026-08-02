@@ -51,7 +51,7 @@ Por cada beneficiario, en orden:
   - `status 3` → el pago se actualiza a `rechazado` en BD (tanto en `verify` como en el callback `confirmation`); **no** crea membresía.
   - `status 4` → pago a `cancelado`.
   - `status 1` → pago queda `pendiente`; el callback asíncrono de Flow puede completarlo después.
-- **Feedback al usuario** en `/dashboard/pagos` tras el retorno de Flow: modal de éxito (`pagado`), banner rojo "Pago rechazado"/"Pago anulado" (`rechazado`/`cancelado`) o banner ámbar "Tu pago está pendiente" (`pendiente`). Aplica a membresías, inscripciones y cualquier pago.
+- **Feedback al usuario** en `/dashboard/pagos` tras el retorno de Flow: overlay verde `PaymentSuccessModal` con botón **OK** (`pagado`), overlay rojo `PaymentErrorModal` con botón **OK** (`rechazado`, `cancelado`, `not_found` o error de verificación) o banner ámbar "Tu pago está pendiente" (`pendiente`). Aplica a membresías, inscripciones y cualquier pago.
 - **Ventas admin** (`/admin/ventas`): filtro de estado "Rechazado" + tarjeta de conteo de rechazados.
 
 ## 6. Registro de BD (migraciones aplicadas)
