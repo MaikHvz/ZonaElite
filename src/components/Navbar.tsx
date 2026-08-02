@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession } from "@/providers/SessionProvider";
 import { signOut } from "@/lib/supabase/auth";
 import { useRouter } from "next/navigation";
@@ -23,6 +24,7 @@ const logoUrl = "/logo.png";
 export default function Navbar() {
   const { user, loading, isAdmin } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -51,6 +53,8 @@ export default function Navbar() {
       document.body.style.overflow = "auto";
     };
   }, [mobileOpen]);
+
+  if (pathname.startsWith("/admin")) return null;
 
   const handleLogout = async () => {
     setLoggingOut(true);

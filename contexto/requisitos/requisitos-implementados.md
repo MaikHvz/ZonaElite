@@ -62,3 +62,12 @@
 - Fix: botón hamburguesa en el header (`md:hidden`) que abre el sidebar como **drawer deslizable** en móvil (overlay con backdrop, cierra al navegar o con el botón close); en desktop sigue estático y con colapso.
 - Los labels del drawer se muestran siempre en móvil aunque el sidebar esté colapsado en desktop.
 - Verificación: suite **173 passed, 0 failed** (sección K), build verde.
+
+---
+
+## B-017 — Navbar público no se muestra en el panel admin (2026-08-02)
+
+- **Problema:** el navbar público del sitio se renderizaba en todas las rutas (layout raíz) y, por ser `fixed top-0 z-50`, quedaba encima del header del admin. El ☰ del admin (que abre el drawer de CRUD) quedaba invisible en móvil: el único ☰ visible abría el menú del sitio normal.
+- **Fix:** `src/components/Navbar.tsx` usa `usePathname()` y retorna `null` en rutas `/admin`. El header del admin ahora es auto-contenido: perfil enlazado a `/perfil` y botón "Cerrar sesión" (`signOut()`), ya que el navbar público (que proveía logout/Perfil/Mi Panel) ya no está en `/admin`.
+- `/dashboard` mantiene el navbar público con su offset `pt-24 md:pt-28` (sin cambios).
+- Verificación: suite **178 passed, 0 failed** (sección L), build verde. Sin migración SQL.

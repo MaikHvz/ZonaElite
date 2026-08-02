@@ -369,6 +369,29 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 
 ---
 
+## B-017 — Navbar público tapa el menú CRUD del admin en móvil
+
+| Campo | Valor |
+|-------|-------|
+| **Estado** | 🟢 RESUELTO (2026-08-02) |
+| **Severidad** | 🟠 Alto (el admin no puede navegar los CRUD desde el celular) |
+| **Módulo** | Panel admin / Navegación |
+| **Fuente** | Reporte del usuario |
+
+**Descripción:** en el celular, dentro del panel admin, al tocar el botón de menú (☰) se abre el menú del sitio público (Inicio, Nosotros, Disciplinas, Tienda, Blog...) en vez del menú de CRUD del admin (Productos, Eventos, Horarios, Asistencia, Usuarios, Deudas, Ventas...). El menú CRUD del admin nunca se veía en móvil.
+
+**Causa raíz:** el `<Navbar />` público se renderiza en el layout raíz en todas las rutas (incluido `/admin`) y es `fixed top-0 z-50`. El layout del admin no tenía offset superior (a diferencia de `/dashboard`, que usa `pt-24 md:pt-28`), por lo que el navbar público quedaba **encima** del header del admin: el ☰ propio del admin (que abre el drawer de CRUD) quedaba invisible debajo, y el único ☰ visible era el del navbar público.
+
+**Fix aplicado:**
+1. `src/components/Navbar.tsx` — oculta el navbar público en rutas `/admin` vía `usePathname()` (`if (pathname.startsWith("/admin")) return null;`).
+2. `src/app/admin/layout.tsx` — header auto-contenido: círculo de perfil enlazado a `/perfil` + botón "Cerrar sesión" (`signOut()` + `router.push("/auth")`), ya que el navbar público (que proveía logout/Perfil) ya no está en `/admin`.
+
+**Verificación:** suite **178 passed, 0 failed** (sección L nueva), `npm run build` verde. Sin migración SQL.
+
+**Referencias:** `src/components/Navbar.tsx`, `src/app/admin/layout.tsx`, `src/app/dashboard/layout.tsx`, `contexto/requisitos/fix-navbar-admin-movil.md`.
+
+---
+
 ## Registro de cambios del documento
 
 | Fecha | Acción |
@@ -385,3 +408,4 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 | 2026-08-02 | **Fase 9 completa:** B-012 resuelto (tabla `user_notifications` documentada en el esquema, DDL verificado contra la BD real). Suite en verde (131 tests). |
 | 2026-08-02 | **Fase 10 completa:** B-013 y B-014 resueltos (RLS restringidas a admin/staff + deuda materializada en `debts` + drop del constraint legacy en la migración `006`). Suite en verde (156 tests). Migración `006_debts_and_rls.sql` aplicada por el usuario. |
 | 2026-08-02 | **B-016 resuelto:** columna `location_url` agregada a `events` (migración `007`). Suite en verde (161 tests). Migración `007_add_events_location_url.sql` pendiente de aplicar en Supabase. |
+| 2026-08-02 | **B-017 resuelto:** navbar público oculto en `/admin` (antes tapaba el ☰ del admin y se abría el menú del sitio). Suite en verde (178 tests). Sin migración. |

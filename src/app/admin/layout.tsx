@@ -2,13 +2,23 @@
 
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import { signOut } from "@/lib/supabase/auth";
 import { useSession } from "@/providers/SessionProvider";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { profile } = useSession();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await signOut();
+    router.push("/auth");
+  };
 
   return (
     <AdminGuard>
@@ -37,12 +47,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 Ver sitio
               </Link>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full btn-primary-gradient flex items-center justify-center">
+                <Link
+                  href="/perfil"
+                  className="w-8 h-8 rounded-full btn-primary-gradient flex items-center justify-center"
+                  aria-label="Ver perfil"
+                >
                   <span className="material-symbols-outlined text-white text-[16px]">person</span>
-                </div>
+                </Link>
                 <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface hidden lg:block">
                   {profile?.full_name || "Admin"}
                 </span>
+                <button
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer disabled:opacity-50"
+                  aria-label="Cerrar sesión"
+                >
+                  <span className="material-symbols-outlined text-[20px]">logout</span>
+                </button>
               </div>
             </div>
           </header>

@@ -72,3 +72,10 @@ Por cada beneficiario, en orden:
 - **Admin**: `/admin/reglamento` edita el texto (textarea grande); al guardar crea la fila si no existe o actualiza la existente (con `updated_by` = admin).
 - **Usuarios**: tab "Reglamento" en el panel → `/dashboard/reglamento` muestra el texto como párrafos (patrón `content.split("\n")`, igual que el blog). Sin contenido → "El reglamento aún no ha sido publicado".
 - **RLS**: SELECT para todos los autenticados; INSERT/UPDATE/DELETE solo `is_admin()`. Los usuarios no pueden modificar el reglamento.
+
+## 9. Navegación del panel admin (móvil + desktop)
+
+- El navbar público (`Navbar.tsx`) **no se renderiza en rutas `/admin`** (B-017): era `fixed z-50` y tapaba el ☰ del header admin en móvil. El panel admin es auto-contenido.
+- **Header admin**: ☰ (móvil, abre el drawer), "Panel de Administración", "Ver sitio" (→ `/`), perfil (→ `/perfil`) y botón **Cerrar sesión** (`signOut()` → `/auth`).
+- **Drawer CRUD** (`AdminSidebar`): en móvil se desliza con overlay/backdrop y cierra al navegar; en desktop es estático con colapso a iconos. Incluye los 15 módulos (Dashboard, Productos, Eventos, Horarios, Tipos de Clase, Asistencia, Usuarios, Membresías, Inscripciones, Deudas, Ventas, Blog, Notificaciones, Reglamento, Configuración).
+- `/dashboard` conserva el navbar público con offset `pt-24 md:pt-28` (sin cambios).

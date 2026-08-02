@@ -874,6 +874,27 @@ ok("K: labels del drawer se muestran en móvil aunque esté colapsado en desktop
   /font-\[family-name:var\(--font-body-md\)\] text-\[14px\] \$\{collapsed \? "md:hidden" : ""\}/.test(adminSidebar));
 
 // ============================================================
+// L. Navbar público oculto en /admin (B-017)
+// ============================================================
+section("L. Navbar público oculto en /admin (B-017)");
+
+const navbarSrc = readFileSync(join(ROOT, "src", "components", "Navbar.tsx"), "utf8");
+
+ok("L: Navbar usa usePathname y se oculta en rutas /admin",
+  navbarSrc.includes('usePathname') &&
+  /if \(pathname\.startsWith\("\/admin"\)\) return null;/.test(navbarSrc));
+ok("L: Navbar no se renderiza en /admin pero sí en el resto",
+  !navbarSrc.includes('"/admin"') || navbarSrc.includes('startsWith("/admin")'));
+ok("L: admin layout tiene botón Cerrar sesión (signOut)",
+  adminLayout.includes('from "@/lib/supabase/auth"') &&
+  adminLayout.includes('aria-label="Cerrar sesión"') &&
+  /await signOut\(\);/.test(adminLayout));
+ok("L: admin header enlaza el perfil a /perfil",
+  /href="\/perfil"[\s\S]*?aria-label="Ver perfil"/.test(adminLayout));
+ok("L: dashboard conserva offset para navbar público",
+  /pt-24 md:pt-28/.test(readFileSync(join(ROOT, "src", "app", "dashboard", "layout.tsx"), "utf8")));
+
+// ============================================================
 // RESULTADO
 // ============================================================
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
