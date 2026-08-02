@@ -350,6 +350,25 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 
 ---
 
+## B-016 — Columna `location_url` faltante en `events`
+
+| Campo | Valor |
+|-------|-------|
+| **Estado** | 🟢 RESUELTO (2026-08-02) |
+| **Severidad** | 🟠 Alto (bloquea crear/editar eventos) |
+| **Módulo** | Eventos |
+| **Fuente** | Reporte del usuario |
+
+**Descripción:** al crear/editar un evento en `/admin/eventos` (con URL de Google Maps o imagen) el insert/update falla con `Could not find the 'location_url' column of 'events' in the schema cache`. La UI envía y lee `location_url` (campo "Ubicación Google Maps"), pero la tabla `events` no tenía esa columna (solo `location_name`, `location_lat`, `location_lng`).
+
+**Fix aplicado:** migración `007_add_events_location_url.sql` — `ALTER TABLE public.events ADD COLUMN IF NOT EXISTS location_url text;` (idempotente). Espejo 1:1 actualizado en `squema-sql-actualizado.sql`. Sin cambios de frontend (ya consumía la columna).
+
+**Verificación:** suite **161 passed, 0 failed**, `npm run build` verde. ⚠️ **Migración 007 pendiente de aplicar en Supabase.**
+
+**Referencias:** `src/app/admin/eventos/page.tsx`, `src/components/EventCard.tsx`, `src/app/eventos/[id]/page.tsx`, `contexto/migrations/007_add_events_location_url.sql`.
+
+---
+
 ## Registro de cambios del documento
 
 | Fecha | Acción |
@@ -364,3 +383,5 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 | 2026-08-02 | **Fase 7 completa:** B-006 resuelto (RPC transaccional `enroll_class` con lock y validación de capacidad en la migración `004`; `EnrollModal` la usa). Suite en verde (119 tests). Migración `004_enroll_class_rpc.sql` aplicada por el usuario. |
 | 2026-08-02 | **Fase 8 completa:** B-010 y B-011 resueltos (conteo de tokens atado a la membresía por ventana temporal en la migración `005`; RPCs duplicadas consolidadas en el esquema). Suite en verde (127 tests). Migración `005_tokens_membership_window.sql` aplicada por el usuario. |
 | 2026-08-02 | **Fase 9 completa:** B-012 resuelto (tabla `user_notifications` documentada en el esquema, DDL verificado contra la BD real). Suite en verde (131 tests). |
+| 2026-08-02 | **Fase 10 completa:** B-013 y B-014 resueltos (RLS restringidas a admin/staff + deuda materializada en `debts` + drop del constraint legacy en la migración `006`). Suite en verde (156 tests). Migración `006_debts_and_rls.sql` aplicada por el usuario. |
+| 2026-08-02 | **B-016 resuelto:** columna `location_url` agregada a `events` (migración `007`). Suite en verde (161 tests). Migración `007_add_events_location_url.sql` pendiente de aplicar en Supabase. |

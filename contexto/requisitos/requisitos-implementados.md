@@ -34,3 +34,12 @@
 
 - Suite: **156 passed, 0 failed** (`node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`).
 - `npm run build`: verde sin warnings.
+
+---
+
+## B-016 — Columna `location_url` en `events` (2026-08-02)
+
+- Migración `contexto/migrations/007_add_events_location_url.sql`: `ALTER TABLE public.events ADD COLUMN IF NOT EXISTS location_url text;` (idempotente).
+- Espejo 1:1 actualizado en `documentacion/squema-sql-actualizado.sql` (`location_url text,` en el DDL de `events`).
+- La UI (admin/eventos), `EventCard` y `/eventos/[id]` ya usaban la columna; ahora existe en BD.
+- Verificación: suite **161 passed, 0 failed**, build verde.

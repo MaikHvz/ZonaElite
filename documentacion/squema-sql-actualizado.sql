@@ -323,6 +323,7 @@ CREATE TABLE IF NOT EXISTS public.events (
   description text,
   image text,
   location_name text,
+  location_url text,
   location_lat numeric,
   location_lng numeric,
   event_date date NOT NULL,

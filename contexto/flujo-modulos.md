@@ -57,3 +57,10 @@ Por cada beneficiario, en orden:
 | `004` | RPC `enroll_class` (capacidad server-side) |
 | `005` | `get_remaining_tokens` atado a membresía (ventana) |
 | `006` | Tabla `debts` + RLS restringidas (B-013) + drop constraint legacy (B-014) |
+| `007` | Columna `events.location_url` (B-016) |
+
+## 7. Eventos (`/admin/eventos`, `/eventos`)
+
+- Crear/editar un evento inserta `type, title, description, image, location_name, location_url, event_date`.
+- `location_url` guarda el link de Google Maps o dirección; `/eventos/[id]` genera el embed vía `extractGoogleMapsEmbed` y `EventCard` muestra nombre/lugar.
+- `events` (tras migración 007): `type, title, description, image, location_name, location_url, location_lat, location_lng, event_date, extra, created_at`.

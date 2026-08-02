@@ -795,6 +795,27 @@ ok("F10: sidebar admin incluye Deudas",
   /href: "\/admin\/deudas"/.test(readFileSync(join(ROOT, "src", "components", "admin", "AdminSidebar.tsx"), "utf8")));
 
 // ============================================================
+// I. B-016 — Columna location_url en events
+// ============================================================
+section("I. B-016: columna location_url de events");
+
+const migration007 = readFileSync(join(ROOT, "contexto", "migrations", "007_add_events_location_url.sql"), "utf8");
+const adminEventos = readFileSync(join(ROOT, "src", "app", "admin", "eventos", "page.tsx"), "utf8");
+const eventDetail = readFileSync(join(ROOT, "src", "app", "eventos", "[id]", "page.tsx"), "utf8");
+const eventCard = readFileSync(join(ROOT, "src", "components", "EventCard.tsx"), "utf8");
+
+ok("B-016: migración 007 existe con ALTER idempotente",
+  migration007.includes("ALTER TABLE public.events ADD COLUMN IF NOT EXISTS location_url text;"));
+ok("B-016: esquema documenta location_url en events (espejo)",
+  /CREATE TABLE IF NOT EXISTS public\.events \([\s\S]*?location_url text,[\s\S]*?\)/.test(schema));
+ok("B-016: admin/eventos envía location_url en insert/update",
+  /location_url: form\.location_url \|\| null/.test(adminEventos));
+ok("B-016: /eventos/[id] lee location_url para embed de mapa",
+  eventDetail.includes("extractGoogleMapsEmbed(event.location_url)"));
+ok("B-016: EventCard tipa location_url",
+  /location_url: string \| null/.test(eventCard));
+
+// ============================================================
 // RESULTADO
 // ============================================================
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
