@@ -7,6 +7,8 @@ import {
   extendEnrollment,
   markPaymentAsPaid,
   findPaymentByTokenAndUser,
+  isVerificationOrderMatch,
+  notifyPaymentWithoutMembership,
 } from "@/lib/flow-helpers";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +83,15 @@ export async function GET(request: Request) {
       const verification = await verifyFlowPayment(token);
 
       if (verification.status === 2) {
+        if (!isVerificationOrderMatch(fullPayment.commerce_order, verification.commerceOrder)) {
+          console.error(VERIFY_LOG, "commerceOrder mismatch — descartando:", {
+            flowOrder: verification.commerceOrder,
+            paymentOrder: fullPayment.commerce_order,
+            token,
+          });
+          return NextResponse.json({ status: fullPayment.status });
+        }
+
         await markPaymentAsPaid(
           admin,
           fullPayment.id,
@@ -99,6 +110,7 @@ export async function GET(request: Request) {
 
           if (!result.success) {
             console.error(VERIFY_LOG, "Membership creation failed:", result.error);
+            await notifyPaymentWithoutMembership(admin, fullPayment, result.error || "Error al crear membresía");
           }
         }
 

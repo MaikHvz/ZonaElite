@@ -14,6 +14,8 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   rechazado: { label: "Rechazado", className: "bg-red-500/10 text-red-400 border-red-500/20" },
   enviado: { label: "Enviado", className: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
   expirado: { label: "Expirado", className: "bg-red-500/10 text-red-400 border-red-500/20" },
+  pagada: { label: "Pagada", className: "bg-green-500/10 text-green-400 border-green-500/20" },
+  condonada: { label: "Condonada", className: "bg-on-surface/10 text-on-surface-variant border-on-surface/10" },
 };
 
 export default function StatusBadge({ status }: { status: string }) {

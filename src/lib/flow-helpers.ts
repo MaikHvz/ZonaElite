@@ -1,5 +1,6 @@
-import { FLOW_LOG_PREFIX } from "./flow";
-import { getChileToday, addDaysChile } from "./dates";
+import { FLOW_LOG_PREFIX } from "./flow.ts";
+import { getChileToday, addDaysChile } from "./dates.ts";
+import { extendOrCreateEnrollment } from "./enrollments.ts";
 
 const HELPERS_LOG = `${FLOW_LOG_PREFIX}/helpers`;
 
@@ -97,17 +98,11 @@ export async function confirmAndCreateMembership(
   }
 
   // Cancel ALL active memberships for this beneficiary
-  let cancelQuery = supabase
+  const { error: cancelError } = await supabase
     .from("memberships")
     .update({ status: "cancelada" })
     .eq("beneficiary_id", targetBeneficiaryId)
     .eq("status", "activa");
-
-  if (existingMembership?.id) {
-    cancelQuery = cancelQuery.neq("id", existingMembership.id);
-  }
-
-  const { error: cancelError } = await cancelQuery;
 
   if (cancelError) {
     console.error(HELPERS_LOG, "Failed to cancel existing memberships:", cancelError);
@@ -117,7 +112,7 @@ export async function confirmAndCreateMembership(
 
   const endDate = addDaysChile(today, plan.duration_days);
 
-  const { data: membership } = await supabase
+  const { data: membership, error: insertError } = await supabase
     .from("memberships")
     .insert({
       beneficiary_id: targetBeneficiaryId,
@@ -130,8 +125,30 @@ export async function confirmAndCreateMembership(
     .select("id")
     .single();
 
+  // B-002: índice único parcial idx_memberships_one_active rechazó el insert
+  // (SQLSTATE 23505) porque otra membresía activa quedó creada en paralelo.
+  // Retry idempotente: re-consultar la activa existente y linkear el pago a esa.
+  if (insertError?.code === "23505") {
+    console.log(HELPERS_LOG, "Unique index (23505): linking to existing active membership:", paymentId);
+    const { data: existingActive } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("beneficiary_id", targetBeneficiaryId)
+      .eq("status", "activa")
+      .maybeSingle();
+
+    if (existingActive) {
+      await supabase
+        .from("payments")
+        .update({ membership_id: existingActive.id })
+        .eq("id", paymentId);
+      console.log(HELPERS_LOG, "Linked payment to existing active membership:", existingActive.id);
+      return { success: true, membershipId: existingActive.id };
+    }
+  }
+
   if (!membership) {
-    console.error(HELPERS_LOG, "Failed to create membership for payment:", paymentId);
+    console.error(HELPERS_LOG, "Failed to create membership for payment:", paymentId, insertError);
     return { success: false, error: "Error al crear membresía" };
   }
 
@@ -166,93 +183,73 @@ export async function extendEnrollment(
   beneficiaryId: string,
   enrollmentPlanId: string
 ): Promise<{ success: boolean; enrollmentId?: string; error?: string }> {
-  // Get enrollment plan
-  const { data: plan } = await supabase
-    .from("enrollment_plans")
-    .select("id, duration_days")
-    .eq("id", enrollmentPlanId)
-    .single();
+  return extendOrCreateEnrollment(supabase, beneficiaryId, enrollmentPlanId, paymentId);
+}
 
-  if (!plan) {
-    console.error(HELPERS_LOG, "Enrollment plan not found:", enrollmentPlanId);
-    return { success: false, error: "Plan de inscripción no encontrado" };
-  }
+/**
+ * Verifica que el commerceOrder devuelto por Flow (vía payment/getStatus)
+ * coincida con el commerce_order guardado en el pago del sistema. Evita
+ * confusión de órdenes y replay cross-tenant (B-007).
+ */
+export function isVerificationOrderMatch(
+  paymentCommerceOrder: string | null | undefined,
+  flowCommerceOrder: string | null | undefined
+): boolean {
+  if (!paymentCommerceOrder || !flowCommerceOrder) return false;
+  return paymentCommerceOrder === flowCommerceOrder;
+}
 
-  const today = getChileToday();
-
-  // Check for existing active enrollment
-  const { data: existing } = await supabase
-    .from("academy_enrollments")
-    .select("id, end_date")
-    .eq("beneficiary_id", beneficiaryId)
-    .eq("status", "activa")
-    .gte("end_date", today)
-    .order("end_date", { ascending: false })
-    .maybeSingle();
-
-  let startDate: string;
-  let endDate: string;
-
-  if (existing) {
-    // Extend from current end date (or today if past)
-    const baseDate = existing.end_date > today ? existing.end_date : today;
-    startDate = baseDate;
-    endDate = new Date(new Date(baseDate + "T12:00:00").getTime() + plan.duration_days * 86400000)
-      .toISOString()
-      .split("T")[0];
-
-    // Update existing enrollment
-    const { error } = await supabase
-      .from("academy_enrollments")
-      .update({
-        end_date: endDate,
-        enrollment_plan_id: enrollmentPlanId,
-        payment_id: paymentId,
-      })
-      .eq("id", existing.id);
-
-    if (error) {
-      console.error(HELPERS_LOG, "Failed to extend enrollment:", error);
-      return { success: false, error: "Error al extender inscripción" };
-    }
-
-    console.log(HELPERS_LOG, "Enrollment extended:", {
-      enrollmentId: existing.id,
-      newEndDate: endDate,
-      daysAdded: plan.duration_days,
-    });
-
-    return { success: true, enrollmentId: existing.id };
-  } else {
-    // Create new enrollment
-    startDate = today;
-    endDate = addDaysChile(today, plan.duration_days);
-
-    const { data: enrollment, error } = await supabase
-      .from("academy_enrollments")
-      .insert({
-        beneficiary_id: beneficiaryId,
-        enrollment_plan_id: enrollmentPlanId,
-        payment_id: paymentId,
-        start_date: startDate,
-        end_date: endDate,
-        status: "activa",
-      })
+/**
+ * B-008: alerta admin cuando un pago quedó "pagado" pero la membresía
+ * no se pudo crear. Inserta una notificación `target='staff'` (solo visible
+ * para admin/staff según RLS `notifications_select_all_or_admin`).
+ * `sent_by` es NOT NULL, así que se resuelve el primer admin (role_id=1).
+ * Nunca lanza: cualquier fallo solo se loguea (la alerta es best-effort).
+ */
+export async function notifyPaymentWithoutMembership(
+  supabase: SupabaseClient,
+  payment: { id: string; user_id: string; concept?: string | null },
+  error: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: admin } = await supabase
+      .from("profiles")
       .select("id")
-      .single();
+      .eq("role_id", 1)
+      .limit(1)
+      .maybeSingle();
 
-    if (error) {
-      console.error(HELPERS_LOG, "Failed to create enrollment:", error);
-      return { success: false, error: "Error al crear inscripción" };
+    if (!admin) {
+      console.error(HELPERS_LOG, "No admin found to notify for payment:", payment.id);
+      return { success: false, error: "Sin admin para notificar" };
     }
 
-    console.log(HELPERS_LOG, "Enrollment created:", {
-      enrollmentId: enrollment.id,
-      startDate,
-      endDate,
-    });
+    const { error: insertError } = await supabase
+      .from("notifications")
+      .insert({
+        type: "sistema",
+        subject: "Pago pagado sin membresía",
+        content: JSON.stringify({
+          payment_id: payment.id,
+          user_id: payment.user_id,
+          concept: payment.concept || null,
+          error,
+        }),
+        target: "staff",
+        sent_by: admin.id,
+        sent_at: new Date().toISOString(),
+      });
 
-    return { success: true, enrollmentId: enrollment.id };
+    if (insertError) {
+      console.error(HELPERS_LOG, "Failed to insert notification:", insertError);
+      return { success: false, error: "No se pudo insertar notificación" };
+    }
+
+    console.log(HELPERS_LOG, "Notified admin about payment without membership:", payment.id);
+    return { success: true };
+  } catch (err) {
+    console.error(HELPERS_LOG, "Notification insert threw:", err);
+    return { success: false, error: String(err) };
   }
 }
 

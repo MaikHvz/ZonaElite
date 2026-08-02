@@ -14,6 +14,7 @@ const sidebarLinks = [
   { href: "/admin/usuarios", label: "Usuarios", icon: "group" },
   { href: "/admin/membresias", label: "Membresías", icon: "card_membership" },
   { href: "/admin/inscripciones", label: "Inscripciones", icon: "badge" },
+  { href: "/admin/deudas", label: "Deudas", icon: "account_balance_wallet" },
   { href: "/admin/ventas", label: "Ventas", icon: "receipt_long" },
   { href: "/admin/blog", label: "Blog", icon: "article" },
   { href: "/admin/notificaciones", label: "Notificaciones", icon: "notifications" },

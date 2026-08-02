@@ -3,7 +3,12 @@ import {
   verifyFlowPayment,
   FLOW_LOG_PREFIX,
 } from "@/lib/flow";
-import { confirmAndCreateMembership, extendEnrollment } from "@/lib/flow-helpers";
+import {
+  confirmAndCreateMembership,
+  extendEnrollment,
+  isVerificationOrderMatch,
+  notifyPaymentWithoutMembership,
+} from "@/lib/flow-helpers";
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +102,15 @@ async function processInBackground(token: string) {
     return;
   }
 
+  if (!isVerificationOrderMatch(payment.commerce_order, verification.commerceOrder)) {
+    console.error(L, "commerceOrder mismatch — descartando callback:", {
+      flowOrder: verification.commerceOrder,
+      paymentOrder: payment.commerce_order,
+      token,
+    });
+    return;
+  }
+
   try {
     await supabase
       .from("payments")
@@ -118,9 +132,11 @@ async function processInBackground(token: string) {
       const result = await confirmAndCreateMembership(supabase, payment.id, payment.user_id);
       if (!result.success) {
         console.error(L, "Membership creation failed:", result.error);
+        await notifyPaymentWithoutMembership(supabase, payment, result.error || "Error al crear membresía");
       }
     } catch (err) {
       console.error(L, "Membership creation threw:", err);
+      await notifyPaymentWithoutMembership(supabase, payment, String(err));
     }
   }
 

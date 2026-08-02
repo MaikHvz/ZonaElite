@@ -2,6 +2,8 @@
 
 > **Lee este archivo primero.** Contiene todo lo necesario para entender el proyecto sin revisar código fuente.
 
+> **⚠️ Auditoría activa de bugs:** `contexto/informe-bugs.md` (estado de 15 bugs) y plan en `contexto/requisitos/plan-fixes-produccion.md` (10 fases). Actualizar ambos al corregir cada bug.
+
 ---
 
 ## 1. Qué es
@@ -459,7 +461,8 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 13. **`membership_plans.category`** = `'adulto'|'nino'`, **`dependents.category`** = `'nino'|'adulto'` (orden invertido).
 14. **`beneficiaries`** no tiene columna `category` — el category viene del `dependent` o se asume `'adulto'`.
 15. **Spanish** en todo el contenido visible.
-16. **Zonas Horarias**: NUNCA usar `new Date().toISOString().split("T")[0]` para calcular "hoy", ya que usa UTC y genera un desfase después de las 20:00 hora Chile. SIEMPRE importar y usar `getChileToday()` y `addDaysChile()` desde `src/lib/dates.ts`.
+16. **Zonas Horarias**: NUNCA usar `new Date().toISOString().split("T")[0]` para calcular "hoy", ya que usa UTC y genera un desfase después de las 20:00 hora Chile. SIEMPRE importar y usar `getChileToday()` y `addDaysChile()` desde `src/lib/dates.ts`. Para límites de mes/trimestre usar los helpers Chile-aware de `dates.ts` (`chileMonthStartDate()`, `chileMonthEndDate()`, `chileQuarterStartDate()`, `chileQuarterEndDate()`, etc.) y convertir a instantes UTC con `chileDateToUtc()` cuando se comparen columnas TIMESTAMPTZ. El scan estático de `scripts/test-flows.mjs` falla (exit 1) si reaparecen los patrones `toISOString().split("T")[0]` o `new Date(y, m, 1).toISOString()`.
+17. **Suite de pruebas**: `scripts/test-flows.mjs` (Node 24+, sin deps) cubre zona horaria Chile, firma HMAC de Flow, contratos de esquema/RLS y ciclo de vida de inscripción. Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`.
 17. **Guía de trabajo obligatoria**: Antes de implementar CUALQUIER nueva funcionalidad, leer y ejecutar el workflow definido en `documentacion/guia-de-trabajo.md`. Las 4 fases son obligatorias: planificación → análisis de impacto → implementación → documentación post-implementación (incluye actualizar `squema-sql-actualizado.sql`).
 
 ---

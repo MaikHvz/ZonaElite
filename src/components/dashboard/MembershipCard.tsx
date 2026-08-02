@@ -2,25 +2,25 @@
 
 import { useEffect, useState } from "react";
 import StatusBadge from "@/components/admin/StatusBadge";
-import type { MembershipData, TokenInfo } from "@/lib/supabase/dashboard";
-import { getRemainingTokens } from "@/lib/supabase/dashboard";
+import { getChileToday } from "@/lib/dates";
+import {
+  effectiveMembershipStatus,
+  daysRemaining,
+} from "@/lib/membership-status";
+import type { MembershipData, TokenInfo, PendingDebt } from "@/lib/supabase/dashboard";
+import { getRemainingTokens, getPendingDebts } from "@/lib/supabase/dashboard";
 
-function getProgress(start: string, end: string) {
-  const s = new Date(start).getTime();
-  const e = new Date(end).getTime();
-  const now = Date.now();
+function getProgress(start: string, end: string, today: string) {
+  const s = new Date(start + "T12:00:00").getTime();
+  const e = new Date(end + "T12:00:00").getTime();
+  const now = new Date(today + "T12:00:00").getTime();
   if (now >= e) return 100;
   if (now <= s) return 0;
   return Math.round(((now - s) / (e - s)) * 100);
 }
 
-function getDaysRemaining(end: string) {
-  const diff = new Date(end).getTime() - Date.now();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-}
-
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("es-CL", {
+  return new Date(d + "T12:00:00").toLocaleDateString("es-CL", {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -32,23 +32,31 @@ export default function MembershipCard({
 }: {
   membership: MembershipData;
 }) {
-  const progress = getProgress(membership.start_date, membership.end_date);
-  const daysRemaining = getDaysRemaining(membership.end_date);
-  const isExpired = membership.status === "vencida";
-  const isWarning = daysRemaining <= 7 && membership.status === "activa";
+  const today = getChileToday();
+  const effectiveStatus = effectiveMembershipStatus(
+    membership.status,
+    membership.end_date,
+    today
+  );
+  const progress = getProgress(membership.start_date, membership.end_date, today);
+  const daysLeft = daysRemaining(membership.end_date, today);
+  const isExpired = effectiveStatus === "vencida";
+  const isWarning = effectiveStatus === "activa" && daysLeft <= 7;
   const beneficiaryName = membership.beneficiary?.dependent
     ? membership.beneficiary.dependent.full_name
     : null;
 
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
+  const [pendingDebts, setPendingDebts] = useState<PendingDebt[]>([]);
 
   useEffect(() => {
-    if (membership.status === "activa") {
+    if (effectiveStatus === "activa") {
       getRemainingTokens(membership.beneficiary_id, membership.id).then((info) => {
         setTokenInfo(info);
       });
+      getPendingDebts(membership.beneficiary_id).then(setPendingDebts);
     }
-  }, [membership.beneficiary_id, membership.id, membership.status]);
+  }, [membership.beneficiary_id, membership.id, effectiveStatus]);
 
   const bgGradient = isExpired
     ? "from-red-950/20 to-transparent"
@@ -108,7 +116,7 @@ export default function MembershipCard({
       </div>
 
       {/* Clases disponibles — siempre visible en membresías activas */}
-      {membership.status === "activa" && (
+      {effectiveStatus === "activa" && (
         <div className="mb-4 p-3 bg-surface-container-lowest/50 rounded-xl border border-on-surface/5">
           <div className="flex items-center gap-2 mb-2">
             <span className="material-symbols-outlined text-primary text-[16px]">confirmation_number</span>
@@ -170,7 +178,9 @@ export default function MembershipCard({
                   </span>
                   {tokenInfo.remaining !== null && tokenInfo.remaining <= 0 && (
                     <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-red-400">
-                      {tokenInfo.remaining < 0 ? `Deuda: ${Math.abs(tokenInfo.remaining)}` : "Agotadas"}
+                      {pendingDebts.length > 0
+                        ? `Deuda: ${pendingDebts.length} ${pendingDebts.length === 1 ? "clase" : "clases"}`
+                        : "Agotadas"}
                     </span>
                   )}
                 </div>
@@ -187,6 +197,43 @@ export default function MembershipCard({
         </div>
       )}
 
+      {/* Deudas pendientes — siempre visible si existen */}
+      {pendingDebts.length > 0 && (
+        <div className="mb-4 p-3 bg-red-500/5 rounded-xl border border-red-500/20">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="material-symbols-outlined text-red-400 text-[16px]">warning</span>
+            <span className="font-[family-name:var(--font-headline-md)] text-[12px] uppercase tracking-wider text-red-400">
+              Clases en deuda ({pendingDebts.length})
+            </span>
+          </div>
+          <ul className="space-y-1">
+            {pendingDebts.slice(0, 3).map((d) => (
+              <li key={d.id} className="flex items-center justify-between">
+                <span className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
+                  {d.session?.schedule?.discipline?.name || "Clase"}
+                </span>
+                <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase text-on-surface-variant">
+                  {d.session?.session_date
+                    ? new Date(d.session.session_date + "T12:00:00").toLocaleDateString("es-CL", {
+                        day: "numeric",
+                        month: "short",
+                      })
+                    : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {pendingDebts.length > 3 && (
+            <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant mt-1">
+              y {pendingDebts.length - 3} más
+            </p>
+          )}
+          <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant mt-2">
+            El staff de la academia puede gestionar estas clases desde el panel de administración.
+          </p>
+        </div>
+      )}
+
       <div className="space-y-2 mb-4">
         <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
           <span className="text-on-surface-variant">Inicio</span>
@@ -196,15 +243,15 @@ export default function MembershipCard({
           <span className="text-on-surface-variant">Vence</span>
           <span className="text-on-surface">{formatDate(membership.end_date)}</span>
         </div>
-        {membership.status === "activa" && (
+        {effectiveStatus === "activa" && (
           <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
             <span className="text-on-surface-variant">Días restantes</span>
             <span
               className={`font-medium ${
-                daysRemaining <= 7 ? "text-yellow-400" : "text-on-surface"
+                daysLeft <= 7 ? "text-yellow-400" : "text-on-surface"
               }`}
             >
-              {daysRemaining} días
+              {daysLeft} días
             </span>
           </div>
         )}

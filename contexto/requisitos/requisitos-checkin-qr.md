@@ -28,7 +28,7 @@ Permitir que un alumno (o su tutor, en el caso de cargas/hijos) se marque **pres
 
 ## 4. Qué NO hace (fuera de alcance)
 
-1. **No valida ni exige matrícula o membresía vigente** para permitir el check-in — solo lo informa. No es un "control de acceso", es un registro de asistencia.
+1. **Valida membresía y matrícula vigente** para permitir el check-in: sin membresía activa, vencida o sin matrícula activa, el check-in se **bloquea** (`sin_membresia` / `atrasado` / `sin_matricula`) y se redirige a comprar/renovar. Actualizado por las correcciones 2026-08 (Fase 10).
 2. **No respeta ni hace cumplir el límite de cupos (`capacity`)** — un walk-in siempre puede marcarse presente aunque la clase figure "llena" para quienes se inscriben con anticipación desde `/horarios`.
 3. **No reemplaza el flujo de inscripción anticipada** (`/horarios` + `EnrollModal`) — sigue existiendo tal como está, con sus propias reglas de cupo y elegibilidad. El QR es solo para el día de la clase.
 4. **No impide que alguien marque presente a un beneficiario que no le pertenece** más allá de la regla de propiedad ya existente (`owns_beneficiary`) — es decir, un usuario solo puede marcarse a sí mismo o a sus propias cargas, nunca a beneficiarios de otra familia.
@@ -43,7 +43,8 @@ Permitir que un alumno (o su tutor, en el caso de cargas/hijos) se marque **pres
 |---|---|
 | Beneficiario sin inscripción previa a esa clase | Se agrega igual a la lista de esa sesión y queda `presente` |
 | Clase llena (cupos = 0 o negativos) | El check-in se permite de todas formas |
-| Beneficiario sin membresía o matrícula vigente | Se marca `presente` igual, mostrando aviso "Atrasado" |
+| Beneficiario sin membresía o matrícula vigente | Check-in **bloqueado** con mensaje específico (`sin_membresia` / `atrasado` / `sin_matricula`) |
+| Beneficiario con membresía y matrícula vigentes pero sin tokens | Se marca `presente` igual y se **materializa una deuda de 1 clase** (tabla `debts`) |
 | Beneficiario ya marcado presente (por QR o admin) | Un nuevo escaneo no duplica el registro |
 | Usuario marca a una carga que no es suya | Bloqueado (regla de propiedad ya existente en el sistema) |
 | Staff necesita corregir asistencia | Se sigue haciendo desde `/admin/asistencia`, sin cambios |

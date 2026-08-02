@@ -1,4 +1,4 @@
--- =====================================================================
+﻿-- =====================================================================
 -- SCHEMA COMPLETO DE LA BASE DE DATOS: ZonaElite
 -- Proyecto: sfkkfcticgqdqvzthimz
 -- Generado automaticamente desde PostgREST OpenAPI + contexto SQL
@@ -11,7 +11,7 @@
 -- Los valores de texto se usan en lugar de ENUMs nativos:
 --   dependents.category: 'nino' | 'adulto'
 -- membership_plans.category: 'adulto' | 'nino'
--- membership_plans.tokens: NULL = ilimitado, número = clases incluidas
+-- membership_plans.tokens: NULL = ilimitado, nÃºmero = clases incluidas
 --   schedules.category: 'ninos' | 'adultos' | 'ambos'
 --   attendance.status: 'presente' | 'ausente' | 'justificado'
 --   blog_posts.status: 'borrador' | 'publicado' | 'programado'
@@ -53,7 +53,7 @@ AS $$
   );
 $$;
 
--- Verifica si el usuario es dueño de un beneficiario
+-- Verifica si el usuario es dueÃ±o de un beneficiario
 CREATE OR REPLACE FUNCTION public.owns_beneficiary(b_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -69,6 +69,16 @@ AS $$
       )
     )
   );
+$$;
+
+-- Fecha de hoy en America/Santiago (para policies RLS y defaults
+-- que dependen del dÃ­a local; current_date serÃ­a UTC en el servidor).
+CREATE OR REPLACE FUNCTION public.chile_today()
+RETURNS date
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT (timezone('America/Santiago', now()))::date;
 $$;
 
 -- Trigger function: auto-create profile on user signup
@@ -228,7 +238,7 @@ CREATE TABLE IF NOT EXISTS public.membership_plans (
   duration_days integer NOT NULL,
   category text NOT NULL,
   benefits jsonb,
-  tokens integer, -- NULL = ilimitado, número = clases incluidas
+  tokens integer, -- NULL = ilimitado, nÃºmero = clases incluidas
   active boolean DEFAULT true NOT NULL,
   created_at timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT membership_plans_pkey PRIMARY KEY (id)
@@ -349,6 +359,16 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   CONSTRAINT notifications_pkey PRIMARY KEY (id)
 );
 
+CREATE TABLE IF NOT EXISTS public.user_notifications (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  user_id uuid NOT NULL,
+  title text NOT NULL,
+  content text NOT NULL,
+  read boolean DEFAULT false NOT NULL,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT user_notifications_pkey PRIMARY KEY (id)
+);
+
 CREATE TABLE IF NOT EXISTS public.audit_logs (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   user_id uuid,
@@ -414,9 +434,9 @@ ALTER TABLE public.class_enrollments
   ADD CONSTRAINT class_enrollments_beneficiary_session_key
   UNIQUE (beneficiary_id, session_id);
 
-ALTER TABLE public.class_enrollments
-  ADD CONSTRAINT class_enrollments_beneficiary_schedule_key
-  UNIQUE (beneficiary_id, schedule_id);
+-- B-014: el UNIQUE legacy (beneficiary_id, schedule_id) fue eliminado
+-- en la migración 006 (el modelo per-session es la fuente de verdad).
+-- El backfill mapeó las filas legacy schedule_id -> session_id.
 
 -- =====================================================
 -- CHECK CONSTRAINTS
@@ -475,6 +495,7 @@ CREATE INDEX IF NOT EXISTS idx_beneficiaries_dependent_id ON public.beneficiarie
 CREATE INDEX IF NOT EXISTS idx_memberships_beneficiary_id ON public.memberships(beneficiary_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_plan_id ON public.memberships(plan_id);
 CREATE INDEX IF NOT EXISTS idx_memberships_status ON public.memberships(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_memberships_one_active ON public.memberships(beneficiary_id) WHERE status = 'activa';
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON public.payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON public.payments(status);
 CREATE INDEX IF NOT EXISTS idx_payments_flow_token ON public.payments(flow_token);
@@ -568,14 +589,13 @@ CREATE POLICY "class_enrollments_insert_admin_or_self" ON public.class_enrollmen
   public.is_admin()
   OR (
     public.owns_beneficiary(beneficiary_id)
-    AND EXISTS (SELECT 1 FROM public.academy_enrollments ae WHERE ae.beneficiary_id = class_enrollments.beneficiary_id AND ae.status = 'activa' AND ae.end_date >= current_date)
-    AND EXISTS (SELECT 1 FROM public.memberships m WHERE m.beneficiary_id = class_enrollments.beneficiary_id AND m.status = 'activa' AND m.end_date >= current_date)
+    AND EXISTS (SELECT 1 FROM public.academy_enrollments ae WHERE ae.beneficiary_id = class_enrollments.beneficiary_id AND ae.status = 'activa' AND ae.end_date >= public.chile_today())
+    AND EXISTS (SELECT 1 FROM public.memberships m WHERE m.beneficiary_id = class_enrollments.beneficiary_id AND m.status = 'activa' AND m.end_date >= public.chile_today())
   )
 );
-CREATE POLICY "class_enrollments_insert_qr_walkin" ON public.class_enrollments FOR INSERT WITH CHECK (
-  auth.uid() IS NOT NULL
-  AND public.owns_beneficiary(beneficiary_id)
-  AND source = 'qr'
+-- B-013: walk-in QR restringido a admin/staff (el flujo legítimo pasa por /api/checkin con service role)
+CREATE POLICY "class_enrollments_insert_qr_admin_staff" ON public.class_enrollments FOR INSERT WITH CHECK (
+  public.is_admin() OR public.is_staff()
 );
 CREATE POLICY "class_enrollments_delete_admin" ON public.class_enrollments FOR DELETE USING (public.is_admin());
 ALTER TABLE public.dependents ENABLE ROW LEVEL SECURITY;
@@ -588,8 +608,9 @@ CREATE POLICY "beneficiaries_select_own_or_admin" ON public.beneficiaries FOR SE
 ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "attendance_select_own_or_admin" ON public.attendance FOR SELECT USING (public.owns_beneficiary(beneficiary_id) OR public.is_admin());
 CREATE POLICY "attendance_insert_admin" ON public.attendance FOR INSERT WITH CHECK (public.is_admin());
-CREATE POLICY "attendance_insert_own_beneficiary" ON public.attendance FOR INSERT WITH CHECK (
-  auth.uid() IS NOT NULL AND public.owns_beneficiary(beneficiary_id)
+-- B-013: auto-asistencia restringida a admin/staff (el check-in QR pasa por /api/checkin con service role)
+CREATE POLICY "attendance_insert_admin_staff" ON public.attendance FOR INSERT WITH CHECK (
+  public.is_admin() OR public.is_staff()
 );
 CREATE POLICY "attendance_update_admin" ON public.attendance FOR UPDATE USING (public.is_admin());
 ALTER TABLE public.membership_plans ENABLE ROW LEVEL SECURITY;
@@ -680,7 +701,36 @@ ALTER TABLE public.academy_enrollments ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "admin_all_academy_enrollments" ON public.academy_enrollments FOR ALL USING (public.is_admin());
 CREATE POLICY "staff_read_academy_enrollments" ON public.academy_enrollments FOR SELECT USING (public.is_staff());
 CREATE POLICY "user_read_own_enrollments" ON public.academy_enrollments FOR SELECT USING (public.owns_beneficiary(beneficiary_id));
-CREATE POLICY "user_insert_enrollment_flow" ON public.academy_enrollments FOR INSERT WITH CHECK (public.owns_beneficiary(beneficiary_id));
+-- B-013: auto-matrícula restringida a admin/staff (el pago Flow crea la inscripción server-side)
+CREATE POLICY "academy_enrollments_insert_admin_staff" ON public.academy_enrollments FOR INSERT WITH CHECK (
+  public.is_admin() OR public.is_staff()
+);
+
+-- =====================================================
+-- TABLA: debts (deuda materializada por check-in sin tokens, Fase 10)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS public.debts (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  beneficiary_id uuid NOT NULL REFERENCES public.beneficiaries(id) ON DELETE CASCADE,
+  membership_id uuid REFERENCES public.memberships(id),
+  session_id uuid REFERENCES public.class_sessions(id),
+  class_enrollment_id uuid REFERENCES public.class_enrollments(id),
+  amount integer NOT NULL DEFAULT 1 CHECK (amount > 0),
+  status text NOT NULL DEFAULT 'pendiente' CHECK (status IN ('pendiente','pagada','condonada')),
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  resolved_at timestamptz,
+  resolved_by uuid REFERENCES public.profiles(id),
+  CONSTRAINT debts_pkey PRIMARY KEY (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_debts_beneficiary_status ON public.debts(beneficiary_id, status);
+CREATE INDEX IF NOT EXISTS idx_debts_session ON public.debts(session_id);
+
+ALTER TABLE public.debts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "debts_admin_all" ON public.debts FOR ALL USING (public.is_admin());
+CREATE POLICY "debts_staff_read" ON public.debts FOR SELECT USING (public.is_staff());
+CREATE POLICY "debts_user_read_own" ON public.debts FOR SELECT USING (public.owns_beneficiary(beneficiary_id));
 
 -- =====================================================
 -- SEED DATA: enrollment plans
@@ -688,7 +738,7 @@ CREATE POLICY "user_insert_enrollment_flow" ON public.academy_enrollments FOR IN
 INSERT INTO public.enrollment_plans (name, price, duration_days, active, sort_order)
 VALUES
   ('6 Meses', 15000, 180, true, 1),
-  ('1 Año', 25000, 365, true, 2)
+  ('1 AÃ±o', 25000, 365, true, 2)
 ON CONFLICT DO NOTHING;
 
 
@@ -697,12 +747,12 @@ ON CONFLICT DO NOTHING;
 -- ==========================================
 
 -- =====================================================================
--- MIGRACIÓN: Sistema de Inscripciones (Matrícula) - ZonaElite
+-- MIGRACIÃ“N: Sistema de Inscripciones (MatrÃ­cula) - ZonaElite
 -- Ejecutar en Supabase SQL Editor
 -- =====================================================================
 
 -- =====================================================
--- TABLA: enrollment_plans (planes de inscripción)
+-- TABLA: enrollment_plans (planes de inscripciÃ³n)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS public.enrollment_plans (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -770,9 +820,9 @@ CREATE POLICY "staff_read_academy_enrollments" ON public.academy_enrollments
 CREATE POLICY "user_read_own_enrollments" ON public.academy_enrollments
   FOR SELECT USING (public.owns_beneficiary(beneficiary_id));
 
--- Usuarios: pueden insertar (para pagos Flow directos)
-CREATE POLICY "user_insert_enrollment_flow" ON public.academy_enrollments
-  FOR INSERT WITH CHECK (public.owns_beneficiary(beneficiary_id));
+-- B-013: auto-matrícula restringida a admin/staff (el pago Flow crea la inscripción server-side)
+CREATE POLICY "academy_enrollments_insert_admin_staff" ON public.academy_enrollments
+  FOR INSERT WITH CHECK (public.is_admin() OR public.is_staff());
 
 -- =====================================================
 -- SEED DATA: 2 planes por defecto
@@ -780,7 +830,7 @@ CREATE POLICY "user_insert_enrollment_flow" ON public.academy_enrollments
 INSERT INTO public.enrollment_plans (name, price, duration_days, active, sort_order)
 VALUES
   ('6 Meses', 15000, 180, true, 1),
-  ('1 Año', 25000, 365, true, 2)
+  ('1 AÃ±o', 25000, 365, true, 2)
 ON CONFLICT DO NOTHING;
 
 
@@ -799,7 +849,7 @@ ALTER TABLE public.payments
 -- Backfill from concept field for any existing payments that included enrollment
 UPDATE public.payments
 SET include_enrollment = true
-WHERE concept ILIKE 'Inscripción%'
+WHERE concept ILIKE 'InscripciÃ³n%'
   AND include_enrollment = false;
 
 -- Now backfill enrollment_plan_id for those payments by matching plan name from concept
@@ -816,21 +866,21 @@ WHERE p.include_enrollment = true
 -- ==========================================
 
 -- =====================================================================
--- MIGRACIÓN: Sistema de Tokens por Membresía
+-- MIGRACIÃ“N: Sistema de Tokens por MembresÃ­a
 -- Fecha: 2026-07-27
--- Descripción: Agrega campo tokens a membership_plans, índices y funciones
+-- DescripciÃ³n: Agrega campo tokens a membership_plans, Ã­ndices y funciones
 -- =====================================================================
 
 -- 1. Agregar columna tokens a membership_plans
--- NULL = ilimitado (sin restricción de clases)
--- Número entero = cantidad de clases incluidas en el periodo de vigencia
+-- NULL = ilimitado (sin restricciÃ³n de clases)
+-- NÃºmero entero = cantidad de clases incluidas en el periodo de vigencia
 ALTER TABLE membership_plans 
 ADD COLUMN IF NOT EXISTS tokens INTEGER NULL;
 
 COMMENT ON COLUMN membership_plans.tokens IS 
-'Número de clases incluidas en el plan. NULL = ilimitado (sin restricción).';
+'NÃºmero de clases incluidas en el plan. NULL = ilimitado (sin restricciÃ³n).';
 
--- 2. Índices para rendimiento del cálculo de tokens
+-- 2. Ãndices para rendimiento del cÃ¡lculo de tokens
 CREATE INDEX IF NOT EXISTS idx_class_enrollments_beneficiary 
 ON class_enrollments(beneficiary_id);
 
@@ -843,7 +893,7 @@ ON class_enrollments(beneficiary_id, session_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_beneficiary_session_status 
 ON attendance(beneficiary_id, session_id, status);
 
--- 3. Función para calcular tokens restantes
+-- 3. FunciÃ³n para calcular tokens restantes
 CREATE OR REPLACE FUNCTION public.get_remaining_tokens(
   p_beneficiary_id UUID,
   p_membership_id UUID
@@ -867,7 +917,7 @@ DECLARE
   v_consumed BIGINT;
   v_justified BIGINT;
 BEGIN
-  -- Obtener información de la membresía y el plan
+  -- Obtener informaciÃ³n de la membresÃ­a y el plan
   SELECT 
     mp.tokens,
     m.start_date,
@@ -884,7 +934,7 @@ BEGIN
     AND m.beneficiary_id = p_beneficiary_id
     AND m.status = 'activa';
   
-  -- Si no se encuentra la membresía, retornar NULL
+  -- Si no se encuentra la membresÃ­a, retornar NULL
   IF v_plan_tokens IS NULL THEN
     remaining := NULL;
     total := NULL;
@@ -896,8 +946,10 @@ BEGIN
   END IF;
   
   -- Contar inscripciones en el periodo (consumen token)
-  -- Validamos ce.enrolled_at >= v_created_at para que clases reservadas
-  -- el mismo día pero antes de comprar la membresía no descuenten tokens.
+  -- B-010: la reserva pertenece a esta membresía si se hizo dentro
+  -- de su ventana de vigencia [created_at, end_date]. El límite
+  -- superior evita que reservas hechas con otra membresía
+  -- (o vencida la actual) cuenten contra esta.
   SELECT COUNT(*)
   INTO v_consumed
   FROM class_enrollments ce
@@ -905,11 +957,12 @@ BEGIN
   WHERE ce.beneficiary_id = p_beneficiary_id
     AND cs.session_date >= v_start_date
     AND cs.session_date <= v_end_date
-    AND ce.enrolled_at >= v_created_at;
+    AND ce.enrolled_at >= v_created_at
+    AND ce.enrolled_at < (v_end_date + INTERVAL '1 day');
   
   -- Contar justificaciones en el periodo (devuelven token)
-  -- Unimos con class_enrollments para verificar que la justificación
-  -- pertenece a una inscripción de esta misma membresía.
+  -- Unimos con class_enrollments para verificar que la justificaciÃ³n
+  -- pertenece a una inscripciÃ³n de esta misma membresÃ­a.
   SELECT COUNT(*)
   INTO v_justified
   FROM attendance a
@@ -919,7 +972,8 @@ BEGIN
     AND a.status = 'justificado'
     AND cs.session_date >= v_start_date
     AND cs.session_date <= v_end_date
-    AND ce.enrolled_at >= v_created_at;
+    AND ce.enrolled_at >= v_created_at
+    AND ce.enrolled_at < (v_end_date + INTERVAL '1 day');
   
   -- Calcular tokens restantes
   -- remaining = total - (inscripciones - justificaciones)
@@ -935,7 +989,7 @@ BEGIN
 END;
 $$;
 
--- 4. Función para obtener detalle de deuda
+-- 4. FunciÃ³n para obtener detalle de deuda
 CREATE OR REPLACE FUNCTION public.get_enrollment_debt(
   p_beneficiary_id UUID,
   p_membership_id UUID
@@ -958,7 +1012,7 @@ DECLARE
   v_token_info RECORD;
   v_excess_count BIGINT;
 BEGIN
-  -- Obtener información de tokens
+  -- Obtener informaciÃ³n de tokens
   SELECT * INTO v_token_info
   FROM public.get_remaining_tokens(p_beneficiary_id, p_membership_id);
   
@@ -967,10 +1021,10 @@ BEGIN
     RETURN;
   END IF;
   
-  -- Calcular cuántas inscripciones exceden los tokens
+  -- Calcular cuÃ¡ntas inscripciones exceden los tokens
   v_excess_count := ABS(v_token_info.remaining);
   
-  -- Retornar las últimas N inscripciones que generan la deuda
+  -- Retornar las Ãºltimas N inscripciones que generan la deuda
   RETURN QUERY
   SELECT 
     ce.id as enrollment_id,
@@ -1002,197 +1056,10 @@ BEGIN
 END;
 $$;
 
--- 5. Comentarios
--- =====================================================================
--- MIGRACIÓN: Sistema de Tokens por Membresía
--- Fecha: 2026-07-27
--- Descripción: Agrega campo tokens a membership_plans, índices y funciones
--- =====================================================================
-
--- 1. Agregar columna tokens a membership_plans
--- NULL = ilimitado (sin restricción de clases)
--- Número entero = cantidad de clases incluidas en el periodo de vigencia
-ALTER TABLE membership_plans 
-ADD COLUMN IF NOT EXISTS tokens INTEGER NULL;
-
-COMMENT ON COLUMN membership_plans.tokens IS 
-'Número de clases incluidas en el plan. NULL = ilimitado (sin restricción).';
-
--- 2. Índices para rendimiento del cálculo de tokens
-CREATE INDEX IF NOT EXISTS idx_class_enrollments_beneficiary 
-ON class_enrollments(beneficiary_id);
-
-CREATE INDEX IF NOT EXISTS idx_attendance_beneficiary_status 
-ON attendance(beneficiary_id, status);
-
-CREATE INDEX IF NOT EXISTS idx_class_enrollments_beneficiary_session 
-ON class_enrollments(beneficiary_id, session_id);
-
-CREATE INDEX IF NOT EXISTS idx_attendance_beneficiary_session_status 
-ON attendance(beneficiary_id, session_id, status);
-
--- 3. Función para calcular tokens restantes
-CREATE OR REPLACE FUNCTION public.get_remaining_tokens(
-  p_beneficiary_id UUID,
-  p_membership_id UUID
-)
-RETURNS TABLE (
-  remaining INTEGER,
-  total INTEGER,
-  consumed INTEGER,
-  justified INTEGER,
-  is_unlimited BOOLEAN
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-STABLE
-AS $$
-DECLARE
-  v_plan_tokens INTEGER;
-  v_start_date DATE;
-  v_end_date DATE;
-  v_created_at TIMESTAMPTZ;
-  v_consumed BIGINT;
-  v_justified BIGINT;
-BEGIN
-  -- Obtener información de la membresía y el plan
-  SELECT 
-    mp.tokens,
-    m.start_date,
-    m.end_date,
-    m.created_at
-  INTO 
-    v_plan_tokens,
-    v_start_date,
-    v_end_date,
-    v_created_at
-  FROM memberships m
-  JOIN membership_plans mp ON m.plan_id = mp.id
-  WHERE m.id = p_membership_id
-    AND m.beneficiary_id = p_beneficiary_id
-    AND m.status = 'activa';
-  
-  -- Si no se encuentra la membresía, retornar NULL
-  IF v_plan_tokens IS NULL THEN
-    remaining := NULL;
-    total := NULL;
-    consumed := 0;
-    justified := 0;
-    is_unlimited := TRUE;
-    RETURN NEXT;
-    RETURN;
-  END IF;
-  
-  -- Contar inscripciones en el periodo (consumen token)
-  -- Validamos ce.enrolled_at >= v_created_at para que clases reservadas
-  -- el mismo día pero antes de comprar la membresía no descuenten tokens.
-  SELECT COUNT(*)
-  INTO v_consumed
-  FROM class_enrollments ce
-  JOIN class_sessions cs ON ce.session_id = cs.id
-  WHERE ce.beneficiary_id = p_beneficiary_id
-    AND cs.session_date >= v_start_date
-    AND cs.session_date <= v_end_date
-    AND ce.enrolled_at >= v_created_at;
-  
-  -- Contar justificaciones en el periodo (devuelven token)
-  -- Unimos con class_enrollments para verificar que la justificación
-  -- pertenece a una inscripción de esta misma membresía.
-  SELECT COUNT(*)
-  INTO v_justified
-  FROM attendance a
-  JOIN class_sessions cs ON a.session_id = cs.id
-  JOIN class_enrollments ce ON ce.session_id = cs.id AND ce.beneficiary_id = a.beneficiary_id
-  WHERE a.beneficiary_id = p_beneficiary_id
-    AND a.status = 'justificado'
-    AND cs.session_date >= v_start_date
-    AND cs.session_date <= v_end_date
-    AND ce.enrolled_at >= v_created_at;
-  
-  -- Calcular tokens restantes
-  -- remaining = total - (inscripciones - justificaciones)
-  remaining := v_plan_tokens - (v_consumed - v_justified);
-  
-  -- Si remaining es negativo, es deuda (se retorna tal cual)
-  total := v_plan_tokens;
-  consumed := v_consumed;
-  justified := v_justified;
-  is_unlimited := FALSE;
-  
-  RETURN NEXT;
-END;
-$$;
-
--- 4. Función para obtener detalle de deuda
-CREATE OR REPLACE FUNCTION public.get_enrollment_debt(
-  p_beneficiary_id UUID,
-  p_membership_id UUID
-)
-RETURNS TABLE (
-  enrollment_id UUID,
-  session_date DATE,
-  discipline_name TEXT,
-  start_time TIME,
-  end_time TIME,
-  professor_name TEXT,
-  source TEXT,
-  enrolled_at TIMESTAMPTZ
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-STABLE
-AS $$
-DECLARE
-  v_token_info RECORD;
-  v_excess_count BIGINT;
-BEGIN
-  -- Obtener información de tokens
-  SELECT * INTO v_token_info
-  FROM public.get_remaining_tokens(p_beneficiary_id, p_membership_id);
-  
-  -- Si es ilimitado o tiene tokens, no hay deuda
-  IF v_token_info.is_unlimited OR v_token_info.remaining >= 0 THEN
-    RETURN;
-  END IF;
-  
-  -- Calcular cuántas inscripciones exceden los tokens
-  v_excess_count := ABS(v_token_info.remaining);
-  
-  -- Retornar las últimas N inscripciones que generan la deuda
-  RETURN QUERY
-  SELECT 
-    ce.id as enrollment_id,
-    cs.session_date,
-    d.name as discipline_name,
-    s.start_time,
-    s.end_time,
-    p.full_name as professor_name,
-    ce.source,
-    ce.enrolled_at
-  FROM class_enrollments ce
-  JOIN class_sessions cs ON ce.session_id = cs.id
-  JOIN schedules s ON cs.schedule_id = s.id
-  JOIN disciplines d ON s.discipline_id = d.id
-  JOIN profiles p ON s.professor_id = p.id
-  WHERE ce.beneficiary_id = p_beneficiary_id
-    AND cs.session_date >= (
-      SELECT m.start_date 
-      FROM memberships m 
-      WHERE m.id = p_membership_id
-    )
-    AND cs.session_date <= (
-      SELECT m.end_date 
-      FROM memberships m 
-      WHERE m.id = p_membership_id
-    )
-  ORDER BY cs.session_date DESC, ce.enrolled_at DESC
-  LIMIT v_excess_count;
-END;
-$$;
 
 -- 5. Comentarios
 COMMENT ON FUNCTION public.get_remaining_tokens(UUID, UUID) IS 
-'Retorna los tokens restantes para un beneficiario en una membresía específica.
+'Retorna los tokens restantes para un beneficiario en una membresÃ­a especÃ­fica.
 Si el plan es ilimitado (tokens = NULL), retorna remaining = NULL y is_unlimited = TRUE.
 Si remaining < 0, indica deuda (inscripciones exceden los tokens disponibles).';
 
@@ -1200,14 +1067,117 @@ COMMENT ON FUNCTION public.get_enrollment_debt(UUID, UUID) IS
 'Retorna el detalle de las inscripciones que generan deuda cuando los tokens se agotan.
 Solo retorna datos cuando remaining < 0.';
 
--- 6. Actualizaciones de Membresías (Módulos adicionales)
--- Migración: Agregar columna featured a membership_plans
+-- =====================================================
+-- RPC enroll_class (B-006): capacidad validada server-side
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION public.enroll_class(
+  p_session_id uuid,
+  p_beneficiary_ids uuid[]
+)
+RETURNS TABLE (
+  beneficiary_id uuid,
+  success boolean,
+  error_code text,
+  error_message text
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+STABLE
+AS $$
+DECLARE
+  v_capacity integer;
+  v_enrolled bigint;
+  v_session_date date;
+  v_schedule_id uuid;
+  v_is_admin boolean;
+  v_bid uuid;
+  v_membership_ok boolean;
+  v_enrollment_ok boolean;
+BEGIN
+  SELECT s.capacity, cs.session_date, cs.schedule_id
+    INTO v_capacity, v_session_date, v_schedule_id
+    FROM public.class_sessions cs
+    JOIN public.schedules s ON s.id = cs.schedule_id
+    WHERE cs.id = p_session_id;
+
+  IF v_schedule_id IS NULL THEN
+    RAISE EXCEPTION 'SesiÃ³n no encontrada' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF v_session_date < public.chile_today() THEN
+    RAISE EXCEPTION 'La sesiÃ³n ya pasÃ³' USING ERRCODE = 'P0001';
+  END IF;
+
+  v_is_admin := public.is_admin();
+
+  PERFORM 1 FROM public.class_sessions WHERE id = p_session_id FOR UPDATE;
+
+  SELECT count(*) INTO v_enrolled
+    FROM public.class_enrollments
+    WHERE session_id = p_session_id;
+
+  FOREACH v_bid IN ARRAY p_beneficiary_ids LOOP
+    IF EXISTS (
+      SELECT 1 FROM public.class_enrollments ce
+      WHERE ce.session_id = p_session_id AND ce.beneficiary_id = v_bid
+    ) THEN
+      RETURN QUERY SELECT v_bid, true, NULL, 'Ya inscrito';
+      CONTINUE;
+    END IF;
+
+    IF NOT (v_is_admin OR public.owns_beneficiary(v_bid)) THEN
+      RETURN QUERY SELECT v_bid, false, 'UNAUTHORIZED', 'No tienes acceso a este beneficiario';
+      CONTINUE;
+    END IF;
+
+    SELECT EXISTS (
+      SELECT 1 FROM public.memberships m
+      WHERE m.beneficiary_id = v_bid
+        AND m.status = 'activa'
+        AND m.end_date >= public.chile_today()
+    ) INTO v_membership_ok;
+    IF NOT v_membership_ok THEN
+      RETURN QUERY SELECT v_bid, false, 'NO_MEMBERSHIP', 'Sin membresÃ­a activa';
+      CONTINUE;
+    END IF;
+
+    SELECT EXISTS (
+      SELECT 1 FROM public.academy_enrollments ae
+      WHERE ae.beneficiary_id = v_bid
+        AND ae.status = 'activa'
+        AND ae.end_date >= public.chile_today()
+    ) INTO v_enrollment_ok;
+    IF NOT v_enrollment_ok THEN
+      RETURN QUERY SELECT v_bid, false, 'NO_ENROLLMENT', 'Sin inscripciÃ³n a la academia';
+      CONTINUE;
+    END IF;
+
+    IF v_enrolled >= v_capacity THEN
+      RETURN QUERY SELECT v_bid, false, 'CLASS_FULL', 'Clase llena';
+      CONTINUE;
+    END IF;
+
+    INSERT INTO public.class_enrollments (session_id, beneficiary_id, source)
+    VALUES (p_session_id, v_bid, 'horarios');
+
+    v_enrolled := v_enrolled + 1;
+    RETURN QUERY SELECT v_bid, true, NULL, 'Inscrito';
+  END LOOP;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.enroll_class(UUID, UUID[]) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.enroll_class(UUID, UUID[]) TO authenticated;
+
+-- 6. Actualizaciones de MembresÃ­as (MÃ³dulos adicionales)
+-- MigraciÃ³n: Agregar columna featured a membership_plans
 -- Solo 1 plan puede ser featured a la vez (enforced en app y base de datos con partial index)
 
 ALTER TABLE public.membership_plans
   ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT FALSE;
 
--- Asegurar que solo 1 sea featured usando un índice parcial único:
+-- Asegurar que solo 1 sea featured usando un Ã­ndice parcial Ãºnico:
 CREATE UNIQUE INDEX IF NOT EXISTS membership_plans_one_featured_idx
   ON public.membership_plans (featured)
   WHERE (featured = TRUE);

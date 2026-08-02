@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getChileToday, addDaysChile, chileDateToUtc } from "@/lib/dates";
 import {
   BarChart,
   Bar,
@@ -62,18 +63,17 @@ export default function AttendanceOverview() {
 
   useEffect(() => {
     const supabase = createClient();
-    const now = new Date();
-    const sixWeeksAgo = new Date(now.getTime() - 42 * 86400000);
+    const sixWeeksAgo = addDaysChile(getChileToday(), -42);
 
     Promise.all([
       supabase
         .from("attendance")
         .select("status, session:class_sessions(session_date, schedule:schedules(discipline:disciplines(name)))")
-        .gte("marked_at", sixWeeksAgo.toISOString()),
+        .gte("marked_at", chileDateToUtc(sixWeeksAgo)),
       supabase
         .from("class_sessions")
         .select("id, session_date")
-        .gte("session_date", sixWeeksAgo.toISOString().split("T")[0]),
+        .gte("session_date", sixWeeksAgo),
     ]).then(([attRes, sessRes]) => {
       const rows = (attRes.data || []) as unknown as Array<{
         status: string;
@@ -84,10 +84,9 @@ export default function AttendanceOverview() {
       }>;
 
       const allSessions = (sessRes.data || []) as Array<{ id: string; session_date: string }>;
-      const now2 = new Date();
-      const thirtyDaysAgo = new Date(now2.getTime() - 30 * 86400000);
+      const thirtyDaysAgo = addDaysChile(getChileToday(), -30);
       setTotalSessions(
-        allSessions.filter((s) => new Date(s.session_date) >= thirtyDaysAgo).length
+        allSessions.filter((s) => s.session_date >= thirtyDaysAgo).length
       );
 
       // Status breakdown
@@ -125,14 +124,15 @@ export default function AttendanceOverview() {
       );
 
       // Trend (6 weeks)
+      const now = new Date();
       const weekMap: Record<string, { present: number; absent: number; justified: number; total: number; date: string }> = {};
       for (let i = 5; i >= 0; i--) {
-        const ws = new Date(now2.getTime() - (i + 1) * 7 * 86400000);
+        const ws = new Date(now.getTime() - (i + 1) * 7 * 86400000);
         weekMap[`w${i}`] = { present: 0, absent: 0, justified: 0, total: 0, date: `${ws.getDate()}/${ws.getMonth() + 1}` };
       }
       rows.forEach((r) => {
         const d = new Date(r.session?.session_date || "");
-        const diff = Math.floor((now2.getTime() - d.getTime()) / (7 * 86400000));
+        const diff = Math.floor((now.getTime() - d.getTime()) / (7 * 86400000));
         const key = diff < 6 ? `w${5 - diff}` : null;
         if (key && weekMap[key]) {
           weekMap[key].total += 1;

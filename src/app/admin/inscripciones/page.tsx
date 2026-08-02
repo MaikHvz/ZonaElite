@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getChileToday, addDaysChile } from "@/lib/dates";
+import { extendOrCreateEnrollment } from "@/lib/enrollments";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
@@ -241,25 +242,7 @@ export default function AdminInscripcionesPage() {
       setAssigning(true);
       const supabase = createClient();
 
-      const todayDate = new Date();
-      const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, "0")}-${String(todayDate.getDate()).padStart(2, "0")}`;
-      const endDateObj = new Date(Date.now() + plan.duration_days * 86400000);
-      const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, "0")}-${String(endDateObj.getDate()).padStart(2, "0")}`;
-
-      const { data: enrollment, error: enrollError } = await supabase
-        .from("academy_enrollments")
-        .insert({
-          beneficiary_id: selectedBeneficiaryId,
-          enrollment_plan_id: selectedPlanId,
-          start_date: today,
-          end_date: endDate,
-          status: "activa",
-        })
-        .select("id")
-        .single();
-
-      if (enrollError) { setToast({ msg: getSupabaseErrorMessage(enrollError, "asignar inscripción"), type: "error" }); return; }
-
+      let paymentId: string | null = null;
       if (assignAmount > 0) {
         const { data: payment } = await supabase.from("payments").insert({
           user_id: selectedUser.userId,
@@ -270,10 +253,19 @@ export default function AdminInscripcionesPage() {
           status: "pagado",
           paid_at: new Date().toISOString(),
         }).select("id").single();
+        paymentId = payment?.id ?? null;
+      }
 
-        if (payment && enrollment) {
-          await supabase.from("academy_enrollments").update({ payment_id: payment.id }).eq("id", enrollment.id);
-        }
+      const result = await extendOrCreateEnrollment(
+        supabase,
+        selectedBeneficiaryId,
+        selectedPlanId,
+        paymentId
+      );
+
+      if (!result.success) {
+        setToast({ msg: result.error || "Error al asignar inscripción", type: "error" });
+        return;
       }
 
       setAssignOpen(false);

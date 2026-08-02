@@ -2,6 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  chileDateToUtc,
+  chileMonthStartDate,
+  chileMonthEndDate,
+  chilePrevMonthStartDate,
+  chilePrevMonthEndDate,
+  chileNextMonthStartDate,
+} from "@/lib/dates";
 
 interface Comparison { label: string; current: number; previous: number; diff: number; diffPct: number; icon: string; color: string; }
 
@@ -11,21 +19,24 @@ export default function MonthlyComparison() {
 
   useEffect(() => {
     const supabase = createClient();
-    const now = new Date();
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
+    const thisStart = chileDateToUtc(chileMonthStartDate());
+    const thisEnd = chileDateToUtc(chileNextMonthStartDate());
+    const lastStart = chileDateToUtc(chilePrevMonthStartDate());
+    const lastEnd = chileDateToUtc(chileMonthStartDate());
+    const thisStartDate = chileMonthStartDate();
+    const thisEndDate = chileMonthEndDate();
+    const lastStartDate = chilePrevMonthStartDate();
+    const lastEndDate = chilePrevMonthEndDate();
 
     Promise.all([
-      supabase.from("payments").select("amount").eq("status", "pagado").gte("paid_at", thisMonthStart).lte("paid_at", thisMonthEnd),
-      supabase.from("payments").select("amount").eq("status", "pagado").gte("paid_at", lastMonthStart).lte("paid_at", lastMonthEnd),
-      supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", thisMonthStart).lte("created_at", thisMonthEnd),
-      supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", lastMonthStart).lte("created_at", lastMonthEnd),
-      supabase.from("memberships").select("id", { count: "exact", head: true }).eq("status", "activa").gte("created_at", thisMonthStart).lte("created_at", thisMonthEnd),
-      supabase.from("memberships").select("id", { count: "exact", head: true }).eq("status", "activa").gte("created_at", lastMonthStart).lte("created_at", lastMonthEnd),
-      supabase.from("memberships").select("id", { count: "exact", head: true }).gte("start_date", thisMonthStart.split("T")[0]).lte("start_date", thisMonthEnd.split("T")[0]),
-      supabase.from("memberships").select("id", { count: "exact", head: true }).gte("start_date", lastMonthStart.split("T")[0]).lte("start_date", lastMonthEnd.split("T")[0]),
+      supabase.from("payments").select("amount").eq("status", "pagado").gte("paid_at", thisStart).lt("paid_at", thisEnd),
+      supabase.from("payments").select("amount").eq("status", "pagado").gte("paid_at", lastStart).lt("paid_at", lastEnd),
+      supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", thisStart).lt("created_at", thisEnd),
+      supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", lastStart).lt("created_at", lastEnd),
+      supabase.from("memberships").select("id", { count: "exact", head: true }).eq("status", "activa").gte("created_at", thisStart).lt("created_at", thisEnd),
+      supabase.from("memberships").select("id", { count: "exact", head: true }).eq("status", "activa").gte("created_at", lastStart).lt("created_at", lastEnd),
+      supabase.from("memberships").select("id", { count: "exact", head: true }).gte("start_date", thisStartDate).lte("start_date", thisEndDate),
+      supabase.from("memberships").select("id", { count: "exact", head: true }).gte("start_date", lastStartDate).lte("start_date", lastEndDate),
     ]).then(([rThisPay, rLastPay, rThisUsers, rLastUsers, rThisMembers, rLastMembers, rThisAssign, rLastAssign]) => {
       const thisRevenue = (rThisPay.data || []).reduce((sum, p) => sum + (p.amount || 0), 0);
       const lastRevenue = (rLastPay.data || []).reduce((sum, p) => sum + (p.amount || 0), 0);

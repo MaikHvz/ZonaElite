@@ -52,9 +52,11 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
   - **Iniciador de Pago**: `src/app/api/flow/create-order/route.ts` usa funciones de `src/lib/flow.ts` para crear el payload firmado con HMAC-SHA256 y comunicarse con el Sandbox/Producción de Flow.
   - **Verificador**: `src/app/api/flow/verify/route.ts` retorna el resumen de la compra y despliega el modal emergente `PaymentSuccessModal.tsx` con el desglose del producto, beneficiario, monto y fecha.
 - **Manejador Asíncrono (Webhook)**:
-  - `src/app/api/flow/confirmation/route.ts`: Captura el HTTP POST automático de Flow.
+  - `src/app/api/flow/confirmation/route.ts`: Captura el HTTP POST automático de Flow (solo manda `token`; la firma `s` se usa en las llamadas a la API, no en el webhook).
   - Se ejecuta en background (`after()` de Next 15+) enviando datos a `confirmAndCreateMembership()` dentro de `src/lib/flow-helpers.ts`.
   - Cancela masivamente (Bulk Update) membresías anteriores para evitar duplicidades, e inserta la nueva fecha de inicio (`getChileToday()`) y fin (`addDaysChile()`).
+  - **Integridad del callback (B-007)**: `confirmation` y `verify` descartan el pago si el `commerceOrder` devuelto por Flow no coincide con el guardado en `payments` (`isVerificationOrderMatch`).
+  - **Alerta post-pago (B-008)**: si la membresía falla tras el pago, `notifyPaymentWithoutMembership` inserta una notificación `target='staff'` (solo visible para admin/staff) en `notifications`; el reintento manual es `POST /api/flow/force-confirm`.
 - **Módulo de Productos (Tienda)**:
   - Públicos: `/productos` y `/productos/[id]`
   - Las transacciones de la tienda operan integradas con Flow generando órdenes distintas a las de las membresías.
@@ -70,6 +72,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
     - Llama a `AttendanceOverview.tsx`. 
     - Genera sesiones semanales usando el endpoint `/api/admin/generate-sessions/route.ts`.
     - Sistema de Check-in público (QR) soportado por `src/app/checkin/[sessionId]/page.tsx` y el route handler `/api/checkin/route.ts`.
+    - **Inscripción a clases (B-006)**: `EnrollModal.tsx` ya no inserta directo a `class_enrollments`; llama a la RPC transaccional `public.enroll_class` (migración `004`) que valida acceso, membresía/inscripción activas, sesión no pasada y aforo (`CLASS_FULL`) con `SELECT ... FOR UPDATE`. El check cliente queda como UX rápida; la fuente de verdad es la RPC.
   - **Membresías (`/admin/membresias/page.tsx`)**: 
     - CRUD de Planes (tabla `membership_plans`). Permite designar un único plan como Destacado (PRO) con exclusividad garantizada en UI y base de datos.
     - Asignación manual usando `AssignMembershipModal.tsx` (replicando la lógica de cancelación y activación que usa Flow).
@@ -85,7 +88,8 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 ---
 
 ## 6. Módulos Utilitarios Internos (`src/lib/`)
-- **Gestor de Fechas (`src/lib/dates.ts`)**: Impide los bugs de "Salto de Día" en la conversión UTC al forzar la zona horaria chilena (`America/Santiago`) en funciones como `getChileToday()` y `addDaysChile()`.
+- **Gestor de Fechas (`src/lib/dates.ts`)**: Impide los bugs de "Salto de Día" en la conversión UTC al forzar la zona horaria chilena (`America/Santiago`) en funciones como `getChileToday()` y `addDaysChile()`. Incluye helpers Chile-aware para límites de mes/trimestre y conversión a instantes UTC: `chileDateToUtc()`, `chileMonthStartDate()`, `chileMonthEndDate()`, `chilePrevMonthStartDate()`, `chilePrevMonthEndDate()`, `chileNextMonthStartDate()`, `chileQuarterStartDate()`, `chileQuarterEndDate()`, `chileMonthsBackStart()`, `chileMonthKey()`. Todos son DST-aware (probe a mediodía UTC) y deben usarse al filtrar columnas DATE (con strings `YYYY-MM-DD`) o TIMESTAMPTZ (con `chileDateToUtc()`).
+- **Suite de Pruebas de Producción (`scripts/test-flows.mjs`)**: Test runner standalone (Node 24+, sin toolchain extra) con **131 checks**: límites de zona horaria `America/Santiago`, scan estático de patrones riesgosos (`toISOString().split("T")[0]` y límites de mes), firma HMAC-SHA256 de Flow (create-order + callback) y verificación de `commerceOrder` (B-007), contratos de esquema/RLS (incl. `chile_today()` en policies, RPC `enroll_class` B-006, tokens atados a membresía B-010, RPCs consolidadas B-011, `user_notifications` documentada B-012), ciclo de vida de inscripción (B-004), vencimiento efectivo (B-001/B-009), atomicidad de membresías (B-002) y alerta admin post-pago (B-008). Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`. Retorna exit 1 si reaparece cualquier bug de fechas o se rompe un contrato.
 - **Servicios Admin (`src/lib/admin-helpers.ts`)**: Funciones genéricas compartidas para la validación de operaciones administrativas.
 - **Helpers de Flow (`src/lib/flow-helpers.ts` & `src/lib/flow.ts`)**: SDK de pasarela de pago nativo y procesamiento transaccional en base de datos.
 - **Supabase Clients (`src/lib/supabase/`)**:

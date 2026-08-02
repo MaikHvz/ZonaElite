@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getChileToday, addDaysChile, chileDateToUtc, chileMonthStartDate } from "@/lib/dates";
 import StatsCard from "@/components/admin/StatsCard";
 import RevenueChart from "@/components/admin/RevenueChart";
 import MembershipBreakdown from "@/components/admin/MembershipBreakdown";
@@ -26,15 +27,14 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const supabase = createClient();
-    const now = new Date();
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000).toISOString();
+    const thisMonthStart = chileDateToUtc(chileMonthStartDate());
+    const thirtyDaysAgo = chileDateToUtc(addDaysChile(getChileToday(), -30));
 
     Promise.all([
       supabase.from("profiles").select("id", { count: "exact", head: true }).eq("active", true),
       supabase.from("memberships").select("id", { count: "exact", head: true }).eq("status", "activa"),
       supabase.from("products").select("id", { count: "exact", head: true }).eq("active", true),
-      supabase.from("events").select("id", { count: "exact", head: true }).gte("event_date", now.toISOString().split("T")[0]),
+      supabase.from("events").select("id", { count: "exact", head: true }).gte("event_date", getChileToday()),
       supabase.from("payments").select("id", { count: "exact", head: true }).eq("status", "pendiente"),
       supabase.from("payments").select("amount").eq("status", "pagado"),
       supabase.from("payments").select("amount").eq("status", "pagado").gte("paid_at", thisMonthStart),

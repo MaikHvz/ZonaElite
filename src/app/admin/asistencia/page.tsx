@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "@/providers/SessionProvider";
 import { createClient } from "@/lib/supabase/client";
-import { getChileToday } from "@/lib/dates";
+import { getChileToday, chileDateToUtc, chileMonthStartDate } from "@/lib/dates";
 import { QRCodeSVG } from "qrcode.react";
 import {
   getUpcomingSessions,
@@ -615,8 +615,7 @@ export default function AdminAsistenciaPage() {
 
   const handleExportAsistencia = async () => {
     const supabase = createClient();
-    const now = new Date();
-    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+    const startDate = chileDateToUtc(chileMonthStartDate());
 
     const { data: attendanceData } = await supabase
       .from("attendance")
@@ -642,7 +641,7 @@ export default function AdminAsistenciaPage() {
       else if (a.status === "justificado") disciplinaCounts[disc].justificados++;
     });
 
-    const periodoLabel = `${new Date(startDate + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })} al ${now.toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })}`;
+    const periodoLabel = `${new Date(startDate + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })} al ${new Date(getChileToday() + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" })}`;
 
     const resumenSheet: ProfessionalSheetConfig = {
       sheetName: "Resumen Asistencia",
@@ -690,7 +689,7 @@ export default function AdminAsistenciaPage() {
 
     await exportProfessionalExcel(
       [resumenSheet, detalleSheet],
-      `Reporte_Asistencia_ZonaElite_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,"0")}`
+      `Reporte_Asistencia_ZonaElite_${getChileToday().slice(0, 4)}_${getChileToday().slice(5, 7)}`
     );
   };
 

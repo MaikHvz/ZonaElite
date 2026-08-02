@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { chileDateToUtc, chileMonthsBackStart, chileMonthKey } from "@/lib/dates";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 interface MonthData { name: string; count: number; }
@@ -14,24 +15,22 @@ export default function NewStudentsChart() {
 
   useEffect(() => {
     const supabase = createClient();
-    const now = new Date();
-    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const monthsBack = 11;
+    const startUtc = chileDateToUtc(chileMonthsBackStart(monthsBack));
 
     supabase
       .from("profiles")
       .select("created_at")
-      .gte("created_at", twelveMonthsAgo.toISOString())
+      .gte("created_at", startUtc)
       .order("created_at", { ascending: true })
       .then(({ data: profiles }) => {
         const months: Record<string, number> = {};
-        for (let i = 11; i >= 0; i--) {
-          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        for (let i = monthsBack; i >= 0; i--) {
+          const key = chileMonthsBackStart(i).slice(0, 7);
           months[key] = 0;
         }
         (profiles || []).forEach((p) => {
-          const d = new Date(p.created_at);
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          const key = chileMonthKey(p.created_at);
           if (months[key] !== undefined) months[key]++;
         });
         const chartData: MonthData[] = Object.entries(months).map(([key, count]) => {

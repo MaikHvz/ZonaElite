@@ -16,7 +16,8 @@ interface CheckinResult {
   name: string;
   ok: boolean;
   message: string;
-  membership_status: "al_dia" | "atrasado" | "sin_membresia";
+  membership_status: "al_dia" | "atrasado" | "sin_membresia" | "sin_matricula";
+  debt: boolean;
 }
 
 export default function CheckinPage({
@@ -201,8 +202,10 @@ export default function CheckinPage({
   }
 
   if (results) {
-    const hasNoMembership = results.some((r) => r.membership_status === "sin_membresia");
-    const hasNoTokens = results.some((r) => !r.ok && r.message.includes("Sin tokens"));
+    const hasNoMembership = results.some(
+      (r) => r.membership_status === "sin_membresia" || r.membership_status === "sin_matricula"
+    );
+    const hasDebt = results.some((r) => r.debt);
     const allOk = results.every((r) => r.ok);
 
     return (
@@ -257,6 +260,11 @@ export default function CheckinPage({
                           : "Sin membresía"}
                     </span>
                   )}
+                  {r.debt && (
+                    <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">
+                      En deuda
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -291,20 +299,22 @@ export default function CheckinPage({
             </div>
           )}
 
-          {hasNoTokens && !hasNoMembership && (
+          {hasDebt && !hasNoMembership && (
             <div className="mb-6 p-5 bg-surface-container-lowest border border-yellow-500/20 rounded-2xl text-center">
               <span className="material-symbols-outlined text-yellow-400 text-[36px] mb-3 block">token</span>
               <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase mb-2">
-                Sin clases restantes
+                Quedó 1 clase en deuda
               </h3>
               <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mb-4">
-                Tu membresía no tiene tokens disponibles. Renueva o compra una nueva membresía para continuar asistiendo.
+                Tu membresía no tiene tokens disponibles, pero el check-in se registró igual.
+                La clase quedó como deuda y la verás en tu tarjeta de membresía. El staff puede
+                gestionarla desde el panel de administración.
               </p>
               <button
                 onClick={() => router.push("/dashboard/membresias")}
-                className="w-full py-3 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] uppercase rounded-lg shadow-[0_0_16px_rgba(229,57,53,0.3)] hover:opacity-90 transition-opacity cursor-pointer"
+                className="w-full py-3 border border-primary/30 text-primary font-[family-name:var(--font-headline-md)] text-[13px] uppercase rounded-lg hover:bg-primary/5 transition-colors cursor-pointer"
               >
-                Comprar membresía
+                Ver mis membresías
               </button>
             </div>
           )}

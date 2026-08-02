@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { getChileToday, addDaysChile } from "@/lib/dates";
 
 const WEEKS_AHEAD = 4;
 
@@ -16,29 +17,24 @@ export async function POST() {
       return NextResponse.json({ created: 0, error: schedErr?.message || "No active schedules" });
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const endDate = new Date(today);
-    endDate.setDate(endDate.getDate() + WEEKS_AHEAD * 7);
+    const today = getChileToday();
+    const totalDays = WEEKS_AHEAD * 7;
 
     const sessionsToInsert: { schedule_id: string; session_date: string }[] = [];
 
     for (const schedule of activeSchedules) {
-      const current = new Date(today);
-
-      while (current <= endDate) {
-        if (current.getDay() === schedule.day_of_week) {
-          const y = current.getFullYear();
-          const m = String(current.getMonth() + 1).padStart(2, "0");
-          const dd = String(current.getDate()).padStart(2, "0");
-          const dateStr = `${y}-${m}-${dd}`;
+      let current = today;
+      for (let i = 0; i < totalDays; i++) {
+        // El día de la semana de una fecha calendario es independiente de la zona
+        // horaria; usar mediodía local evita ambigüedades de DST.
+        const dow = new Date(current + "T12:00:00").getDay();
+        if (dow === schedule.day_of_week) {
           sessionsToInsert.push({
             schedule_id: schedule.id,
-            session_date: dateStr,
+            session_date: current,
           });
         }
-        current.setDate(current.getDate() + 1);
+        current = addDaysChile(current, 1);
       }
     }
 

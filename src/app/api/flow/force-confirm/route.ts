@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { FLOW_LOG_PREFIX } from "@/lib/flow";
-import { confirmAndCreateMembership, extendEnrollment, markPaymentAsPaid } from "@/lib/flow-helpers";
+import { confirmAndCreateMembership, extendEnrollment, markPaymentAsPaid, notifyPaymentWithoutMembership } from "@/lib/flow-helpers";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
@@ -39,7 +39,11 @@ export async function POST(request: Request) {
     // Only call confirmAndCreateMembership if concept includes membership
     const hasMembership = /membres[íi]a/i.test(payment.concept || "");
     if (hasMembership) {
-      await confirmAndCreateMembership(admin, paymentId, payment.user_id);
+      const result = await confirmAndCreateMembership(admin, paymentId, payment.user_id);
+      if (!result.success) {
+        console.error(`${FORCE_LOG} membership creation failed:`, result.error);
+        await notifyPaymentWithoutMembership(admin, payment, result.error || "Error al crear membresía");
+      }
     }
 
     // Handle enrollment if included in payment record

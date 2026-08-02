@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { getChileToday } from "@/lib/dates";
+import { getChileToday, addDaysChile } from "@/lib/dates";
 import FormModal from "@/components/admin/FormModal";
 
 interface Plan { id: string; name: string; price: number; duration_days: number; category: string; }
@@ -159,23 +159,36 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
     if (!plan) { setSaving(false); return; }
 
     // Cancelar cualquier membresía activa previa
-    await supabase
+    const { error: cancelError } = await supabase
       .from("memberships")
       .update({ status: "cancelada" })
       .eq("beneficiary_id", form.beneficiaryId)
       .eq("status", "activa");
 
-    const endDate = new Date(form.startDate);
-    endDate.setDate(endDate.getDate() + plan.duration_days);
+    if (cancelError) {
+      console.error("AssignMembershipModal: fallo al cancelar membresías previas:", cancelError);
+    }
 
-    const { data: membership } = await supabase.from("memberships").insert({
+    const endDate = addDaysChile(form.startDate, plan.duration_days);
+
+    const { data: membership, error: insertError } = await supabase.from("memberships").insert({
       beneficiary_id: form.beneficiaryId,
       plan_id: form.planId,
       purchased_by: user?.id,
       start_date: form.startDate,
-      end_date: endDate.toISOString().split("T")[0],
+      end_date: endDate,
       status: "activa",
     }).select("id").single();
+
+    // B-002: si el índice único rechazó el insert (23505), recargar estado para
+    // reflejar la membresía activa que quedó creada (posible doble submit / admin paralelo).
+    if (insertError?.code === "23505") {
+      console.warn("AssignMembershipModal: ya existe una membresía activa (23505), se recarga el listado");
+      setSaving(false);
+      onSaved();
+      onClose();
+      return;
+    }
 
     if (membership) {
       let receiptUrl = null;

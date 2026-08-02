@@ -75,6 +75,7 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const supabase = createClient();
 
   const loadData = useCallback(async () => {
@@ -82,6 +83,7 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
     setLoading(true);
     setSelected(new Set());
     setSelectedSession(null);
+    setSubmitError(null);
 
     const today = getChileToday();
 
@@ -348,25 +350,32 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
   const handleSubmit = async () => {
     if (!schedule || !selectedSession || selected.size === 0) return;
     setSubmitting(true);
+    setSubmitError(null);
 
     const ids = Array.from(selected);
-    const insertions = ids.map((bid) =>
-      supabase.from("class_enrollments").insert({
-        session_id: selectedSession,
-        beneficiary_id: bid,
-      })
-    );
+    const { data, error } = await supabase.rpc("enroll_class", {
+      p_session_id: selectedSession,
+      p_beneficiary_ids: ids,
+    });
 
-    const results = await Promise.all(insertions);
-    const errors = results.filter((r) => r.error);
     setSubmitting(false);
 
-    if (errors.length > 0 && errors[0].error) {
-      if (errors[0].error.code === "23505") {
-        onEnrolled();
-        onClose();
-        return;
-      }
+    if (error) {
+      setSubmitError(error.message || "No se pudo inscribir. Intenta de nuevo.");
+      return;
+    }
+
+    const results = (data || []) as Array<{
+      beneficiary_id: string | null;
+      success: boolean;
+      error_code: string | null;
+      error_message: string | null;
+    }>;
+
+    const failed = results.filter((r) => !r.success);
+    if (failed.length > 0 && failed[0].error_code) {
+      setSubmitError(failed[0].error_message || "No se pudo inscribir. Intenta de nuevo.");
+      return;
     }
 
     onEnrolled();
@@ -542,6 +551,11 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
 
         {/* Footer */}
         <div className="p-6 pt-4 border-t border-on-surface/5">
+          {submitError && (
+            <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-red-400 mb-3 text-center">
+              {submitError}
+            </p>
+          )}
           {selectedSessionData && (
             <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant mb-3 text-center">
               {formatSessionDate(selectedSessionData.session_date)} · {remaining > 0 ? `${remaining} cupos disponibles` : "Clase llena"}

@@ -1,19 +1,24 @@
 import Link from "next/link";
+import { getChileToday } from "@/lib/dates";
+import {
+  effectiveMembershipStatus,
+  daysRemaining,
+} from "@/lib/membership-status";
 import type { MembershipData } from "@/lib/supabase/dashboard";
-
-function getDaysRemaining(end: string) {
-  const diff = new Date(end).getTime() - Date.now();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-}
 
 export default function AlertBanner({
   memberships,
 }: {
   memberships: MembershipData[];
 }) {
-  const active = memberships.filter((m) => m.status === "activa");
-  const expired = memberships.filter((m) => m.status === "vencida");
-  const expiring = active.filter((m) => getDaysRemaining(m.end_date) <= 7);
+  const today = getChileToday();
+  const active = memberships.filter(
+    (m) => effectiveMembershipStatus(m.status, m.end_date, today) === "activa"
+  );
+  const expired = memberships.filter((m) =>
+    effectiveMembershipStatus(m.status, m.end_date, today) === "vencida"
+  );
+  const expiring = active.filter((m) => daysRemaining(m.end_date, today) <= 7);
 
   if (expired.length > 0) {
     return (
@@ -31,8 +36,7 @@ export default function AlertBanner({
           </p>
         </div>
         <Link
-          href="https://wa.me/56900000000?text=Hola,%20quiero%20renovar%20mi%20membres%C3%ADa"
-          target="_blank"
+          href="/#membresias"
           className="shrink-0 btn-primary-gradient font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-white px-4 py-2 rounded-lg shadow-[0_0_12px_rgba(255,84,76,0.2)]"
         >
           Renovar
@@ -42,7 +46,7 @@ export default function AlertBanner({
   }
 
   if (expiring.length > 0) {
-    const days = getDaysRemaining(expiring[0].end_date);
+    const days = daysRemaining(expiring[0].end_date, today);
     return (
       <div className="glass-card !rounded-xl bg-gradient-to-r from-yellow-950/20 to-transparent border-l-[3px] !border-l-yellow-500 p-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -58,8 +62,7 @@ export default function AlertBanner({
           </p>
         </div>
         <Link
-          href="https://wa.me/56900000000?text=Hola,%20quiero%20renovar%20mi%20membres%C3%ADa"
-          target="_blank"
+          href="/#membresias"
           className="shrink-0 font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-yellow-400 border border-yellow-500/30 px-4 py-2 rounded-lg hover:bg-yellow-500/10 transition-colors whitespace-nowrap"
         >
           Renovar

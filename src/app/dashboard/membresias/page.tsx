@@ -9,6 +9,7 @@ import {
   getUserMemberships,
   type MembershipData,
 } from "@/lib/supabase/dashboard";
+import { effectiveMembershipStatus } from "@/lib/membership-status";
 import MembershipCard from "@/components/dashboard/MembershipCard";
 import { MembershipCardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import CheckoutModal from "@/components/CheckoutModal";
@@ -148,10 +149,13 @@ export default function MembresiasPage() {
     })();
   }, [user]);
 
-  const filtered =
-    filter === "all"
-      ? memberships
-      : memberships.filter((m) => m.status === filter);
+  const filtered = (() => {
+    const today = getChileToday();
+    if (filter === "all") return memberships;
+    return memberships.filter(
+      (m) => effectiveMembershipStatus(m.status, m.end_date, today) === filter
+    );
+  })();
 
   const filters: { key: Filter; label: string }[] = [
     { key: "all", label: "Todas" },

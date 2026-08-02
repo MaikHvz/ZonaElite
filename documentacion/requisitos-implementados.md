@@ -44,6 +44,12 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
   - Eliminación de todas las referencias directas a `new Date().toISOString().split("T")[0]` en toda la lógica de servidor y cliente.
   - Centralización en `src/lib/dates.ts` usando la API `Intl.DateTimeFormat` configurada en `"es-CL"` y `"America/Santiago"`.
   - Las funciones `getChileToday()` y `addDaysChile(fecha, dias)` garantizan que si se renueva a las 23:59 hrs en Chile, en BD se inserte la fecha correcta correspondiente a Chile y no "mañana" (UTC).
+- **Auditoría 2026-08 (Escaneo Exhaustivo)**:
+  - Se eliminaron los últimos 20 usos de patrones riesgosos que quedaban en paneles admin y dashboard: límites de mes/trimestre calculados con `new Date(y, m, 1).toISOString()` (corría el corte 3-4h y filtraba pagos de las últimas horas del mes anterior) y `.split("T")[0]` sobre columnas DATE (off-by-one en `session_date`/`event_date`).
+  - Fixes aplicados en: `admin/page.tsx`, `admin/usuarios/page.tsx`, `admin/asistencia/page.tsx`, `admin/ventas` (charts `RevenueChart.tsx`, `NewStudentsChart.tsx`, `MonthlyComparison.tsx`), `AttendanceOverview.tsx`, `src/lib/supabase/dashboard.ts`, `AssignMembershipModal.tsx`, `flow-helpers.ts`.
+  - `generate-sessions/route.ts` ahora genera las sesiones iterando fechas chilenas reales (`getChileToday()`/`addDaysChile()`) en vez de `new Date()` del servidor, y obtiene el `day_of_week` de cada fecha calendario (independiente de zona horaria).
+  - El bucket de gráficos por mes usa `chileMonthKey()` (asigna cada pago al mes chileno real, no al mes UTC).
+  - Todos los fixes están protegidos por la suite `scripts/test-flows.mjs` (Sección 12).
 
 ## 6. Panel Administrativo a Medida
 **Requisito**: Un sistema integral para manejar usuarios, roles, creación y listado de horarios y la gestión del contenido público. Todo con permisos estructurados.
@@ -100,5 +106,37 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
   - Muestra el **Concepto Adquirido** (ej: Membresía Adulto / Inscripción), **Beneficiario**, **Monto Pagado** ($XX.XXX CLP), **Fecha** y **N° de Orden**.
   - `src/app/api/flow/verify/route.ts`: Retorna los detalles del pago de la BD para alimentar dinámicamente el modal.
   - Integrado automáticamente en la experiencia del usuario tras retornar de Flow.cl en `/dashboard/pagos`.
+
+## 12. Escaneo Exhaustivo y Suite de Pruebas de Producción
+**Requisito**: Correr una auditoría de flujos (zonas horarias, pagos Flow, RLS, inscripción per-session) con un script de pruebas aparte, con testing realista de producción.
+- **Implementación**:
+  - `scripts/test-flows.mjs`: Suite standalone (Node 24+, sin dependencias) con **110 checks**:
+    1. **Zona horaria**: demuestra los bugs UTC vs Chile (instante 02:00Z es 22:00 del día anterior en Chile), valida límite de mes correcto (`04:00Z` invierno / `03:00Z` verano), detecta las 2 transiciones DST 2026 y valida `addDaysChile()` cruzando DST.
+    2. **Scan estático**: recorre `src/` y falla (exit 1) si reaparecen `toISOString().split("T")[0]` o `new Date(y,m,1).toISOString()`.
+    3. **Firma HMAC-SHA256 de Flow**: determinismo, sensibilidad a monto/secret, validación real de `verifyFlowCallbackSignature()`, y **B-007** verificación de `commerceOrder` (helper `isVerificationOrderMatch` + scans de `confirmation/route.ts` y `verify/route.ts`).
+    4. **Contratos de esquema/RLS**: columnas `payments.include_enrollment`/`enrollment_plan_id`, policies de `class_enrollments` con `chile_today()`, UNIQUE per-session, y guards de membresía en `/api/checkin`.
+    5. **Ciclo de vida de inscripción**: `extendEnrollment` (base = max(end_date, hoy) + duración) y modelo per-session (`session_id` como clave).
+    6. **Vencimiento efectivo (B-001/B-009)**: `effectiveMembershipStatus`/`daysRemaining` DST-safe y que `MembershipCard`/`AlertBanner`/página usen el estado efectivo, no el literal.
+    7. **Atomicidad (B-002/B-015)**: mock con índice único parcial → 2 confirmaciones paralelas terminan en 1 sola membresía activa; **B-008** alerta admin (`notifyPaymentWithoutMembership`) con mock de `notifications`.
+  - **Comando**: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`
+- **Hallazgos de seguridad (pendientes de decisión, sin cambios de BD aplicados)**:
+  1. RLS `academy_enrollments.user_insert_enrollment_flow` permite a un usuario autenticado insertar su propia inscripción sin pago.
+  2. RLS `class_enrollments_insert_qr_walkin` y `attendance_insert_own_beneficiary` permiten auto-inscripción/auto-asistencia directa por API; los endpoints (`/api/checkin`) ya las validan con el client admin, pero conviene restringirlas a admin/staff.
+  3. UNIQUE legacy `(beneficiary_id, schedule_id)` sigue presente junto al nuevo `(beneficiary_id, session_id)`; las inscripciones antiguas con solo `schedule_id` no matchean en el check-in por `session_id`.
+
+## 13. Corrección de Flujos Críticos de Producción (Fases 1–9, auditoría 2026-08)
+**Requisito**: Corregir los bugs críticos del informe `contexto/informe-bugs.md` priorizando los flujos de membresía post-pago, vencimiento/renovación, inscripciones y pagos Flow, con una fase a la vez y verificación (tests + build) antes de avanzar.
+- **Implementación por fase** (detalle en `contexto/requisitos/plan-fixes-produccion.md`):
+  1. **Fase 1 (B-001, B-003, B-009) — Vencimiento dinámico**: módulo `src/lib/membership-status.ts` (`effectiveMembershipStatus`/`isMembershipExpired`/`daysRemaining` DST-safe). `MembershipCard`, `AlertBanner`, `dashboard/membresias` y `getDashboardSummary` derivan el estado de `end_date < getChileToday()` y no del literal `status='vencida'`. Botón "Renovar" ahora enlaza a `/#membresias` (sección de compra), no a WhatsApp.
+  2. **Fase 2 (B-002, B-015) — Atomicidad**: migración `002_unique_active_membership.sql` (índice único parcial `WHERE status='activa'` + dedupe conservando la más reciente + backfill de vencidas). `flow-helpers.ts` captura SQLSTATE 23505 con retry idempotente. `AssignMembershipModal` recarga ante 23505.
+  3. **Fase 3 (B-005) — Fecha chilena en RLS**: migración `003_chile_today_rls.sql` con `public.chile_today()` (`timezone('America/Santiago', now())::date`) y policy `class_enrollments_insert_admin_or_self` regenerada. Aplicada en Supabase.
+  4. **Fase 4 (B-004) — Dedup de inscripciones**: helper `src/lib/enrollments.ts` (`extendOrCreateEnrollment`): si hay inscripción activa la extiende desde `max(end_date, hoy)`, si no crea con `getChileToday()`/`addDaysChile()`. `handleAssign` del admin y `extendEnrollment` de flow-helpers delegan en él.
+  5. **Fase 5 (B-007) — Integridad del callback Flow**: doc oficial de Flow confirma que el callback solo manda `token` (no `s`). Se agregó `isVerificationOrderMatch` (`flow-helpers.ts`): `confirmation/route.ts` y `verify/route.ts` descartan el pago si el `commerceOrder` devuelto por Flow no coincide con el guardado en `payments`.
+  6. **Fase 6 (B-008) — Alerta post-pago**: `notifyPaymentWithoutMembership` (`flow-helpers.ts`): si la membresía no se crea tras un pago pagado, inserta `notifications` (`type='sistema'`, `target='staff'`, content con `payment_id`/`error`, `sent_by` = primer admin) en los 3 handlers (`confirmation`, `verify`, `force-confirm`). El reintento manual sigue siendo `force-confirm`.
+  7. **Fase 7 (B-006) — Capacidad de clase server-side**: RPC transaccional `public.enroll_class` (migración `004_enroll_class_rpc.sql`, aplicada) con `SELECT ... FOR UPDATE` sobre la sesión: valida sesión no pasada (`session_date >= chile_today()`, sin exigir `status='activa'` para permitir inscripción anticipada), acceso, membresía e inscripción de academia activas, aforo (`CLASS_FULL`) e idempotencia. `EnrollModal` reemplazó el insert directo por la RPC y muestra el error de la BD.
+  8. **Fase 8 (B-010, B-011) — Tokens atados a la membresía**: migración `005_tokens_membership_window.sql` (aplicada): `get_remaining_tokens` sigue siendo dinámico pero cada reserva queda atada a la membresía por `enrolled_at ∈ [created_at, end_date]` (límite superior nuevo en `v_consumed` y `v_justified`). B-011: eliminadas las RPCs duplicadas del esquema (1 sola definición de `get_remaining_tokens` y `get_enrollment_debt`).
+  9. **Fase 9 (B-012) — Esquema en espejo**: DDL de `user_notifications` agregado al esquema documentado, verificado contra la BD real vía OpenAPI/PostgREST (`id uuid PK`, `user_id uuid`, `title text`, `content text`, `read boolean DEFAULT false`, `created_at timestamptz`).
+- **Migraciones creadas**: `002_unique_active_membership.sql` (aplicada), `003_chile_today_rls.sql` (aplicada), `004_enroll_class_rpc.sql` (aplicada), `005_tokens_membership_window.sql` (aplicada). Esquema documentado sincronizado (`squema-sql-actualizado.sql`).
+- **Estado**: Fases 1–9 completadas. Suite en verde (131 tests), build OK. Pendientes de negocio (Fase 10): RLS `user_insert_enrollment_flow`/QR walk-in/auto-asistencia y constraint UNIQUE legacy.
 
 

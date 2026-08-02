@@ -8,6 +8,7 @@ import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 import { exportProfessionalExcel, type ProfessionalSheetConfig } from "@/lib/excel";
+import { chileMonthStartDate, chileMonthEndDate } from "@/lib/dates";
 
 interface UserRow {
   id: string;
@@ -73,13 +74,11 @@ export default function AdminUsuariosPage() {
         .select(`id, beneficiary_id, start_date, end_date, status, created_at, membership_plans(name, price)`);
 
       if (exportTimeframe === "mes") {
-        const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
-        mQuery = mQuery.gte("start_date", start).lte("start_date", end);
+        mQuery = mQuery.gte("start_date", chileMonthStartDate()).lte("start_date", chileMonthEndDate());
       } else if (exportTimeframe === "ano") {
-        const start = new Date(now.getFullYear(), 0, 1).toISOString();
-        const end = new Date(now.getFullYear(), 11, 31).toISOString();
-        mQuery = mQuery.gte("start_date", start).lte("start_date", end);
+        const yearStart = chileMonthStartDate().slice(0, 4) + "-01-01";
+        const yearEnd = chileMonthStartDate().slice(0, 4) + "-12-31";
+        mQuery = mQuery.gte("start_date", yearStart).lte("start_date", yearEnd);
       }
 
       const { data: memberships } = await mQuery;
@@ -96,13 +95,11 @@ export default function AdminUsuariosPage() {
         .select(`id, beneficiary_id, start_date, end_date, status, created_at, enrollment_plans(name)`);
 
       if (exportTimeframe === "mes") {
-        const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
-        eQuery = eQuery.gte("start_date", start).lte("start_date", end);
+        eQuery = eQuery.gte("start_date", chileMonthStartDate()).lte("start_date", chileMonthEndDate());
       } else if (exportTimeframe === "ano") {
-        const start = new Date(now.getFullYear(), 0, 1).toISOString();
-        const end = new Date(now.getFullYear(), 11, 31).toISOString();
-        eQuery = eQuery.gte("start_date", start).lte("start_date", end);
+        const yearStart = chileMonthStartDate().slice(0, 4) + "-01-01";
+        const yearEnd = chileMonthStartDate().slice(0, 4) + "-12-31";
+        eQuery = eQuery.gte("start_date", yearStart).lte("start_date", yearEnd);
       }
 
       const { data: enrollments } = await eQuery;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { chileDateToUtc, chileMonthsBackStart, chileMonthKey } from "@/lib/dates";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 interface MonthData { name: string; amount: number; count: number; }
@@ -14,33 +15,31 @@ export default function RevenueChart() {
 
   useEffect(() => {
     const supabase = createClient();
-    const now = new Date();
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const monthsBack = 5;
+    const startUtc = chileDateToUtc(chileMonthsBackStart(monthsBack));
 
     supabase
       .from("payments")
       .select("amount, paid_at")
       .eq("status", "pagado")
-      .gte("paid_at", sixMonthsAgo.toISOString())
+      .gte("paid_at", startUtc)
       .order("paid_at", { ascending: true })
       .then(({ data: payments }) => {
         const months: Record<string, { amount: number; count: number }> = {};
-        for (let i = 5; i >= 0; i--) {
-          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        for (let i = monthsBack; i >= 0; i--) {
+          const key = chileMonthsBackStart(i).slice(0, 7);
           months[key] = { amount: 0, count: 0 };
         }
         (payments || []).forEach((p) => {
           if (!p.paid_at) return;
-          const d = new Date(p.paid_at);
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          const key = chileMonthKey(p.paid_at);
           if (months[key]) {
             months[key].amount += p.amount || 0;
             months[key].count += 1;
           }
         });
         const chartData: MonthData[] = Object.entries(months).map(([key, val]) => {
-          const [y, m] = key.split("-");
+          const [, m] = key.split("-");
           return { name: MONTHS_ES[Number(m) - 1], amount: val.amount, count: val.count };
         });
         setData(chartData);

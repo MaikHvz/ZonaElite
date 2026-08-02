@@ -42,12 +42,15 @@ export async function POST(req: Request) {
     );
   }
 
+  const today = getChileToday();
+
   const results: Array<{
     beneficiary_id: string;
     name: string;
     ok: boolean;
     message: string;
-    membership_status: "al_dia" | "atrasado" | "sin_membresia";
+    membership_status: "al_dia" | "atrasado" | "sin_membresia" | "sin_matricula";
+    debt: boolean;
   }> = [];
 
   for (const bId of beneficiary_ids) {
@@ -68,6 +71,7 @@ export async function POST(req: Request) {
         ok: false,
         message: "No tienes acceso a este beneficiario",
         membership_status: "sin_membresia",
+        debt: false,
       });
       continue;
     }
@@ -90,6 +94,8 @@ export async function POST(req: Request) {
       .eq("beneficiary_id", bId)
       .maybeSingle();
 
+    let createdDebt = false;
+
     if (!existingEnrollment) {
       const { data: membership } = await admin
         .from("memberships")
@@ -107,11 +113,11 @@ export async function POST(req: Request) {
           ok: false,
           message: "Sin membresía activa. Debes comprar una membresía para asistir a clases.",
           membership_status: "sin_membresia",
+          debt: false,
         });
         continue;
       }
 
-      const today = getChileToday();
       if (membership.end_date < today) {
         results.push({
           beneficiary_id: bId,
@@ -119,11 +125,36 @@ export async function POST(req: Request) {
           ok: false,
           message: "Membresía vencida. Debes renovar tu membresía para asistir a clases.",
           membership_status: "atrasado",
+          debt: false,
+        });
+        continue;
+      }
+
+      // Gate de matrícula: sin inscripción activa a la academia no se puede asistir.
+      const { data: academyEnrollment } = await admin
+        .from("academy_enrollments")
+        .select("id")
+        .eq("beneficiary_id", bId)
+        .eq("status", "activa")
+        .gte("end_date", today)
+        .order("end_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!academyEnrollment) {
+        results.push({
+          beneficiary_id: bId,
+          name: bName,
+          ok: false,
+          message: "Sin matrícula activa. Debes matricularte para asistir a clases.",
+          membership_status: "sin_matricula",
+          debt: false,
         });
         continue;
       }
 
       const planTokens = (membership.membership_plans as unknown as { tokens: number | null })?.tokens;
+      let tokensAvailable = true;
       if (planTokens !== null) {
         const { data: tokenData } = await admin.rpc("get_remaining_tokens", {
           p_beneficiary_id: bId,
@@ -133,14 +164,7 @@ export async function POST(req: Request) {
         if (tokenData && tokenData.length > 0) {
           const tokenInfo = tokenData[0];
           if (!tokenInfo.is_unlimited && tokenInfo.remaining !== null && tokenInfo.remaining <= 0) {
-            results.push({
-              beneficiary_id: bId,
-              name: bName,
-              ok: false,
-              message: "Sin tokens disponibles. Tu membresía no tiene clases restantes.",
-              membership_status: "al_dia",
-            });
-            continue;
+            tokensAvailable = false;
           }
         }
       }
@@ -158,8 +182,36 @@ export async function POST(req: Request) {
           ok: false,
           message: `Error al inscribir: ${enrollErr.message}`,
           membership_status: "sin_membresia",
+          debt: false,
         });
         continue;
+      }
+
+      // Fase 10: sin tokens -> se inscribe igual y se materializa deuda de 1 clase.
+      if (!tokensAvailable) {
+        const { data: existingDebt } = await admin
+          .from("debts")
+          .select("id")
+          .eq("beneficiary_id", bId)
+          .eq("session_id", session_id)
+          .eq("status", "pendiente")
+          .maybeSingle();
+
+        if (!existingDebt) {
+          const { error: debtErr } = await admin.from("debts").insert({
+            beneficiary_id: bId,
+            membership_id: membership.id,
+            session_id,
+            amount: 1,
+            status: "pendiente",
+          });
+
+          if (!debtErr) {
+            createdDebt = true;
+          }
+        } else {
+          createdDebt = true;
+        }
       }
     }
 
@@ -184,6 +236,7 @@ export async function POST(req: Request) {
         ok: false,
         message: `Error al registrar asistencia: ${attErr.message}`,
         membership_status: "sin_membresia",
+        debt: createdDebt,
       });
       continue;
     }
@@ -206,8 +259,7 @@ export async function POST(req: Request) {
       .limit(1)
       .maybeSingle();
 
-    let membershipStatus: "al_dia" | "atrasado" | "sin_membresia" = "sin_membresia";
-    const today = getChileToday();
+    let membershipStatus: "al_dia" | "atrasado" | "sin_membresia" | "sin_matricula" = "sin_membresia";
 
     if (membership && membership.end_date >= today) {
       if (enrollment && enrollment.end_date >= today) {
@@ -223,8 +275,11 @@ export async function POST(req: Request) {
       beneficiary_id: bId,
       name: bName,
       ok: true,
-      message: "Presente ✓",
+      message: createdDebt
+        ? "Presente ✓ (quedó 1 clase en deuda)"
+        : "Presente ✓",
       membership_status: membershipStatus,
+      debt: createdDebt,
     });
   }
 

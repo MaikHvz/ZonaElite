@@ -1,5 +1,6 @@
 import { createClient } from "./client";
-import { getChileToday } from "../dates";
+import { getChileToday, addDaysChile, chileDateToUtc, chileMonthStartDate } from "../dates";
+import { effectiveMembershipStatus } from "../membership-status";
 
 type SupabaseResult<T> = { data: T | null; error: string | null };
 
@@ -244,9 +245,7 @@ export async function getDashboardSummary(userId: string) {
   return safeQuery(async () => {
     const supabase = createClient();
 
-    const now = new Date();
-    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      .toISOString();
+    const firstOfMonth = chileDateToUtc(chileMonthStartDate());
 
     const [membershipsRes, paymentsRes, dependentsRes, thisMonthRes] =
       await Promise.all([
@@ -272,8 +271,10 @@ export async function getDashboardSummary(userId: string) {
       ]);
 
     const allMemberships = membershipsRes.data?.memberships || [];
+    const today = getChileToday();
     const activeMemberships = allMemberships.filter(
-      (m) => m.status === "activa"
+      (m) =>
+        effectiveMembershipStatus(m.status, m.end_date, today) === "activa"
     );
 
     const paidThisMonth = (thisMonthRes.data || []).reduce(
@@ -651,18 +652,19 @@ export async function getAdminAttendanceAnalytics() {
   return safeQuery(async () => {
     const supabase = createClient();
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
-    const sixWeeksAgo = new Date(now.getTime() - 42 * 86400000);
+    const today = getChileToday();
+    const thirtyDaysAgo = addDaysChile(today, -30);
+    const sixWeeksAgo = addDaysChile(today, -42);
 
     const [attendanceRes, sessionsRes] = await Promise.all([
       supabase
         .from("attendance")
         .select("status, session_id, session:class_sessions(session_date, schedule:schedules(discipline:disciplines(name)))")
-        .gte("marked_at", sixWeeksAgo.toISOString()),
+        .gte("marked_at", chileDateToUtc(sixWeeksAgo)),
       supabase
         .from("class_sessions")
         .select("id, session_date")
-        .gte("session_date", sixWeeksAgo.toISOString().split("T")[0]),
+        .gte("session_date", sixWeeksAgo),
     ]);
 
     const rows = (attendanceRes.data || []) as unknown as Array<{
@@ -737,7 +739,7 @@ export async function getAdminAttendanceAnalytics() {
     const totalPresent = statusCounts["presente"] || 0;
     const overallRate = totalRecords > 0 ? Math.round((totalPresent / totalRecords) * 100) : 0;
     const sessionsLast30Days = allSessions.filter(
-      (s) => new Date(s.session_date) >= thirtyDaysAgo
+      (s) => s.session_date >= thirtyDaysAgo
     ).length;
 
     return {
@@ -961,6 +963,34 @@ export interface DebtDetail {
   professor_name: string;
   source: string;
   enrolled_at: string;
+}
+
+export interface PendingDebt {
+  id: string;
+  amount: number;
+  status: string;
+  created_at: string;
+  session: {
+    session_date: string;
+    schedule: { discipline: { name: string } | null } | null;
+  } | null;
+}
+
+export async function getPendingDebts(beneficiaryId: string): Promise<PendingDebt[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("debts")
+    .select("id, amount, status, created_at, session:class_sessions(session_date, schedule:schedules(discipline:disciplines(name)))")
+    .eq("beneficiary_id", beneficiaryId)
+    .eq("status", "pendiente")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data as unknown as PendingDebt[];
 }
 
 export async function getRemainingTokens(
