@@ -46,6 +46,13 @@ Por cada beneficiario, en orden:
 - Callbacks `confirmation`/`verify`: validan `commerceOrder` antes de aplicar; firma HMAC intacta.
 - Post-pago: si un pago exitoso no genera membresía/inscripción → **alerta admin** (`notifyPaymentWithoutMembership`).
 - Matrícula/membresía solo por pago Flow o asignación manual del admin (nunca auto-insert del usuario).
+- **Estados (B-018):** `verifyFlowPayment` devuelve `1=pendiente`, `2=pagada`, `3=rechazada`, `4=anulada`. `mapFlowStatus` (única fuente en `flow.ts`) traduce a `pendiente | pagado | rechazado | cancelado`:
+  - `status 2` → `pagado` + crea/actualiza membresía o inscripción (flujo existente).
+  - `status 3` → el pago se actualiza a `rechazado` en BD (tanto en `verify` como en el callback `confirmation`); **no** crea membresía.
+  - `status 4` → pago a `cancelado`.
+  - `status 1` → pago queda `pendiente`; el callback asíncrono de Flow puede completarlo después.
+- **Feedback al usuario** en `/dashboard/pagos` tras el retorno de Flow: modal de éxito (`pagado`), banner rojo "Pago rechazado"/"Pago anulado" (`rechazado`/`cancelado`) o banner ámbar "Tu pago está pendiente" (`pendiente`). Aplica a membresías, inscripciones y cualquier pago.
+- **Ventas admin** (`/admin/ventas`): filtro de estado "Rechazado" + tarjeta de conteo de rechazados.
 
 ## 6. Registro de BD (migraciones aplicadas)
 

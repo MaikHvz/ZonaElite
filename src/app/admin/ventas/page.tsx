@@ -175,6 +175,7 @@ export default function AdminVentasPage() {
     const pagados = payments.filter((p) => p.status === "pagado");
     const pendientes = payments.filter((p) => p.status === "pendiente");
     const cancelados = payments.filter((p) => p.status === "cancelado");
+    const rechazados = payments.filter((p) => p.status === "rechazado");
 
     const totalRevenue = pagados.reduce((sum, p) => sum + (p.amount || 0), 0);
     const pendingAmount = pendientes.reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -192,6 +193,7 @@ export default function AdminVentasPage() {
       totalPendientes: pendientes.length,
       pendingAmount,
       totalCancelados: cancelados.length,
+      totalRechazados: rechazados.length,
       totalAll: payments.length,
       byMethod,
     };
@@ -251,7 +253,7 @@ export default function AdminVentasPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         <div className="bg-surface-container-lowest border border-on-surface/5 rounded-xl p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -300,6 +302,23 @@ export default function AdminVentasPage() {
           </p>
           <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant/60 mt-1">
             pagos cancelados
+          </p>
+        </div>
+
+        <div className="bg-surface-container-lowest border border-on-surface/5 rounded-xl p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-orange-400 text-[20px]">block</span>
+            </div>
+            <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">
+              Rechazados
+            </span>
+          </div>
+          <p className="font-[family-name:var(--font-headline-lg)] text-[28px] text-on-surface">
+            {stats.totalRechazados}
+          </p>
+          <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant/60 mt-1">
+            pagos rechazados
           </p>
         </div>
 
@@ -364,7 +383,7 @@ export default function AdminVentasPage() {
             Estado:
           </span>
           <div className="flex gap-1">
-            {["todos", "pagado", "pendiente", "cancelado"].map((s) => (
+            {["todos", "pagado", "pendiente", "rechazado", "cancelado"].map((s) => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
@@ -374,7 +393,15 @@ export default function AdminVentasPage() {
                     : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
                 }`}
               >
-                {s === "todos" ? "Todos" : s === "pagado" ? "Pagado" : s === "pendiente" ? "Pendiente" : "Cancelado"}
+                {s === "todos"
+                  ? "Todos"
+                  : s === "pagado"
+                    ? "Pagado"
+                    : s === "pendiente"
+                      ? "Pendiente"
+                      : s === "rechazado"
+                        ? "Rechazado"
+                        : "Cancelado"}
               </button>
             ))}
           </div>

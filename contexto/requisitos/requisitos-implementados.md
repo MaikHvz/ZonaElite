@@ -71,3 +71,18 @@
 - **Fix:** `src/components/Navbar.tsx` usa `usePathname()` y retorna `null` en rutas `/admin`. El header del admin ahora es auto-contenido: perfil enlazado a `/perfil` y botón "Cerrar sesión" (`signOut()`), ya que el navbar público (que proveía logout/Perfil/Mi Panel) ya no está en `/admin`.
 - `/dashboard` mantiene el navbar público con su offset `pt-24 md:pt-28` (sin cambios).
 - Verificación: suite **178 passed, 0 failed** (sección L), build verde. Sin migración SQL.
+
+---
+
+## B-018 — Feedback de pagos Flow rechazados/anulados/pendientes (2026-08-02)
+
+- **Problema:** Flow devuelve estados `1=pendiente`, `2=pagada`, `3=rechazada`, `4=anulada`. El código solo manejaba `2` y `4`: un pago rechazado (`3`) quedaba `pendiente` en BD y el usuario volvía de Flow sin feedback claro.
+- **Fix:**
+  - `src/lib/flow.ts`: helper `mapFlowStatus(status)` → `pendiente | pagado | rechazado | cancelado` (única fuente de verdad).
+  - `src/app/api/flow/verify/route.ts`: para `status !== 2` actualiza el pago según `mapFlowStatus` y responde `{ status: mapped }` al cliente (`3`→`rechazado`, `4`→`cancelado`, `1`→`pendiente`).
+  - `src/app/api/flow/confirmation/route.ts`: el callback server marca `rechazado`/`cancelado` en BD cuando el pago no fue aprobado (ya no lo deja pendiente); nunca crea membresía si no es `status 2`.
+  - `src/components/PurchaseSuccessBanner.tsx`: `PurchaseFailedBanner` acepta `title`/`description`; nuevo `PurchasePendingBanner` (ámbar).
+  - `src/app/dashboard/pagos/page.tsx`: banners diferenciados por resultado (`rechazado`, `cancelado`, `pendiente`) — aplica a membresías, inscripciones y cualquier pago (mismo flujo verify).
+  - `src/app/admin/ventas/page.tsx`: filtro de estado "Rechazado" + tarjeta de conteo de rechazados.
+- Sin migración SQL (`payments.status` es `text` sin CHECK; `StatusBadge` ya soportaba `rechazado`). Esquema actualizado solo en el comentario de documentación.
+- Verificación: suite **195 passed, 0 failed** (sección M), build verde. Ver `contexto/requisitos/feedback-pagos-flow.md`.

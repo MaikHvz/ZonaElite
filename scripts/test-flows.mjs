@@ -33,7 +33,7 @@ const {
   chileMonthsBackStart,
   chileMonthKey,
 } = await import("../src/lib/dates.ts");
-const { verifyFlowCallbackSignature } = await import("../src/lib/flow.ts");
+const { verifyFlowCallbackSignature, mapFlowStatus } = await import("../src/lib/flow.ts");
 const {
   effectiveMembershipStatus,
   isMembershipExpired,
@@ -893,6 +893,58 @@ ok("L: admin header enlaza el perfil a /perfil",
   /href="\/perfil"[\s\S]*?aria-label="Ver perfil"/.test(adminLayout));
 ok("L: dashboard conserva offset para navbar público",
   /pt-24 md:pt-28/.test(readFileSync(join(ROOT, "src", "app", "dashboard", "layout.tsx"), "utf8")));
+
+// ============================================================
+// M. Feedback de pagos Flow rechazados/anulados/pendientes (B-018)
+// ============================================================
+section("M. Feedback de pagos Flow rechazados/anulados/pendientes (B-018)");
+
+// M1. Mapeo de estados de Flow a la BD (unit)
+ok("M: mapFlowStatus(1) == pendiente", mapFlowStatus(1) === "pendiente");
+ok("M: mapFlowStatus(2) == pagado", mapFlowStatus(2) === "pagado");
+ok("M: mapFlowStatus(3) == rechazado", mapFlowStatus(3) === "rechazado");
+ok("M: mapFlowStatus(4) == cancelado", mapFlowStatus(4) === "cancelado");
+ok("M: mapFlowStatus(desconocido) == pendiente", mapFlowStatus(99) === "pendiente");
+
+const verifyRouteM = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
+const confirmRouteM = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
+const pagosPageM = readFileSync(join(ROOT, "src", "app", "dashboard", "pagos", "page.tsx"), "utf8");
+const bannerSrcM = readFileSync(join(ROOT, "src", "components", "PurchaseSuccessBanner.tsx"), "utf8");
+const ventasPageM = readFileSync(join(ROOT, "src", "app", "admin", "ventas", "page.tsx"), "utf8");
+const schemaSqlM = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+
+ok("M: verify usa mapFlowStatus para flujos no aprobados",
+  verifyRouteM.includes("mapFlowStatus"));
+ok("M: verify marca status 3 como rechazado",
+  /update\(\{ status: mapped \}\)/.test(verifyRouteM) &&
+  /mapped === "rechazado" \|\| mapped === "cancelado"/.test(verifyRouteM));
+ok("M: verify devuelve rechazado/cancelado/pendiente al cliente",
+  /return NextResponse\.json\(\{ status: mapped \}\)/.test(verifyRouteM));
+ok("M: confirmation marca rechazado/cancelado en BD (ya no queda pendiente)",
+  confirmRouteM.includes("mapFlowStatus") &&
+  /update\(\{ status: mapped \}\)/.test(confirmRouteM) &&
+  /mapped === "rechazado" \|\| mapped === "cancelado"/.test(confirmRouteM));
+ok("M: confirmation no crea membresía si no está aprobado (status !== 2 retorna)",
+  /if \(verification\.status !== 2\) \{/.test(confirmRouteM));
+ok("M: PurchaseFailedBanner acepta title/description",
+  /title\?: string;/.test(bannerSrcM) && /description\?: string;/.test(bannerSrcM));
+ok("M: existe PurchasePendingBanner (feedback de pago pendiente)",
+  bannerSrcM.includes("export function PurchasePendingBanner"));
+ok("M: pagos distingue 'rechazado' en el cliente",
+  pagosPageM.includes('verified === "rechazado"') &&
+  pagosPageM.includes('result.status === "rechazado"'));
+ok("M: pagos distingue 'cancelado' en el cliente",
+  pagosPageM.includes('verified === "cancelado"') &&
+  pagosPageM.includes('result.status === "cancelado"'));
+ok("M: pagos distingue 'pendiente' en el cliente",
+  pagosPageM.includes('verified === "pendiente"') &&
+  pagosPageM.includes('result.status === "pendiente"'));
+ok("M: ventas admin filtra por 'rechazado'",
+  /\["todos", "pagado", "pendiente", "rechazado", "cancelado"\]/.test(ventasPageM) &&
+  ventasPageM.includes("totalRechazados") &&
+  ventasPageM.includes("pagos rechazados"));
+ok("M: esquema documenta status 'rechazado' en payments",
+  /payments\.status: 'pendiente' \| 'pagado' \| 'rechazado'/.test(schemaSqlM));
 
 // ============================================================
 // RESULTADO

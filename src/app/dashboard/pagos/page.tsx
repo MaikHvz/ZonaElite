@@ -14,6 +14,7 @@ import PaymentSuccessModal, {
 } from "@/components/PaymentSuccessModal";
 import PurchaseSuccessBanner, {
   PurchaseFailedBanner,
+  PurchasePendingBanner,
 } from "@/components/PurchaseSuccessBanner";
 
 const FLOW_TOKEN_KEY = "flow_pending_token";
@@ -29,7 +30,9 @@ export default function PagosPage() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
-  const [verified, setVerified] = useState<"success" | "failed" | null>(null);
+  const [verified, setVerified] = useState<
+    "success" | "rechazado" | "cancelado" | "pendiente" | "failed" | null
+  >(null);
   const [successDetails, setSuccessDetails] = useState<PaymentSuccessDetails | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const verifyingRef = useRef(false);
@@ -76,6 +79,12 @@ export default function PagosPage() {
             setSuccessDetails(result.payment);
           }
           setModalOpen(true);
+        } else if (result.status === "rechazado") {
+          setVerified("rechazado");
+        } else if (result.status === "cancelado") {
+          setVerified("cancelado");
+        } else if (result.status === "pendiente") {
+          setVerified("pendiente");
         } else if (result.status === "not_found") {
           setVerified("failed");
         } else {
@@ -148,6 +157,19 @@ export default function PagosPage() {
           <PurchaseSuccessBanner />
         </div>
       )}
+      {!verifying && verified === "rechazado" && (
+        <PurchaseFailedBanner
+          title="Pago rechazado."
+          description="No se realizó ningún cargo. Intenta nuevamente o usa otro método de pago."
+        />
+      )}
+      {!verifying && verified === "cancelado" && (
+        <PurchaseFailedBanner
+          title="Pago anulado/cancelado."
+          description="No se realizó ningún cargo. Puedes intentar pagar nuevamente."
+        />
+      )}
+      {!verifying && verified === "pendiente" && <PurchasePendingBanner />}
       {!verifying && verified === "failed" && <PurchaseFailedBanner />}
       {!verifying && !verified && statusParam === "success" && (
         <PurchaseSuccessBanner />

@@ -227,4 +227,25 @@ export function verifyFlowCallbackSignature(
   );
 }
 
+/**
+ * Traduce el estado devuelto por Flow (payment/getStatus) al estado de la
+ * tabla `payments` de la app:
+ *   1 = pendiente de pago, 2 = pagada, 3 = rechazada, 4 = anulada
+ * (B-018)
+ */
+export function mapFlowStatus(
+  status: number
+): "pendiente" | "pagado" | "rechazado" | "cancelado" {
+  switch (status) {
+    case 2:
+      return "pagado";
+    case 3:
+      return "rechazado";
+    case 4:
+      return "cancelado";
+    default:
+      return "pendiente";
+  }
+}
+
 export { FLOW_LOG_PREFIX };

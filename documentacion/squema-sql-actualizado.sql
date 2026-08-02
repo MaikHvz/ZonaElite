@@ -16,7 +16,7 @@
 --   attendance.status: 'presente' | 'ausente' | 'justificado'
 --   blog_posts.status: 'borrador' | 'publicado' | 'programado'
 --   product_orders.status: 'borrador' | 'pagado' | 'enviado' | 'entregado' | 'cancelado'
---   payments.status: 'pendiente' | 'pagado' | 'fallido' | 'reembolsado'
+--   payments.status: 'pendiente' | 'pagado' | 'rechazado' | 'cancelado' | 'fallido' | 'reembolsado'
 --   memberships.status: 'activa' | 'vencida' | 'cancelada' | 'suspendida'
 --   notifications.type: 'info' | 'alerta' | 'sistema'
 --   notifications.target: 'todos' | 'adultos' | 'ninos' | 'staff'

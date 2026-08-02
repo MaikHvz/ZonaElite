@@ -1,6 +1,7 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import {
   verifyFlowPayment,
+  mapFlowStatus,
   FLOW_LOG_PREFIX,
 } from "@/lib/flow";
 import {
@@ -98,7 +99,20 @@ async function processInBackground(token: string) {
   }
 
   if (verification.status !== 2) {
+    const mapped = mapFlowStatus(verification.status);
     console.warn(L, "Flow not approved, status:", verification.status);
+
+    // B-018: marcar el pago rechazado/anulado en la BD para no dejarlo pendiente
+    if (mapped === "rechazado" || mapped === "cancelado") {
+      try {
+        await supabase
+          .from("payments")
+          .update({ status: mapped })
+          .eq("id", payment.id);
+      } catch (err) {
+        console.error(L, "Failed to mark payment as rejected/cancelled:", err);
+      }
+    }
     return;
   }
 

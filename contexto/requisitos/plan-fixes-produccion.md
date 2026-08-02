@@ -319,6 +319,7 @@ Fase 10 (deudas QR + RLS restringidas + legacy) ◀─────────�
 | 2026-08-02 | **Fase 10 completada** (B-013, B-014 + deuda materializada). Migración `006_debts_and_rls.sql` (tabla `debts`, 3 RLS restringidas a admin/staff, backfill legacy + drop constraint). Suite 156 verdes, build verde. Detalle en la sección de la fase. |
 | 2026-08-02 | **Fase 10 aplicada**: el usuario corrió `006_debts_and_rls.sql` en Supabase. |
 | 2026-08-02 | **Plan cerrado**: checklist de las 10 fases completo; creados `contexto/requisitos/requisitos-implementados.md` y `contexto/flujo-modulos.md` (cierre Fase 9, paso 3). |
+| 2026-08-02 | **B-018 resuelto (post-plan):** feedback de pagos Flow rechazados/anulados/pendientes. `mapFlowStatus` en `flow.ts`; `verify/route.ts` y `confirmation/route.ts` marcan el pago en BD; `/dashboard/pagos` muestra banners diferenciados; `/admin/ventas` filtra por "Rechazado". Suite **195 passed, 0 failed**, build verde, sin migración. Ver `contexto/requisitos/feedback-pagos-flow.md`. |
 
 ---
 

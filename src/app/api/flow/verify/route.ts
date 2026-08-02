@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { verifyFlowPayment, FLOW_LOG_PREFIX } from "@/lib/flow";
+import { verifyFlowPayment, mapFlowStatus, FLOW_LOG_PREFIX } from "@/lib/flow";
 import {
   confirmAndCreateMembership,
   extendEnrollment,
@@ -130,15 +130,17 @@ export async function GET(request: Request) {
         return await buildSuccessResponse(fullPayment);
       }
 
-      if (verification.status === 4) {
+      // B-018: flujo no aprobado — actualizar el estado del pago en la BD
+      const mapped = mapFlowStatus(verification.status);
+
+      if (mapped === "rechazado" || mapped === "cancelado") {
         await admin
           .from("payments")
-          .update({ status: "cancelado" })
+          .update({ status: mapped })
           .eq("id", fullPayment.id);
-        return NextResponse.json({ status: "cancelado" });
       }
 
-      return NextResponse.json({ status: fullPayment.status });
+      return NextResponse.json({ status: mapped });
     } catch {
       return NextResponse.json({ status: fullPayment.status });
     }

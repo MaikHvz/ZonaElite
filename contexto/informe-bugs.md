@@ -1,7 +1,7 @@
 # Informe de Bugs y Fallos — ZonaElite
 
 > **Estado del documento:** ACTIVO — se actualiza conforme se solucionan los bugs.
-> **Última actualización:** 2026-08-01
+> **Última actualización:** 2026-08-02
 > **Alcance:** Flujos críticos de producción (inscripción a clases, horarios, creación de clases, membresías post-pago, vencimiento y renovación).
 ---
 
@@ -392,7 +392,35 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 
 ---
 
-## Registro de cambios del documento
+## B-018 — Pago Flow rechazado/anulado queda "pendiente" y sin feedback para el usuario
+
+| Campo | Valor |
+|-------|-------|
+| **Estado** | 🟢 RESUELTO (2026-08-02) |
+| **Severidad** | 🟠 Alto (mala UX: el usuario cree que pagó / el registro queda con estado falso) |
+| **Módulo** | Pago Flow / Dashboard pagos |
+| **Fuente** | Prueba en sandbox con tarjeta rechazada |
+
+**Descripción:** Flow devuelve en `payment/getStatus` los estados `1 = pendiente`, `2 = pagada`, `3 = rechazada`, `4 = anulada`. El código solo manejaba `2` (pagada) y `4` (cancelada):
+- `src/app/api/flow/verify/route.ts` caía al `else` para `status === 3`, devolviendo el status de la BD (seguía `pendiente`) **sin actualizarla**.
+- `src/app/api/flow/confirmation/route.ts` (callback server) logueaba "Flow not approved" y retornaba **sin marcar el pago**.
+- `/dashboard/pagos` mapeaba todo resultado distinto de "pagado" a un banner genérico de fallo, sin distinguir rechazado/anulado/pendiente.
+
+**Impacto:** al probar en sandbox con una tarjeta rechazada, el usuario volvía a `/dashboard/pagos` sin feedback claro de que el pago NO se realizó, y el registro quedaba como `pendiente` en vez de `rechazada`. El botón "Pagar de nuevo" dentro de la ventana de 5 min podía reutilizar ese payment pendiente.
+
+**Solución aplicada:**
+1. **`src/lib/flow.ts`** — nuevo helper `mapFlowStatus(status)` que traduce el estado de Flow a `pendiente | pagado | rechazado | cancelado` (única fuente de verdad, testeable).
+2. **`verify/route.ts`** — para `status !== 2` actualiza el pago según `mapFlowStatus` (`rechazado`/`cancelado`) y devuelve `{ status: mapped }` al cliente. `status 1` devuelve `pendiente` (el callback asíncrono puede completarlo luego).
+3. **`confirmation/route.ts`** — en el callback server, si `status !== 2` marca el pago como `rechazado`/`cancelado` en BD (ya no queda pendiente) y retorna sin crear membresía.
+4. **`PurchaseSuccessBanner.tsx`** — `PurchaseFailedBanner` acepta `title`/`description`; nuevo `PurchasePendingBanner` (tinte ámbar) para pagos pendientes.
+5. **`/dashboard/pagos`** — feedback diferenciado: `rechazado` → "Pago rechazado. No se realizó ningún cargo", `cancelado` → "Pago anulado/cancelado", `pendiente` → "Tu pago está pendiente de confirmación". Aplica a membresías, inscripciones y cualquier pago (mismo flujo verify).
+6. **`/admin/ventas`** — filtro de estado **Rechazado** + tarjeta de conteo de rechazados.
+
+**Verificación:** suite **195 passed, 0 failed** (sección M nueva: unit de `mapFlowStatus` + scans de routes/pagos/ventas/banner/esquema), `npm run build` verde. Sin migración SQL (`payments.status` es `text` sin CHECK; `StatusBadge` ya soportaba `rechazado`).
+
+**Referencias:** `flow.ts:mapFlowStatus`, `api/flow/verify/route.ts:133-143`, `api/flow/confirmation/route.ts:100-114`, `PurchaseSuccessBanner.tsx`, `dashboard/pagos/page.tsx`, `admin/ventas/page.tsx`, `contexto/requisitos/feedback-pagos-flow.md`.
+
+---
 
 | Fecha | Acción |
 |-------|--------|
@@ -409,3 +437,4 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 | 2026-08-02 | **Fase 10 completa:** B-013 y B-014 resueltos (RLS restringidas a admin/staff + deuda materializada en `debts` + drop del constraint legacy en la migración `006`). Suite en verde (156 tests). Migración `006_debts_and_rls.sql` aplicada por el usuario. |
 | 2026-08-02 | **B-016 resuelto:** columna `location_url` agregada a `events` (migración `007`). Suite en verde (161 tests). Migración `007_add_events_location_url.sql` pendiente de aplicar en Supabase. |
 | 2026-08-02 | **B-017 resuelto:** navbar público oculto en `/admin` (antes tapaba el ☰ del admin y se abría el menú del sitio). Suite en verde (178 tests). Sin migración. |
+| 2026-08-02 | **B-018 resuelto:** pagos Flow rechazados/anulados se marcan en BD y el usuario recibe feedback diferenciado (rechazado/cancelado/pendiente) en `/dashboard/pagos` + filtro "Rechazado" en `/admin/ventas`. Suite en verde (195 tests). Sin migración. |
