@@ -1,7 +1,7 @@
 -- ============================================================
 -- 009_personalized_plans_packs.sql
 -- Clases Personalizadas — Módulo independiente (Fase 0)
--- Tablas nuevas propias. No toca memberships/membership_plans/
+-- Tablas nuevas propias. No toca membesrships/membership_plans/
 -- class_enrollments/tokens/checkin. Idempotente.
 -- ============================================================
 
