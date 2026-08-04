@@ -6,6 +6,7 @@ import {
 } from "@/lib/flow";
 import {
   confirmAndCreateMembership,
+  confirmPersonalizedPack,
   extendEnrollment,
   isVerificationOrderMatch,
   notifyPaymentWithoutMembership,
@@ -184,6 +185,23 @@ async function processInBackground(token: string) {
     }
   } catch (err) {
     console.error(L, "Enrollment extension threw:", err);
+  }
+
+  // Clases personalizadas (módulo desacoplado): concepto "Clase Personalizada X"
+  const hasPersonalizedConcept = /^Clase Personalizad[ao]/i.test(payment.concept || "");
+  if (hasPersonalizedConcept) {
+    try {
+      const result = await confirmPersonalizedPack(supabase, payment.id, payment.user_id);
+      if (result.success) {
+        assignedSomething = true;
+      } else {
+        console.error(L, "Personalized pack creation failed:", result.error);
+        await notifyPaymentWithoutMembership(supabase, payment, result.error || "Error al crear pack personalizado");
+      }
+    } catch (err) {
+      console.error(L, "Personalized pack creation threw:", err);
+      await notifyPaymentWithoutMembership(supabase, payment, String(err));
+    }
   }
 
   if (assignedSomething) {

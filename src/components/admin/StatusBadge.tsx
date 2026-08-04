@@ -6,6 +6,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   confirmado: { label: "Confirmado", className: "bg-green-500/10 text-green-400 border-green-500/20" },
   vencida: { label: "Vencida", className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
   vencido: { label: "Vencido", className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
+  agotada: { label: "Agotada", className: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
   programado: { label: "Programado", className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
   pendiente: { label: "Pendiente", className: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
   borrador: { label: "Borrador", className: "bg-on-surface/10 text-on-surface-variant border-on-surface/10" },

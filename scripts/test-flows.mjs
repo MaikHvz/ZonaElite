@@ -1028,6 +1028,102 @@ ok("O: create-order no notifica (evita duplicar/noise)",
   !createOrderRoute.includes("notifyUserPaymentStatus"));
 
 // ============================================================
+// P. Clases personalizadas (módulo desacoplado)
+// ============================================================
+section("P. Clases personalizadas (módulo desacoplado)");
+
+const createOrderRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "create-order", "route.ts"), "utf8");
+const flowHelpersP = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
+const confirmRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
+const verifyRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
+const forceConfirmRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
+const adminMembresiasP = readFileSync(join(ROOT, "src", "app", "admin", "membresias", "page.tsx"), "utf8");
+const deleteConfirmP = readFileSync(join(ROOT, "src", "components", "admin", "DeleteConfirm.tsx"), "utf8");
+const statusBadgeP = readFileSync(join(ROOT, "src", "components", "admin", "StatusBadge.tsx"), "utf8");
+const membershipCardP = readFileSync(join(ROOT, "src", "components", "dashboard", "MembershipCard.tsx"), "utf8");
+const dashboardTsP = readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8");
+const checkoutModalP = readFileSync(join(ROOT, "src", "components", "PersonalizedCheckoutModal.tsx"), "utf8");
+const schemaSqlP = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+
+// P1. create-order: acepta personalizedPlanId y valida exclusividad
+ok("P: create-order desestructura personalizedPlanId del body",
+  /const \{ planId, beneficiaryId, includeEnrollment, enrollmentPlanId, personalizedPlanId \} = body;/.test(createOrderRouteP));
+ok("P: create-order rechaza combinar pack con membresía/inscripción (400)",
+  /if \(personalizedPlanId && \(planId \|\| includeEnrollment \|\| enrollmentPlanId\)\)/.test(createOrderRouteP) &&
+  /Las clases personalizadas no se combinan con otros planes/.test(createOrderRouteP));
+ok("P: create-order valida que el plan exista y esté activo",
+  /\.eq\("id", personalizedPlanId\)[\s\S]*?\.single\(\)[\s\S]*?if \(!data\.active\)[\s\S]*?Plan no disponible/.test(createOrderRouteP));
+ok("P: create-order suma el precio del pack al total",
+  /const totalAmount = \(membershipPlan\?\.price \|\| 0\) \+ \(enrollmentPlan\?\.price \|\| 0\) \+ \(personalizedPlan\?\.price \|\| 0\);/.test(createOrderRouteP));
+ok("P: create-order arma concepto 'Clase Personalizada <plan>'",
+  /conceptParts\.push\(`Clase Personalizada \$\{personalizedPlan\.name\}`\)/.test(createOrderRouteP));
+
+// P2. flow-helpers: confirmPersonalizedPack (idempotente, fechas Chile)
+ok("P: flow-helpers exporta confirmPersonalizedPack",
+  /export async function confirmPersonalizedPack/.test(flowHelpersP));
+ok("P: extrae nombre de plan del concepto (regex tolerant a 'Clase Personalizada/do')",
+  flowHelpersP.includes("Clase Personalizad[ao]"));
+ok("P: confirmPersonalizedPack es idempotente por payment_id",
+  /\.from\("personalized_packs"\)[\s\S]*?\.eq\("payment_id", paymentId\)[\s\S]*?\.maybeSingle\(\)/.test(flowHelpersP));
+ok("P: confirmPersonalizedPack usa fechas de Chile (getChileToday/addDaysChile)",
+  /const today = getChileToday\(\);[\s\S]*?const endDate = addDaysChile\(today, plan\.validity_days\);/.test(flowHelpersP));
+ok("P: fallback de beneficiario propio cuando payment.beneficiary_id es null",
+  /\.from\("beneficiaries"\)[\s\S]*?\.eq\("profile_id", userId\)[\s\S]*?\.maybeSingle\(\)/.test(flowHelpersP));
+ok("P: inserta el pack en estado 'activa' con used_classes 0",
+  /\.from\("personalized_packs"\)\s*\.insert\([\s\S]*?used_classes: 0,[\s\S]*?status: "activa",/.test(flowHelpersP));
+ok("P: confirmPersonalizedPack no toca memberships (módulo desacoplado)",
+  !/\.from\("memberships"\)/.test(flowHelpersP.slice(193, 289)));
+
+// P3. Las 3 rutas de confirmación detectan el concepto y crean el pack
+ok("P: confirmation importa y llama confirmPersonalizedPack",
+  confirmRouteP.includes("confirmPersonalizedPack") &&
+  /const hasPersonalizedConcept = \/\^Clase Personalizad\[ao\]\/i\.test\(payment\.concept \|\| ""\);/.test(confirmRouteP) &&
+  /await confirmPersonalizedPack\(supabase, payment\.id, payment\.user_id\);/.test(confirmRouteP));
+ok("P: verify importa y llama confirmPersonalizedPack",
+  verifyRouteP.includes("confirmPersonalizedPack") &&
+  /await confirmPersonalizedPack\(admin, fullPayment\.id, user\.id\);/.test(verifyRouteP));
+ok("P: force-confirm importa y llama confirmPersonalizedPack",
+  forceConfirmRouteP.includes("confirmPersonalizedPack") &&
+  /await confirmPersonalizedPack\(admin, paymentId, payment\.user_id\);/.test(forceConfirmRouteP));
+ok("P: las 3 rutas marcan assignedSomething al crear el pack",
+  /const result = await confirmPersonalizedPack\(supabase, payment\.id, payment\.user_id\);[\s\S]*?if \(result\.success\)[\s\S]*?assignedSomething = true;/.test(confirmRouteP) &&
+  /await confirmPersonalizedPack\(admin, fullPayment\.id, user\.id\);[\s\S]*?assignedSomething = true;/.test(verifyRouteP) &&
+  /await confirmPersonalizedPack\(admin, paymentId, payment\.user_id\);[\s\S]*?assignedSomething = true;/.test(forceConfirmRouteP));
+
+// P4. Admin: CRUD de planes + packs (consumo/cancelación/filtros)
+ok("P: admin tiene tab 'Personalizadas' con 3 tabs",
+  /t === "planes" \? "Planes" : t === "membresias" \? "Membresías" : "Personalizadas"/.test(adminMembresiasP));
+ok("P: admin deriva estado efectivo del pack (vencida)",
+  /const effectivePackStatus = \(p: PersonalizedPack\): string =>/.test(adminMembresiasP) &&
+  /p\.status === "activa" && p\.end_date < today/.test(adminMembresiasP));
+ok("P: admin calcula contadores y filtros de packs",
+  /const packFilterCounts = \{/.test(adminMembresiasP) &&
+  /const filteredPacks = packFilter === "todas" \? personalizedPacks/.test(adminMembresiasP));
+ok("P: admin permite consumir clase (confirmLabel Consumir)",
+  /confirmLabel="Consumir"/.test(adminMembresiasP));
+ok("P: admin permite cancelar pack (confirmLabel Cancelar Pack)",
+  /confirmLabel="Cancelar Pack"/.test(adminMembresiasP));
+ok("P: DeleteConfirm soporta confirmLabel personalizado",
+  /confirmLabel\?: string;/.test(deleteConfirmP));
+
+// P5. Cliente: StatusBadge agotada, MembershipCard chip, checkout, dashboard helpers
+ok("P: StatusBadge incluye estado 'agotada'",
+  /agotada: \{ label: "Agotada"/.test(statusBadgeP));
+ok("P: MembershipCard muestra chip de clases personalizadas (workspace_premium)",
+  membershipCardP.includes("workspace_premium") &&
+  membershipCardP.includes("availablePersonalized"));
+ok("P: dashboard.ts expone helpers de clases personalizadas",
+  /export async function getActivePersonalizedPlans/.test(dashboardTsP) &&
+  /export async function getUserPersonalizedData/.test(dashboardTsP));
+ok("P: existe PersonalizedCheckoutModal y envía personalizedPlanId",
+  /body: JSON\.stringify\(\{[\s\S]*?personalizedPlanId: selectedPlanId,/.test(checkoutModalP));
+ok("P: esquema documenta las tablas del módulo desacoplado",
+  /CREATE TABLE IF NOT EXISTS public\.personalized_plans/.test(schemaSqlP) &&
+  /CREATE TABLE IF NOT EXISTS public\.personalized_packs/.test(schemaSqlP));
+ok("P: RLS de packs usa owns_beneficiary",
+  /personalized_packs[\s\S]*?owns_beneficiary/.test(schemaSqlP));
+
+// ============================================================
 // RESULTADO
 // ============================================================
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

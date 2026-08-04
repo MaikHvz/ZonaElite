@@ -7,9 +7,10 @@ interface DeleteConfirmProps {
   onConfirm: () => void;
   onCancel: () => void;
   loading?: boolean;
+  confirmLabel?: string;
 }
 
-export default function DeleteConfirm({ open, title, message, onConfirm, onCancel, loading }: DeleteConfirmProps) {
+export default function DeleteConfirm({ open, title, message, onConfirm, onCancel, loading, confirmLabel = "Eliminar" }: DeleteConfirmProps) {
   if (!open) return null;
 
   return (
@@ -39,7 +40,7 @@ export default function DeleteConfirm({ open, title, message, onConfirm, onCance
             disabled={loading}
             className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors font-[family-name:var(--font-body-md)] text-[14px] disabled:opacity-50 cursor-pointer"
           >
-            {loading ? "Eliminando..." : "Eliminar"}
+            {loading ? "Procesando..." : confirmLabel}
           </button>
         </div>
       </div>

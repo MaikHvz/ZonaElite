@@ -1099,6 +1099,143 @@ export async function getBeneficiaryTokens(
 }
 
 // =====================================================
+// CLASES PERSONALIZADAS (módulo desacoplado)
+// =====================================================
+
+export interface PersonalizedPlanData {
+  id: string;
+  name: string;
+  price: number;
+  total_classes: number;
+  validity_days: number;
+  features: string[] | null;
+  active: boolean;
+}
+
+export interface PersonalizedPackData {
+  id: string;
+  beneficiary_id: string;
+  plan_id: string;
+  purchased_by: string;
+  payment_id: string | null;
+  start_date: string;
+  end_date: string;
+  total_classes: number;
+  used_classes: number;
+  status: string;
+  created_at: string;
+  plan: {
+    id: string;
+    name: string;
+    price: number;
+    total_classes: number;
+    validity_days: number;
+    features: string[] | null;
+  } | null;
+  beneficiary: {
+    id: string;
+    profile_id: string | null;
+    dependent_id: string | null;
+    dependent: { full_name: string; category: string } | null;
+  } | null;
+}
+
+export async function getActivePersonalizedPlans() {
+  return safeQuery(async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("personalized_plans")
+      .select("id, name, price, total_classes, validity_days, features")
+      .eq("active", true)
+      .order("price");
+    return (data || []) as PersonalizedPlanData[];
+  });
+}
+
+export interface PersonalizedBeneficiary {
+  id: string;
+  name: string;
+  isSelf: boolean;
+  packs: PersonalizedPackData[];
+}
+
+export async function getUserPersonalizedData(userId: string) {
+  return safeQuery(async () => {
+    const supabase = createClient();
+
+    const [ownBeneficiary, dependentsWithBeneficiary] = await Promise.all([
+      supabase
+        .from("beneficiaries")
+        .select("id")
+        .eq("profile_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("dependents")
+        .select("id, full_name, beneficiaries(id)")
+        .eq("tutor_id", userId),
+    ]);
+
+    const beneficiaryEntries: { id: string; name: string; isSelf: boolean }[] = [];
+    if (ownBeneficiary.data) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", userId)
+        .maybeSingle();
+      beneficiaryEntries.push({
+        id: ownBeneficiary.data.id,
+        name: (profile as { full_name: string } | null)?.full_name || "Yo",
+        isSelf: true,
+      });
+    }
+
+    for (const d of dependentsWithBeneficiary.data || []) {
+      const bRaw = d.beneficiaries as unknown as { id: string }[] | { id: string } | null;
+      const bId = Array.isArray(bRaw) ? bRaw[0]?.id : bRaw?.id;
+      if (bId) {
+        beneficiaryEntries.push({ id: bId, name: d.full_name, isSelf: false });
+      }
+    }
+
+    const packsByBeneficiary = new Map<string, PersonalizedPackData[]>();
+    if (beneficiaryEntries.length > 0) {
+      const { data: packs } = await supabase
+        .from("personalized_packs")
+        .select(
+          `
+          *,
+          plan:personalized_plans(id, name, price, total_classes, validity_days, features),
+          beneficiary:beneficiaries(
+            id, profile_id, dependent_id,
+            dependent:dependents(full_name, category)
+          )
+        `
+        )
+        .in(
+          "beneficiary_id",
+          beneficiaryEntries.map((b) => b.id)
+        )
+        .order("created_at", { ascending: false });
+
+      for (const p of (packs || []) as PersonalizedPackData[]) {
+        const list = packsByBeneficiary.get(p.beneficiary_id) || [];
+        list.push(p);
+        packsByBeneficiary.set(p.beneficiary_id, list);
+      }
+    }
+
+    const beneficiaries: PersonalizedBeneficiary[] = beneficiaryEntries.map((b) => ({
+      id: b.id,
+      name: b.name,
+      isSelf: b.isSelf,
+      packs: packsByBeneficiary.get(b.id) || [],
+    }));
+
+    return { beneficiaries, packsByBeneficiary };
+  });
+}
+
+// =====================================================
 // USER NOTIFICATIONS
 // =====================================================
 

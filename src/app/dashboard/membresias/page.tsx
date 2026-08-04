@@ -7,12 +7,17 @@ import { createClient } from "@/lib/supabase/client";
 import { getChileToday } from "@/lib/dates";
 import {
   getUserMemberships,
+  getUserPersonalizedData,
+  getActivePersonalizedPlans,
   type MembershipData,
+  type PersonalizedBeneficiary,
 } from "@/lib/supabase/dashboard";
 import { effectiveMembershipStatus } from "@/lib/membership-status";
 import MembershipCard from "@/components/dashboard/MembershipCard";
 import { MembershipCardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import CheckoutModal from "@/components/CheckoutModal";
+import PersonalizedCheckoutModal from "@/components/PersonalizedCheckoutModal";
+import StatusBadge from "@/components/admin/StatusBadge";
 import type { EnrollmentPlan } from "@/components/CheckoutModal";
 
 type Filter = "all" | "activa" | "vencida" | "cancelada";
@@ -40,6 +45,10 @@ export default function MembresiasPage() {
   const [allBeneficiaryEnrollments, setAllBeneficiaryEnrollments] = useState<BeneficiaryEnrollment[]>([]);
   const [enrollmentPlans, setEnrollmentPlans] = useState<EnrollmentPlan[]>([]);
   const [enrollCheckoutOpen, setEnrollCheckoutOpen] = useState(false);
+  const [personalizedBeneficiaries, setPersonalizedBeneficiaries] = useState<PersonalizedBeneficiary[]>([]);
+  const [personalizedPlansCount, setPersonalizedPlansCount] = useState(0);
+  const [personalizedCheckoutOpen, setPersonalizedCheckoutOpen] = useState(false);
+  const [checkoutBeneficiaryId, setCheckoutBeneficiaryId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -145,6 +154,14 @@ export default function MembresiasPage() {
         .order("sort_order");
 
       setEnrollmentPlans((plans as EnrollmentPlan[]) || []);
+
+      // Clases personalizadas (módulo desacoplado)
+      const [persData, persPlans] = await Promise.all([
+        getUserPersonalizedData(user.id),
+        getActivePersonalizedPlans(),
+      ]);
+      setPersonalizedBeneficiaries(persData.data?.beneficiaries || []);
+      setPersonalizedPlansCount((persPlans.data || []).length);
       setLoading(false);
     })();
   }, [user]);
@@ -166,6 +183,11 @@ export default function MembresiasPage() {
 
   const formatDate = (d: string) =>
     new Date(d + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" });
+
+  const packEffectiveStatus = (p: { status: string; end_date: string }): string => {
+    if (p.status === "activa" && p.end_date < getChileToday()) return "vencida";
+    return p.status;
+  };
 
   return (
     <div className="space-y-6">
@@ -283,6 +305,132 @@ export default function MembresiasPage() {
         </div>
       )}
 
+      {/* Mis Clases Personalizadas */}
+      {!loading && (
+        <div className="pt-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase tracking-tighter">
+                Mis <span className="text-primary">Clases Personalizadas</span>
+              </h2>
+              <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant mt-1">
+                Packs 1 a 1 o grupos pequeños, desacoplados de tu membresía regular.
+              </p>
+            </div>
+            {personalizedPlansCount > 0 && (
+              <button
+                onClick={() => {
+                  setCheckoutBeneficiaryId(null);
+                  setPersonalizedCheckoutOpen(true);
+                }}
+                className="flex items-center gap-2 font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary border border-primary/30 px-4 py-2 rounded-lg hover:bg-primary/10 transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">add_shopping_cart</span>
+                Comprar pack
+              </button>
+            )}
+          </div>
+
+          {personalizedPlansCount === 0 ? (
+            <div className="glass-panel rounded-xl p-6 text-center">
+              <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant">
+                No hay planes de clases personalizadas disponibles por ahora.
+              </p>
+            </div>
+          ) : personalizedBeneficiaries.length === 0 ? (
+            <div className="glass-panel rounded-xl p-6 text-center">
+              <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant">
+                No encontramos tu perfil de beneficiario. Solicita a la academia que lo cree.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {personalizedBeneficiaries.map((b) => (
+                <div key={b.id} className="glass-card p-5 border-on-surface/5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-[18px]">person</span>
+                      <h3 className="font-[family-name:var(--font-headline-md)] text-[15px] text-on-surface uppercase">
+                        {b.name}
+                        {b.isSelf && (
+                          <span className="ml-1.5 text-[10px] text-on-surface-variant font-[family-name:var(--font-label-sm)]">
+                            Titular
+                          </span>
+                        )}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setCheckoutBeneficiaryId(b.id);
+                        setPersonalizedCheckoutOpen(true);
+                      }}
+                      className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-primary border border-primary/30 px-3 py-1.5 rounded-lg hover:bg-primary/10 transition-colors cursor-pointer"
+                    >
+                      Comprar
+                    </button>
+                  </div>
+
+                  {b.packs.length === 0 ? (
+                    <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant/60 italic">
+                      Sin packs de clases personalizadas
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {b.packs.map((p) => {
+                        const effective = packEffectiveStatus(p);
+                        const remaining = Math.max(0, p.total_classes - p.used_classes);
+                        return (
+                          <div key={p.id} className="p-3 rounded-lg bg-surface-container-lowest/50 border border-on-surface/5">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                                {p.plan?.name || "Plan"}
+                              </p>
+                              <StatusBadge status={effective} />
+                            </div>
+                            <div className="flex items-center justify-between mt-2 font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">
+                              <span>
+                                {p.used_classes} de {p.total_classes} clases usadas
+                              </span>
+                              {effective === "activa" && (
+                                <span className="text-primary/80">
+                                  {remaining} restante{remaining === 1 ? "" : "s"}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-1.5">
+                              <div className="h-1.5 rounded-full bg-on-surface/10 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{
+                                    width: `${p.total_classes > 0 ? Math.min(100, (p.used_classes / p.total_classes) * 100) : 0}%`,
+                                    background:
+                                      effective === "activa"
+                                        ? "linear-gradient(90deg, #ff544c, #d32f2f)"
+                                        : "linear-gradient(90deg, #78716c, #57534e)",
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <p className="mt-1.5 font-[family-name:var(--font-body-sm)] text-[10px] text-on-surface-variant">
+                              Vigencia hasta{" "}
+                              {new Date(p.end_date + "T12:00:00").toLocaleDateString("es-CL", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Enrollment-only checkout */}
       {enrollCheckoutOpen && (
         <CheckoutModal
@@ -290,6 +438,15 @@ export default function MembresiasPage() {
           onClose={() => setEnrollCheckoutOpen(false)}
           plan={null}
           mode="enrollment-only"
+        />
+      )}
+
+      {/* Personalized classes checkout */}
+      {personalizedCheckoutOpen && (
+        <PersonalizedCheckoutModal
+          open={personalizedCheckoutOpen}
+          onClose={() => setPersonalizedCheckoutOpen(false)}
+          defaultBeneficiaryId={checkoutBeneficiaryId}
         />
       )}
     </div>

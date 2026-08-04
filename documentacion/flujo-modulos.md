@@ -8,6 +8,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 **Propósito**: Portal de acceso para usuarios anónimos, venta de membresías y exposición de contenido.
 - **Rutas Principales**:
   - `/` (`src/app/page.tsx`): Landing principal. Agrupa `Hero.tsx`, `IntroSection.tsx`, `Disciplines.tsx`, `Memberships.tsx` (con visualización de membresía destacada PRO), `GalleryCarousel.tsx`, `Philosophy.tsx`, `Lifestyle.tsx`.
+    - 🔵 **PLANIFICADO (Clases Personalizadas)**: sección "¿Necesitas Clases Personalizadas?" debajo de las membresías normales, vía `PersonalizedPlans.tsx` (lee `personalized_plans`). Ver requisito citado en la sección 7.
   - `/nosotros` (`src/app/nosotros/page.tsx`): Información sobre la academia.
   - `/horarios` (`src/app/horarios/page.tsx`): Tabla interactiva pública generada dinámicamente desde la BD.
   - `/blog`, `/blog/[slug]`: Motor de blog público leyendo desde la tabla `posts`.
@@ -35,6 +36,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Sub-Módulos del Dashboard**:
   - **Resumen (`/dashboard/page.tsx`)**: Muestra `AlertBanner.tsx` si la suscripción va a vencer, y renderiza `QuickStats.tsx` de métricas.
   - **Membresías (`/dashboard/membresias/page.tsx`)**: Consulta y muestra en tiempo real las membresías activas usando `MembershipCard.tsx` y llama a `getRemainingTokens()` para planes limitados.
+    - 🔵 **PLANIFICADO (Clases Personalizadas)**: sección "Mis Clases Personalizadas" (cards por beneficiario Yo + cargas) y chip "X clases personalizadas disponibles" en `MembershipCard.tsx`. Ver `contexto/requisitos/clases-personalizadas-modulo-independiente.md`.
   - **Cargas/Dependientes (`/dashboard/cargas/page.tsx`)**:
     - Permite al titular (Tutor) agregar hijos/parejas a través de `AddDependentModal.tsx`.
     - Estos se guardan en la tabla `dependents` y se auto-asignan en la tabla `beneficiaries`.
@@ -77,6 +79,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
     - CRUD de Planes (tabla `membership_plans`). Permite designar un único plan como Destacado (PRO) con exclusividad garantizada en UI y base de datos.
     - Asignación manual usando `AssignMembershipModal.tsx` (replicando la lógica de cancelación y activación que usa Flow).
     - Emisión de recibos usando `@react-pdf/renderer` en `MembershipReceipt.tsx`.
+    - 🔵 **PLANIFICADO (Clases Personalizadas)**: sub-tabs "Planes | Membresías | Personalizadas", botón "Crear Plan Personalizado" y gestión de packs (consumir/cancelar). Ver requisito citado en la sección 7.
   - **Usuarios (`/admin/usuarios/page.tsx`)**: Visor maestro de perfiles, roles y dependientes por usuario usando `DataTable.tsx`. Incluye exportación a Excel con fechas de nacimiento, estado de membresía/inscripción y pestaña especial de gráficos de torta y barras.
   - **Horarios (`/admin/horarios/page.tsx`)**: Interfaz para añadir clases (lunes a domingo, profesor, disciplina). Estos datos alimentan el auto-generador de sesiones y permiten exportar la mallas horaria en formato visual tipo calendario.
   - **Ventas (`/admin/ventas/page.tsx`)**: Panel de métricas transaccionales con exportador de Excel tipo "Cartola" filtrado por Mes, Año e Histórico.
@@ -97,3 +100,22 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
   - `server.ts` (Componentes del Servidor / SSR con cookies)
   - `admin.ts` (Client Service Role para tareas protegidas)
   - `dashboard.ts` (Consultas optimizadas para el dashboard del usuario).
+
+---
+
+## 7. Módulo Clases Personalizadas (🟢 IMPLEMENTADO — v1)
+
+> Estado: **implementado (Fases 0–3b de código + sección P en suite, 244 tests A–P en verde, `npm run build` OK)**. Pendiente manual: aplicar `contexto/migrations/009_personalized_plans_packs.sql` en Supabase y prueba sandbox Flow. Detalle completo en `contexto/requisitos/clases-personalizadas-modulo-independiente.md` y plan por fases en `documentacion/plan-clases-personalizadas.md`.
+
+**Propósito**: Compra de packs de clases personalizadas (1 a 1 / grupos pequeños) como entidad **100% desacoplada** de membresías, tokens, inscripciones y check-in.
+- **Tablas nuevas**: `personalized_plans` (nombre, precio, clases, vigencia, features) y `personalized_packs` (beneficiario, plan, comprador, pago, fechas Chile-aware, usadas/total, estado `activa/agotada/vencida/cancelada`). Sin índice único de packs activos (N packs en paralelo por beneficiario). RLS packs: `select_own_or_admin` (vía `owns_beneficiary`) + `admin_write`; planes: `select_all` + `admin_write`.
+- **Pago Flow**: concepto `Clase Personalizada <name>` — no matchea el regex `/membres[íi]a/i` de los 3 routes, así que nunca crea membresía ni cancela activas. Rama nueva aditiva con helper `confirmPersonalizedPack`:
+  - `create-order/route.ts`: acepta `personalizedPlanId` **excluyente** de `planId`/`includeEnrollment`/`enrollmentPlanId` (400 si se combinan); valida plan activo; `totalAmount = price`; concepto `Clase Personalizada <name>`; incluye `beneficiary_id`.
+  - `src/lib/flow-helpers.ts` → `confirmPersonalizedPack(supabase, paymentId, userId)`: idempotente por `payment_id`, extrae plan del concepto con `extractPersonalizedPlanName`, resuelve beneficiario (fallback: beneficiario propio del usuario si `payment.beneficiary_id` es null), inserta pack con `start_date = getChileToday()` y `end_date = addDaysChile(start, validity_days)`, `used_classes = 0`, `status = 'activa'`.
+  - Rama nueva en los 3 routes (tras `markPaymentAsPaid`): `confirmation`, `verify`, `force-confirm` — detección `/^Clase Personalizad[ao]/i`, setean `assignedSomething`, error → `notifyPaymentWithoutMembership`. Notificación `approved` vía `notifyUserPaymentStatus`.
+- **Consumo**: manual desde admin (`used_classes + 1` → `agotada` al llegar al total). Sin QR ni integración con asistencia. Cancelación de pack desde admin.
+- **UI**:
+  - Admin `admin/membresias`: sub-tabs "Planes | Membresías | Personalizadas". Tab Planes incluye sub-sección "Planes de Clases Personalizadas" (CRUD: nombre, precio, clases, vigencia, features agregables, activo). Tab Personalizadas: filtros Todas/Activas/Agotadas/Vencidas/Canceladas con contadores; acciones Consumir clase y Cancelar Pack (vía `DeleteConfirm` con `confirmLabel`). Estado efectivo derivado: `activa` con `end_date < hoy` → `vencida`.
+  - Dashboard `dashboard/membresias`: sección "Mis Clases Personalizadas" (cards por beneficiario Yo + cargas con estado/vigencia/barra usadas-total y botón Comprar) + chip en `MembershipCard` ("X clases personalizadas disponibles" / "agotadas"). `PersonalizedCheckoutModal` (selector de carga + plan + monto, manejo 401/timeout/`already_paid`).
+  - Landing (`src/app/page.tsx`): sección **"¿Necesitas Clases Personalizadas?"** debajo de las membresías normales vía `PersonalizedPlans.tsx` (retorna `null` si no hay planes activos).
+- **Verificación**: suite sección P (contratos de esquema/RLS, create-order, helper, 3 routes, admin, dashboard, landing) + `npx tsc --noEmit` limpio + `npm run build` OK.

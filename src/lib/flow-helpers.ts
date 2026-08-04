@@ -177,6 +177,116 @@ function extractPlanName(concept: string | null): string | null {
   return fallback ? fallback[1].trim() : null;
 }
 
+function extractPersonalizedPlanName(concept: string | null): string | null {
+  if (!concept) return null;
+  // Match "Clase Personalizada X" (con o sin sufijo "- ZONAELITE")
+  const match = concept.match(/Clase Personalizad[ao]\s+(.+?)(?:\s*-\s*ZONAELITE)?$/i);
+  return match ? match[1].trim() : null;
+}
+
+/**
+ * Clases personalizadas (módulo desacoplado): crea un `personalized_packs`
+ * al confirmarse un pago cuyo concepto es "Clase Personalizada <plan>".
+ * Idempotente: si el pago ya tiene un pack vinculado, no duplica.
+ * NO toca membresías ni tokens (no cancela activas, no inserta en memberships).
+ */
+export async function confirmPersonalizedPack(
+  supabase: SupabaseClient,
+  paymentId: string,
+  userId: string
+): Promise<{ success: boolean; packId?: string; error?: string }> {
+  const { data: payment } = await supabase
+    .from("payments")
+    .select("id, user_id, concept, beneficiary_id")
+    .eq("id", paymentId)
+    .single();
+
+  if (!payment) {
+    console.error(HELPERS_LOG, "Payment not found:", paymentId);
+    return { success: false, error: "Pago no encontrado" };
+  }
+
+  const { data: existingPack } = await supabase
+    .from("personalized_packs")
+    .select("id")
+    .eq("payment_id", paymentId)
+    .maybeSingle();
+
+  if (existingPack) {
+    console.log(HELPERS_LOG, "Payment already has personalized pack:", existingPack.id);
+    return { success: true, packId: existingPack.id };
+  }
+
+  const planName = extractPersonalizedPlanName(payment.concept);
+  if (!planName) {
+    console.error(HELPERS_LOG, "Could not extract personalized plan name from concept:", payment.concept);
+    return { success: false, error: "No se pudo determinar el plan desde el concepto" };
+  }
+
+  const { data: plan } = await supabase
+    .from("personalized_plans")
+    .select("id, name, total_classes, validity_days")
+    .ilike("name", planName)
+    .single();
+
+  if (!plan) {
+    console.error(HELPERS_LOG, "Personalized plan not found:", planName);
+    return { success: false, error: `Plan "${planName}" no encontrado` };
+  }
+
+  let targetBeneficiaryId = payment.beneficiary_id;
+
+  if (!targetBeneficiaryId) {
+    const { data: ownBeneficiary } = await supabase
+      .from("beneficiaries")
+      .select("id")
+      .eq("profile_id", userId)
+      .maybeSingle();
+
+    if (ownBeneficiary) {
+      targetBeneficiaryId = ownBeneficiary.id;
+    }
+  }
+
+  if (!targetBeneficiaryId) {
+    console.error(HELPERS_LOG, "No beneficiary found for user:", userId);
+    return { success: false, error: "Beneficiario no encontrado" };
+  }
+
+  const today = getChileToday();
+  const endDate = addDaysChile(today, plan.validity_days);
+
+  const { data: pack, error: insertError } = await supabase
+    .from("personalized_packs")
+    .insert({
+      beneficiary_id: targetBeneficiaryId,
+      plan_id: plan.id,
+      purchased_by: userId,
+      payment_id: paymentId,
+      start_date: today,
+      end_date: endDate,
+      total_classes: plan.total_classes,
+      used_classes: 0,
+      status: "activa",
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !pack) {
+    console.error(HELPERS_LOG, "Failed to create personalized pack:", paymentId, insertError);
+    return { success: false, error: "Error al crear el pack personalizado" };
+  }
+
+  console.log(HELPERS_LOG, "Personalized pack created:", {
+    packId: pack.id,
+    beneficiaryId: targetBeneficiaryId,
+    planId: plan.id,
+    endDate,
+  });
+
+  return { success: true, packId: pack.id };
+}
+
 export async function extendEnrollment(
   supabase: SupabaseClient,
   paymentId: string,

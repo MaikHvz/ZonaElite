@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { FLOW_LOG_PREFIX } from "@/lib/flow";
-import { confirmAndCreateMembership, extendEnrollment, markPaymentAsPaid, notifyPaymentWithoutMembership, notifyUserPaymentStatus } from "@/lib/flow-helpers";
+import { confirmAndCreateMembership, confirmPersonalizedPack, extendEnrollment, markPaymentAsPaid, notifyPaymentWithoutMembership, notifyUserPaymentStatus } from "@/lib/flow-helpers";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
@@ -61,6 +61,18 @@ export async function POST(request: Request) {
         assignedSomething = true;
       } else {
         console.error(`${FORCE_LOG} enrollment extension failed:`, enrollResult.error);
+      }
+    }
+
+    // Clases personalizadas (módulo desacoplado): concepto "Clase Personalizada X"
+    const hasPersonalizedConcept = /^Clase Personalizad[ao]/i.test(payment.concept || "");
+    if (hasPersonalizedConcept) {
+      const packResult = await confirmPersonalizedPack(admin, paymentId, payment.user_id);
+      if (packResult.success) {
+        assignedSomething = true;
+      } else {
+        console.error(`${FORCE_LOG} personalized pack creation failed:`, packResult.error);
+        await notifyPaymentWithoutMembership(admin, payment, packResult.error || "Error al crear pack personalizado");
       }
     }
 

@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { planId, beneficiaryId, includeEnrollment, enrollmentPlanId } = body;
+    const { planId, beneficiaryId, includeEnrollment, enrollmentPlanId, personalizedPlanId } = body;
 
     if (!beneficiaryId) {
       return NextResponse.json(
@@ -34,9 +34,17 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!planId && !includeEnrollment) {
+    if (!planId && !includeEnrollment && !personalizedPlanId) {
       return NextResponse.json(
-        { error: "Selecciona un plan de membresía o inscripción" },
+        { error: "Selecciona un plan de membresía, inscripción o clases personalizadas" },
+        { status: 400 }
+      );
+    }
+
+    // Clases personalizadas es un módulo desacoplado: nunca se combina con otros planes
+    if (personalizedPlanId && (planId || includeEnrollment || enrollmentPlanId)) {
+      return NextResponse.json(
+        { error: "Las clases personalizadas no se combinan con otros planes" },
         { status: 400 }
       );
     }
@@ -100,6 +108,32 @@ export async function POST(request: Request) {
       enrollmentPlan = data;
     }
 
+    // Validate personalized plan (módulo clases personalizadas)
+    let personalizedPlan = null;
+    if (personalizedPlanId) {
+      const { data, error: ppError } = await supabase
+        .from("personalized_plans")
+        .select("id, name, price, total_classes, validity_days, active")
+        .eq("id", personalizedPlanId)
+        .single();
+
+      if (ppError || !data) {
+        return NextResponse.json(
+          { error: "Plan no encontrado" },
+          { status: 400 }
+        );
+      }
+
+      if (!data.active) {
+        return NextResponse.json(
+          { error: "Plan no disponible" },
+          { status: 400 }
+        );
+      }
+
+      personalizedPlan = data;
+    }
+
     // Validate beneficiary
     const { data: beneficiary, error: benError } = await supabase
       .from("beneficiaries")
@@ -158,12 +192,13 @@ export async function POST(request: Request) {
     }
 
     // Calculate total amount
-    const totalAmount = (membershipPlan?.price || 0) + (enrollmentPlan?.price || 0);
+    const totalAmount = (membershipPlan?.price || 0) + (enrollmentPlan?.price || 0) + (personalizedPlan?.price || 0);
 
     // Build concept
     const conceptParts: string[] = [];
     if (enrollmentPlan) conceptParts.push(`Inscripción ${enrollmentPlan.name}`);
     if (membershipPlan) conceptParts.push(`Membresía ${membershipPlan.name}`);
+    if (personalizedPlan) conceptParts.push(`Clase Personalizada ${personalizedPlan.name}`);
     const concept = conceptParts.join(" + ") || "Pago ZONAELITE";
 
     // Prevent duplicate pending payments (5 min window)

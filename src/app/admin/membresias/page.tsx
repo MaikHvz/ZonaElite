@@ -16,14 +16,19 @@ import { getChileToday, addDaysChile } from "@/lib/dates";
 
 interface Plan { id: string; name: string; price: number; duration_days: number; category: string; benefits: string[]; tokens: number | null; active: boolean; featured?: boolean; }
 interface Membership { id: string; beneficiary_id: string; plan_id: string; purchased_by: string; start_date: string; end_date: string; status: string; created_at: string; membership_plans?: { name: string }; profiles?: { full_name: string }; beneficiaries?: { dependents?: { full_name: string; profiles?: { full_name: string } | null } | null; profiles?: { full_name: string } | null }; }
+interface PersonalizedPlan { id: string; name: string; price: number; total_classes: number; validity_days: number; features: string[] | null; active: boolean; created_at: string; }
+interface PersonalizedPack { id: string; beneficiary_id: string; plan_id: string; purchased_by: string; payment_id: string | null; start_date: string; end_date: string; total_classes: number; used_classes: number; status: string; created_at: string; personalized_plans?: { name: string }; profiles?: { full_name: string }; beneficiaries?: { dependents?: { full_name: string; profiles?: { full_name: string } | null } | null; profiles?: { full_name: string } | null }; }
 
 const emptyPlan = { name: "", price: 0, duration_days: 30, category: "adulto", benefits: [] as string[], tokens: null as number | null, active: true, featured: false };
+const emptyPPlan = { name: "", price: 0, total_classes: 1, validity_days: 30, features: [] as string[], active: true };
 
 export default function AdminMembresiasPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [personalizedPlans, setPersonalizedPlans] = useState<PersonalizedPlan[]>([]);
+  const [personalizedPacks, setPersonalizedPacks] = useState<PersonalizedPack[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"planes" | "membresias">("planes");
+  const [tab, setTab] = useState<"planes" | "membresias" | "personalizadas">("planes");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Plan | null>(null);
   const [form, setForm] = useState(emptyPlan);
@@ -44,14 +49,31 @@ export default function AdminMembresiasPage() {
   const [loadingTokens, setLoadingTokens] = useState(false);
   const [filter, setFilter] = useState<"todas" | "activas" | "proximas-vencer" | "vencidas">("todas");
 
+  const [pPlanModalOpen, setPPlanModalOpen] = useState(false);
+  const [editingPPlan, setEditingPPlan] = useState<PersonalizedPlan | null>(null);
+  const [pForm, setPForm] = useState(emptyPPlan);
+  const [pSaving, setPSaving] = useState(false);
+  const [pDeleteTarget, setPDeleteTarget] = useState<PersonalizedPlan | null>(null);
+  const [pDeleting, setPDeleting] = useState(false);
+  const [newFeature, setNewFeature] = useState("");
+  const [packFilter, setPackFilter] = useState<"todas" | "activas" | "agotadas" | "vencidas" | "canceladas">("todas");
+  const [consumeTarget, setConsumeTarget] = useState<PersonalizedPack | null>(null);
+  const [consuming, setConsuming] = useState(false);
+  const [cancelPackTarget, setCancelPackTarget] = useState<PersonalizedPack | null>(null);
+  const [cancellingPack, setCancellingPack] = useState(false);
+
   const load = async () => {
     const supabase = createClient();
-    const [pRes, mRes] = await Promise.all([
+    const [pRes, mRes, ppRes, pkRes] = await Promise.all([
       supabase.from("membership_plans").select("*").order("price"),
       supabase.from("memberships").select("*, membership_plans(name), profiles:purchased_by(full_name), beneficiaries!inner(dependents(full_name, profiles!tutor_id(full_name)), profiles(full_name))").order("created_at", { ascending: false }),
+      supabase.from("personalized_plans").select("*").order("price"),
+      supabase.from("personalized_packs").select("*, personalized_plans(name), profiles:purchased_by(full_name), beneficiaries!inner(dependents(full_name, profiles!tutor_id(full_name)), profiles(full_name))").order("created_at", { ascending: false }),
     ]);
     setPlans((pRes.data as Plan[]) || []);
     setMemberships((mRes.data as Membership[]) || []);
+    setPersonalizedPlans((ppRes.data as PersonalizedPlan[]) || []);
+    setPersonalizedPacks((pkRes.data as PersonalizedPack[]) || []);
     setLoading(false);
   };
 
@@ -164,6 +186,126 @@ export default function AdminMembresiasPage() {
     return userName || m.profiles?.full_name || "—";
   };
 
+  const getPackBeneficiaryName = (p: PersonalizedPack): string => {
+    const depName = p.beneficiaries?.dependents?.full_name;
+    const tutorName = p.beneficiaries?.dependents?.profiles?.full_name;
+    const userName = p.beneficiaries?.profiles?.full_name;
+    if (depName && tutorName) return `${depName} — Carga de ${tutorName}`;
+    if (depName) return `${depName} — Carga`;
+    return userName || p.profiles?.full_name || "—";
+  };
+
+  // ─── Clases personalizadas: planes ─────────────────────────────────────────
+
+  const openCreatePPlan = () => { setEditingPPlan(null); setPForm(emptyPPlan); setNewFeature(""); setPPlanModalOpen(true); };
+  const openEditPPlan = (p: PersonalizedPlan) => {
+    setEditingPPlan(p);
+    setPForm({ name: p.name, price: p.price, total_classes: p.total_classes, validity_days: p.validity_days, features: Array.isArray(p.features) ? p.features : [], active: p.active });
+    setNewFeature("");
+    setPPlanModalOpen(true);
+  };
+
+  const addFeature = () => {
+    const text = newFeature.trim();
+    if (!text || pForm.features.includes(text)) return;
+    setPForm({ ...pForm, features: [...pForm.features, text] });
+    setNewFeature("");
+  };
+
+  const removeFeature = (idx: number) => {
+    setPForm({ ...pForm, features: pForm.features.filter((_, i) => i !== idx) });
+  };
+
+  const handleSavePPlan = async () => {
+    try {
+      setPSaving(true);
+      const supabase = createClient();
+      const payload = {
+        name: pForm.name,
+        price: pForm.price,
+        total_classes: pForm.total_classes,
+        validity_days: pForm.validity_days,
+        features: pForm.features,
+        active: pForm.active,
+      };
+      if (editingPPlan) {
+        const { error } = await supabase.from("personalized_plans").update(payload).eq("id", editingPPlan.id);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error, "actualizar plan personalizado"), type: "error" }); return; }
+      } else {
+        const { error } = await supabase.from("personalized_plans").insert(payload);
+        if (error) { setToast({ msg: getSupabaseErrorMessage(error, "crear plan personalizado"), type: "error" }); return; }
+      }
+      setPPlanModalOpen(false);
+      await load();
+      setToast({ msg: editingPPlan ? "Plan personalizado actualizado" : "Plan personalizado creado", type: "success" });
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "guardar plan personalizado"), type: "error" });
+    } finally {
+      setPSaving(false);
+    }
+  };
+
+  const handleDeletePPlan = async () => {
+    if (!pDeleteTarget) return;
+    try {
+      setPDeleting(true);
+      const supabase = createClient();
+      const { error } = await supabase.from("personalized_plans").delete().eq("id", pDeleteTarget.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error, "eliminar plan personalizado"), type: "error" }); return; }
+      setPDeleteTarget(null);
+      await load();
+      setToast({ msg: "Plan personalizado eliminado", type: "success" });
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "eliminar plan personalizado"), type: "error" });
+    } finally {
+      setPDeleting(false);
+    }
+  };
+
+  // ─── Clases personalizadas: packs (consumo manual / cancelación) ───────────
+
+  const handleConsumeClass = async () => {
+    if (!consumeTarget) return;
+    try {
+      setConsuming(true);
+      const supabase = createClient();
+      const nextUsed = consumeTarget.used_classes + 1;
+      const nextStatus = nextUsed >= consumeTarget.total_classes ? "agotada" : "activa";
+      const { error } = await supabase
+        .from("personalized_packs")
+        .update({ used_classes: nextUsed, status: nextStatus })
+        .eq("id", consumeTarget.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error, "consumir clase"), type: "error" }); return; }
+      setConsumeTarget(null);
+      await load();
+      setToast({ msg: nextStatus === "agotada" ? "Clase consumida — pack agotado" : "Clase consumida", type: "success" });
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "consumir clase"), type: "error" });
+    } finally {
+      setConsuming(false);
+    }
+  };
+
+  const handleCancelPack = async () => {
+    if (!cancelPackTarget) return;
+    try {
+      setCancellingPack(true);
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("personalized_packs")
+        .update({ status: "cancelada" })
+        .eq("id", cancelPackTarget.id);
+      if (error) { setToast({ msg: getSupabaseErrorMessage(error, "cancelar pack"), type: "error" }); return; }
+      setCancelPackTarget(null);
+      await load();
+      setToast({ msg: "Pack cancelado", type: "success" });
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "cancelar pack"), type: "error" });
+    } finally {
+      setCancellingPack(false);
+    }
+  };
+
   const toggleTokenDetails = async (m: Membership) => {
     if (expandedToken === m.id) {
       setExpandedToken(null);
@@ -222,6 +364,21 @@ export default function AdminMembresiasPage() {
     }
   });
 
+  const effectivePackStatus = (p: PersonalizedPack): string => {
+    if (p.status === "activa" && p.end_date < today) return "vencida";
+    return p.status;
+  };
+
+  const packFilterCounts = {
+    todas: personalizedPacks.length,
+    activas: personalizedPacks.filter((p) => effectivePackStatus(p) === "activa").length,
+    agotadas: personalizedPacks.filter((p) => effectivePackStatus(p) === "agotada").length,
+    vencidas: personalizedPacks.filter((p) => effectivePackStatus(p) === "vencida").length,
+    canceladas: personalizedPacks.filter((p) => effectivePackStatus(p) === "cancelada").length,
+  };
+
+  const filteredPacks = packFilter === "todas" ? personalizedPacks : personalizedPacks.filter((p) => effectivePackStatus(p) === packFilter);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -239,18 +396,25 @@ export default function AdminMembresiasPage() {
               Nuevo Plan
             </button>
           )}
+          {tab === "planes" && (
+            <button onClick={openCreatePPlan} className="flex items-center gap-2 border border-primary/40 text-primary font-[family-name:var(--font-headline-md)] text-[13px] px-5 py-2.5 rounded-lg uppercase tracking-wider hover:bg-primary/10 transition-opacity cursor-pointer">
+              <span className="material-symbols-outlined text-[18px]">workspace_premium</span>
+              Crear Plan Personalizado
+            </button>
+          )}
         </div>
       </div>
 
       <div className="flex gap-4 mb-6">
-        {(["planes", "membresias"] as const).map((t) => (
+        {(["planes", "membresias", "personalizadas"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`font-[family-name:var(--font-headline-md)] text-[13px] uppercase tracking-wider px-4 py-2 rounded-lg transition-colors cursor-pointer ${tab === t ? "btn-primary-gradient text-white" : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"}`}>
-            {t === "planes" ? "Planes" : "Membresías"}
+            {t === "planes" ? "Planes" : t === "membresias" ? "Membresías" : "Personalizadas"}
           </button>
         ))}
       </div>
 
       {tab === "planes" ? (
+        <>
         <DataTable
           columns={[
             { key: "name", label: "Nombre", render: (p) => (
@@ -288,6 +452,107 @@ export default function AdminMembresiasPage() {
           onDelete={setDeleteTarget}
           emptyMessage="No hay planes creados"
         />
+
+        {/* Clases personalizadas: planes */}
+        <div className="mt-10">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="material-symbols-outlined text-primary text-[22px]">workspace_premium</span>
+            <div>
+              <h2 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase tracking-wider">
+                Planes de Clases Personalizadas
+              </h2>
+              <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">
+                Packs 1 a 1 / grupos pequeños vendidos por Flow — módulo desacoplado de membresías.
+              </p>
+            </div>
+          </div>
+          <DataTable
+            columns={[
+              { key: "name", label: "Nombre", render: (p) => p.name },
+              { key: "price", label: "Precio", render: (p) => `$${p.price.toLocaleString("es-CL")}` },
+              { key: "total_classes", label: "Clases", render: (p) => `${p.total_classes} ${p.total_classes === 1 ? "clase" : "clases"}` },
+              { key: "validity_days", label: "Vigencia", render: (p) => `${p.validity_days} días` },
+              { key: "features", label: "Características", render: (p) => Array.isArray(p.features) && p.features.length > 0 ? p.features.slice(0, 2).join(" · ") : <span className="text-on-surface-variant/50">—</span> },
+              { key: "active", label: "Estado", render: (p) => <StatusBadge status={p.active ? "activo" : "cancelado"} /> },
+            ]}
+            data={personalizedPlans}
+            loading={loading}
+            onEdit={openEditPPlan}
+            onDelete={setPDeleteTarget}
+            emptyMessage="No hay planes personalizados creados"
+          />
+        </div>
+        </>
+      ) : tab === "personalizadas" ? (
+        <>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {([
+            { key: "todas", label: "Todas" },
+            { key: "activas", label: "Activas" },
+            { key: "agotadas", label: "Agotadas" },
+            { key: "vencidas", label: "Vencidas" },
+            { key: "canceladas", label: "Canceladas" },
+          ] as const).map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setPackFilter(f.key)}
+              className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                packFilter === f.key
+                  ? f.key === "vencidas" || f.key === "canceladas"
+                    ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+                    : f.key === "agotadas"
+                      ? "bg-orange-500/10 text-orange-400 border-orange-500/30"
+                      : f.key === "activas"
+                        ? "bg-green-500/10 text-green-400 border-green-500/30"
+                        : "btn-primary-gradient text-white"
+                  : "border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+              }`}
+            >
+              {f.label}
+              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] ${
+                packFilter === f.key ? "bg-black/20" : "bg-on-surface/10"
+              }`}>
+                {packFilterCounts[f.key as keyof typeof packFilterCounts]}
+              </span>
+            </button>
+          ))}
+        </div>
+        <DataTable
+          columns={[
+            { key: "beneficiary_id", label: "Beneficiario", render: (p) => getPackBeneficiaryName(p) },
+            { key: "plan_id", label: "Plan", render: (p) => p.personalized_plans?.name || "—" },
+            { key: "start_date", label: "Inicio", render: (p) => new Date(p.start_date).toLocaleDateString("es-CL") },
+            { key: "end_date", label: "Fin", render: (p) => new Date(p.end_date).toLocaleDateString("es-CL") },
+            { key: "used_classes", label: "Clases", render: (p) => `${p.used_classes} / ${p.total_classes}` },
+            { key: "status", label: "Estado", render: (p) => <StatusBadge status={effectivePackStatus(p)} /> },
+            { key: "actions", label: "Acciones", render: (p) => (
+              <div className="flex items-center justify-end gap-2">
+                {effectivePackStatus(p) === "activa" && (
+                  <button
+                    onClick={() => setConsumeTarget(p)}
+                    title="Consumir clase"
+                    className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">fact_check</span>
+                  </button>
+                )}
+                {(effectivePackStatus(p) === "activa" || effectivePackStatus(p) === "agotada" || effectivePackStatus(p) === "vencida") && (
+                  <button
+                    onClick={() => setCancelPackTarget(p)}
+                    title="Cancelar pack"
+                    className="text-on-surface-variant hover:text-red-400 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">cancel</span>
+                  </button>
+                )}
+              </div>
+            )},
+          ]}
+          data={filteredPacks}
+          loading={loading}
+          emptyMessage="No hay packs de clases personalizadas"
+        />
+        </>
       ) : (
         <>
         <div className="flex flex-wrap gap-2 mb-4">
@@ -611,6 +876,86 @@ export default function AdminMembresiasPage() {
           )}
         </div>
       </FormModal>
+
+      {/* Personalized plan modal */}
+      <FormModal open={pPlanModalOpen} title={editingPPlan ? "Editar Plan Personalizado" : "Crear Plan Personalizado"} onClose={() => setPPlanModalOpen(false)}>
+        <div className="space-y-4">
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Nombre *</label>
+            <input value={pForm.name} onChange={(e) => setPForm({ ...pForm, name: e.target.value })} placeholder="Ej: Clase 1 a 1 Kenpo" className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Precio ($) *</label>
+              <input inputMode="numeric" value={pForm.price || ""} onChange={(e) => setPForm({ ...pForm, price: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Clases *</label>
+              <input inputMode="numeric" value={pForm.total_classes || ""} onChange={(e) => setPForm({ ...pForm, total_classes: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+            </div>
+            <div>
+              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Duración (días) *</label>
+              <input inputMode="numeric" value={pForm.validity_days || ""} onChange={(e) => setPForm({ ...pForm, validity_days: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+            </div>
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Características</label>
+            <div className="flex gap-2 mb-3">
+              <input
+                value={newFeature}
+                onChange={(e) => setNewFeature(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFeature(); } }}
+                placeholder="Escribe una característica..."
+                className="flex-1 bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50"
+              />
+              <button
+                type="button"
+                onClick={addFeature}
+                disabled={!newFeature.trim()}
+                className="btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] px-4 py-2.5 rounded-lg uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-40 cursor-pointer"
+              >
+                + Agregar
+              </button>
+            </div>
+            {pForm.features.length > 0 ? (
+              <ul className="space-y-2">
+                {pForm.features.map((f, idx) => (
+                  <li key={idx} className="flex items-center justify-between bg-surface-container border border-on-surface/5 rounded-lg px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-[16px]">check_circle</span>
+                      <span className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">{f}</span>
+                    </div>
+                    <button type="button" onClick={() => removeFeature(idx)} className="text-on-surface-variant hover:text-red-400 transition-colors cursor-pointer">
+                      <span className="material-symbols-outlined text-[18px]">close</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant/50 italic">
+                Sin características agregadas
+              </p>
+            )}
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={pForm.active} onChange={(e) => setPForm({ ...pForm, active: e.target.checked })} className="accent-primary" />
+            <span className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">Activo (visible en la landing y dashboard)</span>
+          </label>
+          <div className="flex justify-end gap-3 pt-4 border-t border-on-surface/5">
+            <button onClick={() => setPPlanModalOpen(false)} className="px-4 py-2.5 rounded-lg border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[14px] cursor-pointer">Cancelar</button>
+            <button onClick={handleSavePPlan} disabled={!pForm.name || pForm.price <= 0 || pForm.total_classes <= 0 || pForm.validity_days <= 0 || pSaving} className="px-4 py-2.5 rounded-lg btn-primary-gradient text-white text-[14px] disabled:opacity-50 cursor-pointer">{pSaving ? "Guardando..." : editingPPlan ? "Guardar Cambios" : "Crear Plan"}</button>
+          </div>
+        </div>
+      </FormModal>
+
+      {/* Delete personalized plan confirmation */}
+      <DeleteConfirm open={!!pDeleteTarget} title="Eliminar Plan Personalizado" message={`¿Estás seguro de eliminar el plan "${pDeleteTarget ? pDeleteTarget.name : ""}"? Los packs existentes no se verán afectados.`} onConfirm={handleDeletePPlan} onCancel={() => setPDeleteTarget(null)} loading={pDeleting} />
+
+      {/* Consume class confirmation */}
+      <DeleteConfirm open={!!consumeTarget} title="Consumir Clase" message={`¿Confirmas consumir 1 clase del pack de "${consumeTarget ? consumeTarget.personalized_plans?.name : ""}" para ${consumeTarget ? getPackBeneficiaryName(consumeTarget) : ""}? ${consumeTarget && consumeTarget.used_classes + 1 >= consumeTarget.total_classes ? "El pack quedará agotado." : ""}`} onConfirm={handleConsumeClass} onCancel={() => setConsumeTarget(null)} loading={consuming} confirmLabel="Consumir" />
+
+      {/* Cancel pack confirmation */}
+      <DeleteConfirm open={!!cancelPackTarget} title="Cancelar Pack" message={`¿Estás seguro de cancelar el pack de "${cancelPackTarget ? cancelPackTarget.personalized_plans?.name : ""}" para ${cancelPackTarget ? getPackBeneficiaryName(cancelPackTarget) : ""}? Esta acción no se puede deshacer.`} onConfirm={handleCancelPack} onCancel={() => setCancelPackTarget(null)} loading={cancellingPack} confirmLabel="Cancelar Pack" />
 
       {/* Cancel confirmation */}
       <DeleteConfirm open={!!cancelTarget} title="Cancelar Membresía" message={`¿Estás seguro de cancelar la membresía de "${cancelTarget ? getBeneficiaryName(cancelTarget) : ""}"? Esta acción no se puede deshacer.`} onConfirm={handleCancelMembership} onCancel={() => setCancelTarget(null)} loading={cancelling} />

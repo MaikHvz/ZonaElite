@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import StatusBadge from "@/components/admin/StatusBadge";
 import { getChileToday } from "@/lib/dates";
+import { createClient } from "@/lib/supabase/client";
 import {
   effectiveMembershipStatus,
   daysRemaining,
@@ -48,6 +49,8 @@ export default function MembershipCard({
 
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
   const [pendingDebts, setPendingDebts] = useState<PendingDebt[]>([]);
+  const [availablePersonalized, setAvailablePersonalized] = useState<number | null>(null);
+  const [personalizedExhausted, setPersonalizedExhausted] = useState(false);
 
   useEffect(() => {
     if (effectiveStatus === "activa") {
@@ -57,6 +60,34 @@ export default function MembershipCard({
       getPendingDebts(membership.beneficiary_id).then(setPendingDebts);
     }
   }, [membership.beneficiary_id, membership.id, effectiveStatus]);
+
+  useEffect(() => {
+    if (!membership.beneficiary_id) return;
+    const supabase = createClient();
+    supabase
+      .from("personalized_packs")
+      .select("total_classes, used_classes, status, end_date")
+      .eq("beneficiary_id", membership.beneficiary_id)
+      .then(({ data }) => {
+        const packs = (data || []) as Array<{ total_classes: number; used_classes: number; status: string; end_date: string }>;
+        const today = getChileToday();
+        let remaining = 0;
+        let anyPack = false;
+        for (const p of packs) {
+          if (p.status === "cancelada") continue;
+          anyPack = true;
+          const effective = p.status === "activa" && p.end_date < today ? "vencida" : p.status;
+          if (effective === "activa") remaining += Math.max(0, p.total_classes - p.used_classes);
+        }
+        if (!anyPack) {
+          setAvailablePersonalized(null);
+          setPersonalizedExhausted(false);
+          return;
+        }
+        setAvailablePersonalized(remaining);
+        setPersonalizedExhausted(remaining === 0);
+      });
+  }, [membership.beneficiary_id]);
 
   const bgGradient = isExpired
     ? "from-red-950/20 to-transparent"
@@ -114,6 +145,22 @@ export default function MembershipCard({
         </div>
         <StatusBadge status={membership.status} />
       </div>
+
+      {/* Clases personalizadas — chip informativo (módulo desacoplado) */}
+      {(availablePersonalized !== null || personalizedExhausted) && (
+        <div className={`mb-4 flex items-center gap-2 px-3 py-2 rounded-xl border ${
+          availablePersonalized && availablePersonalized > 0
+            ? "bg-primary/5 border-primary/15"
+            : "bg-on-surface/5 border-on-surface/10"
+        }`}>
+          <span className={`material-symbols-outlined text-[16px] ${availablePersonalized && availablePersonalized > 0 ? "text-primary" : "text-on-surface-variant"}`}>workspace_premium</span>
+          <span className={`font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider ${availablePersonalized && availablePersonalized > 0 ? "text-primary" : "text-on-surface-variant"}`}>
+            {availablePersonalized && availablePersonalized > 0
+              ? `${availablePersonalized} ${availablePersonalized === 1 ? "clase personalizada disponible" : "clases personalizadas disponibles"}`
+              : "Clases personalizadas agotadas"}
+          </span>
+        </div>
+      )}
 
       {/* Clases disponibles — siempre visible en membresías activas */}
       {effectiveStatus === "activa" && (

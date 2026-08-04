@@ -112,3 +112,18 @@
   - `pending` → "Pago pendiente — … está pendiente de confirmación."
 - **Puntos de disparo:** `confirmation/route.ts`, `verify/route.ts` y `force-confirm/route.ts` (aprobado solo cuando `assignedSomething`). `create-order` no notifica (evita ruido). Las notificaciones aparecen en la campana del navbar y en `/dashboard/notificaciones` (filtro "Personales") — tabla `user_notifications` ya existía, sin migración SQL.
 - Verificación: suite **216 passed, 0 failed** (sección O), build verde. Ver `contexto/requisitos/notificaciones-pago-usuario.md`.
+
+---
+
+## ✅ Clases Personalizadas — Módulo independiente (2026-08-04)
+
+- **Requisito:** planes y packs de clases personalizadas **100% desacoplados** de membresías, tokens, inscripciones y check-in; compra vía Flow; consumo manual en admin. Detalle en `contexto/requisitos/clases-personalizadas-modulo-independiente.md`.
+- **Migración `contexto/migrations/009_personalized_plans_packs.sql`** (idempotente, **⚠️ pendiente de aplicar en Supabase**): tablas `personalized_plans` y `personalized_packs`, índices (`idx_personalized_packs_beneficiary`, `idx_personalized_plans_active`; **sin** índice único de packs activos), RLS (planes `select_all` + `admin_write`; packs `select_own_or_admin` vía `owns_beneficiary` + `admin_write`). Espejo 1:1 en `documentacion/squema-sql-actualizado.sql`.
+- **Backend Flow:**
+  - `create-order/route.ts`: acepta `personalizedPlanId` **excluyente** de `planId`/`includeEnrollment`/`enrollmentPlanId` (400 si se combinan); valida plan activo; `totalAmount = price`; concepto `Clase Personalizada <name>`; guarda `beneficiary_id`.
+  - `src/lib/flow-helpers.ts` → `confirmPersonalizedPack(supabase, paymentId, userId)`: idempotente por `payment_id`, extrae el plan del concepto (`extractPersonalizedPlanName`), resuelve beneficiario (fallback al propio si `payment.beneficiary_id` es null), inserta pack con `start_date = getChileToday()` y `end_date = addDaysChile(start, validity_days)`, `used_classes = 0`, `status = 'activa'`.
+  - Rama nueva en `confirmation`, `verify` y `force-confirm` (tras `markPaymentAsPaid`): detección `/^Clase Personalizad[ao]/i`, `assignedSomething`, error → `notifyPaymentWithoutMembership`; notificación `approved` vía `notifyUserPaymentStatus`.
+- **Admin `admin/membresias`:** sub-tabs "Planes | Membresías | Personalizadas"; CRUD de planes personalizados en el tab Planes; tab Personalizadas con filtros Todas/Activas/Agotadas/Vencidas/Canceladas (con contadores), **Consumir clase** y **Cancelar Pack** (`DeleteConfirm` con `confirmLabel`). Estado efectivo derivado: `activa` con `end_date < hoy` → `vencida`.
+- **Dashboard `dashboard/membresias`:** sección "Mis Clases Personalizadas" (cards por beneficiario Yo + cargas) + chip en `MembershipCard` ("X clases personalizadas disponibles" / "agotadas") + `PersonalizedCheckoutModal` (selector de carga + plan + monto; 401/timeout/`already_paid`).
+- **Landing `src/app/page.tsx`:** sección "¿Necesitas Clases Personalizadas?" vía `PersonalizedPlans.tsx`, debajo de `<Memberships />` (retorna `null` sin planes activos).
+- **Verificación:** suite **244 passed, 0 failed** (sección P), `npx tsc --noEmit` limpio, `npm run build` verde. ⚠️ Pendiente manual: aplicar migración `009` y prueba sandbox Flow (Fase 4). Plan: `documentacion/plan-clases-personalizadas.md`.

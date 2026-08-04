@@ -4,6 +4,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { verifyFlowPayment, mapFlowStatus, FLOW_LOG_PREFIX } from "@/lib/flow";
 import {
   confirmAndCreateMembership,
+  confirmPersonalizedPack,
   extendEnrollment,
   markPaymentAsPaid,
   findPaymentByTokenAndUser,
@@ -130,6 +131,23 @@ export async function GET(request: Request) {
             assignedSomething = true;
           } else {
             console.error(VERIFY_LOG, "Enrollment extension failed:", enrollResult.error);
+          }
+        }
+
+        // Clases personalizadas (módulo desacoplado): concepto "Clase Personalizada X"
+        const hasPersonalizedConcept = /^Clase Personalizad[ao]/i.test(fullPayment.concept || "");
+        if (hasPersonalizedConcept) {
+          try {
+            const packResult = await confirmPersonalizedPack(admin, fullPayment.id, user.id);
+            if (packResult.success) {
+              assignedSomething = true;
+            } else {
+              console.error(VERIFY_LOG, "Personalized pack creation failed:", packResult.error);
+              await notifyPaymentWithoutMembership(admin, fullPayment, packResult.error || "Error al crear pack personalizado");
+            }
+          } catch (err) {
+            console.error(VERIFY_LOG, "Personalized pack creation threw:", err);
+            await notifyPaymentWithoutMembership(admin, fullPayment, String(err));
           }
         }
 
