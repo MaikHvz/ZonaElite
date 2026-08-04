@@ -105,7 +105,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 
 ## 7. Módulo Clases Personalizadas (🟢 IMPLEMENTADO — v1)
 
-> Estado: **implementado (Fases 0–3b de código + sección P en suite, 244 tests A–P en verde, `npm run build` OK)**. Pendiente manual: aplicar `contexto/migrations/009_personalized_plans_packs.sql` en Supabase y prueba sandbox Flow. Detalle completo en `contexto/requisitos/clases-personalizadas-modulo-independiente.md` y plan por fases en `documentacion/plan-clases-personalizadas.md`.
+> Estado: **implementado y verificado en producción (2026-08-04)** — sección P en suite (244 tests A–P en verde), `npm run build` OK, migración 009 aplicada y 1:1 confirmada en Supabase, **pago Flow probado end-to-end** (pago `pagado` → pack `activa` con fechas Chile → notificación `approved` → clase visible en la tarjeta de membresía). Detalle completo en `contexto/requisitos/clases-personalizadas-modulo-independiente.md` y plan por fases en `documentacion/plan-clases-personalizadas.md`.
 
 **Propósito**: Compra de packs de clases personalizadas (1 a 1 / grupos pequeños) como entidad **100% desacoplada** de membresías, tokens, inscripciones y check-in.
 - **Tablas nuevas**: `personalized_plans` (nombre, precio, clases, vigencia, features) y `personalized_packs` (beneficiario, plan, comprador, pago, fechas Chile-aware, usadas/total, estado `activa/agotada/vencida/cancelada`). Sin índice único de packs activos (N packs en paralelo por beneficiario). RLS packs: `select_own_or_admin` (vía `owns_beneficiary`) + `admin_write`; planes: `select_all` + `admin_write`.
