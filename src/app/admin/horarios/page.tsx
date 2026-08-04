@@ -22,9 +22,11 @@ interface Schedule {
   category: string;
   active: boolean;
   description: string | null;
+  mode: string;
   disciplines?: { name: string; color_hex: string };
   profiles?: { full_name: string };
   class_plans?: { plan_id: string; membership_plans?: { name: string } }[];
+  personalized_schedule_plans?: { plan_id: string }[];
 }
 
 interface Discipline { id: string; name: string; color_hex: string; active: boolean; }
@@ -37,10 +39,16 @@ const CATEGORIES = [
   { value: "ninos", label: "Niños" },
   { value: "adultos", label: "Adultos" },
 ];
+const MODE_FILTERS = [
+  { value: "todas", label: "Todas" },
+  { value: "normal", label: "Membresías" },
+  { value: "personalizado", label: "Personalizadas" },
+];
 const emptyForm = {
   discipline_id: "", professor_id: "", room: "", day_of_week: 1,
   start_time: "08:00", end_time: "09:00", capacity: 20,
   category: "ambos", active: true, description: "",
+  mode: "normal",
 };
 
 export default function AdminHorariosPage() {
@@ -48,6 +56,7 @@ export default function AdminHorariosPage() {
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [professors, setProfessors] = useState<Profile[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [personalizedPlans, setPersonalizedPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Schedule | null>(null);
@@ -56,28 +65,31 @@ export default function AdminHorariosPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [modeFilter, setModeFilter] = useState<string>("todas");
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const load = async () => {
     const supabase = createClient();
-    const [sRes, dRes, pRes, plRes] = await Promise.all([
-      supabase.from("schedules").select("*, disciplines(name, color_hex), profiles(full_name), class_plans(plan_id, membership_plans(name))").order("day_of_week"),
+    const [sRes, dRes, pRes, plRes, ppRes] = await Promise.all([
+      supabase.from("schedules").select("*, disciplines(name, color_hex), profiles(full_name), class_plans(plan_id, membership_plans(name)), personalized_schedule_plans(plan_id)").order("day_of_week"),
       supabase.from("disciplines").select("id, name, color_hex, active").order("name"),
       supabase.from("profiles").select("id, full_name").order("full_name"),
       supabase.from("membership_plans").select("id, name, active").eq("active", true).order("name"),
+      supabase.from("personalized_plans").select("id, name, active").eq("active", true).order("name"),
     ]);
     setSchedules((sRes.data as Schedule[]) || []);
     setDisciplines((dRes.data as Discipline[]) || []);
     setProfessors((pRes.data as Profile[]) || []);
     setPlans((plRes.data as Plan[]) || []);
+    setPersonalizedPlans((ppRes.data as Plan[]) || []);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => {
+  const openCreate = (mode: "normal" | "personalizado") => {
     setEditing(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, mode });
     setSelectedPlans([]);
     setModalOpen(true);
   };
@@ -95,8 +107,13 @@ export default function AdminHorariosPage() {
       category: s.category,
       active: s.active,
       description: s.description || "",
+      mode: s.mode,
     });
-    setSelectedPlans(s.class_plans?.map((cp) => cp.plan_id) || []);
+    setSelectedPlans(
+      s.mode === "personalizado"
+        ? s.personalized_schedule_plans?.map((cp) => cp.plan_id) || []
+        : s.class_plans?.map((cp) => cp.plan_id) || []
+    );
     setModalOpen(true);
   };
 
@@ -119,6 +136,7 @@ export default function AdminHorariosPage() {
         category: form.category,
         active: form.active,
         description: form.description || null,
+        mode: form.mode,
       };
 
       let scheduleId: string;
@@ -133,12 +151,22 @@ export default function AdminHorariosPage() {
         scheduleId = data.id;
       }
 
-      const { error: delError } = await supabase.from("class_plans").delete().eq("schedule_id", scheduleId);
-      if (delError) { setToast({ msg: getSupabaseErrorMessage(delError), type: "error" }); setSaving(false); return; }
+      if (form.mode === "personalizado") {
+        const { error: delError } = await supabase.from("personalized_schedule_plans").delete().eq("schedule_id", scheduleId);
+        if (delError) { setToast({ msg: getSupabaseErrorMessage(delError), type: "error" }); setSaving(false); return; }
 
-      if (selectedPlans.length > 0) {
-        const { error: insError } = await supabase.from("class_plans").insert(selectedPlans.map((plan_id) => ({ schedule_id: scheduleId, plan_id })));
-        if (insError) { setToast({ msg: getSupabaseErrorMessage(insError), type: "error" }); setSaving(false); return; }
+        if (selectedPlans.length > 0) {
+          const { error: insError } = await supabase.from("personalized_schedule_plans").insert(selectedPlans.map((plan_id) => ({ schedule_id: scheduleId, plan_id })));
+          if (insError) { setToast({ msg: getSupabaseErrorMessage(insError), type: "error" }); setSaving(false); return; }
+        }
+      } else {
+        const { error: delError } = await supabase.from("class_plans").delete().eq("schedule_id", scheduleId);
+        if (delError) { setToast({ msg: getSupabaseErrorMessage(delError), type: "error" }); setSaving(false); return; }
+
+        if (selectedPlans.length > 0) {
+          const { error: insError } = await supabase.from("class_plans").insert(selectedPlans.map((plan_id) => ({ schedule_id: scheduleId, plan_id })));
+          if (insError) { setToast({ msg: getSupabaseErrorMessage(insError), type: "error" }); setSaving(false); return; }
+        }
       }
 
       setModalOpen(false);
@@ -156,6 +184,9 @@ export default function AdminHorariosPage() {
     setDeleting(true);
     try {
       const supabase = createClient();
+      if (deleteTarget.mode === "personalizado") {
+        await supabase.from("personalized_schedule_plans").delete().eq("schedule_id", deleteTarget.id);
+      }
       const { error } = await supabase.from("schedules").delete().eq("id", deleteTarget.id);
       if (error) { setToast({ msg: getSupabaseErrorMessage(error), type: "error" }); setDeleting(false); return; }
       setDeleteTarget(null);
@@ -174,7 +205,7 @@ export default function AdminHorariosPage() {
     const dayIndexes = [1, 2, 3, 4, 5, 6, 0];
 
     const timeSlots = Array.from(
-      new Set(schedules.map(s => `${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}`))  
+      new Set(schedules.map(s => `${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}`))
     ).sort();
 
     // Build grid matrix
@@ -208,6 +239,7 @@ export default function AdminHorariosPage() {
       "Hora Fin": s.end_time.slice(0, 5),
       "Disciplina": s.disciplines?.name || "—",
       "Instructor": s.profiles?.full_name || "—",
+      "Modalidad": s.mode === "personalizado" ? "Personalizada" : "Membresías",
       "Categoría": ({ ninos: "Niños", adultos: "Adultos", ambos: "Ambos" }[s.category] || s.category),
       "Cupos": s.capacity,
       "Sala": s.room || "—",
@@ -259,6 +291,21 @@ export default function AdminHorariosPage() {
   const categoryLabel = (c: string) => ({ ninos: "Niños", adultos: "Adultos", ambos: "Ambos" }[c] || c);
   const activeDisciplines = disciplines.filter((d) => d.active);
 
+  const filteredSchedules = schedules.filter((s) => modeFilter === "todas" || s.mode === modeFilter);
+
+  const renderModeBadge = (m: string) =>
+    m === "personalizado" ? (
+      <span className="inline-flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+        Personalizada
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+        Normal
+      </span>
+    );
+
+  const allowedPlans = form.mode === "personalizado" ? personalizedPlans : plans;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -271,17 +318,38 @@ export default function AdminHorariosPage() {
             <span className="material-symbols-outlined text-[18px]">download</span>
             Excel
           </button>
-          <button onClick={openCreate} className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] px-5 py-2.5 rounded-lg uppercase tracking-wider hover:opacity-90 transition-opacity cursor-pointer">
+          <button onClick={() => openCreate("normal")} className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] px-5 py-2.5 rounded-lg uppercase tracking-wider hover:opacity-90 transition-opacity cursor-pointer">
             <span className="material-symbols-outlined text-[18px]">add</span>
-            Nueva Clase
+            Nueva Clase Normal
+          </button>
+          <button onClick={() => openCreate("personalizado")} className="flex items-center gap-2 bg-purple-600/15 text-purple-300 border border-purple-500/30 font-[family-name:var(--font-headline-md)] text-[13px] px-5 py-2.5 rounded-lg uppercase tracking-wider hover:bg-purple-600/25 transition-colors cursor-pointer">
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Nueva Clase Personalizada
           </button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        {MODE_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setModeFilter(f.value)}
+            className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-4 py-1.5 rounded-full border transition-colors cursor-pointer ${
+              modeFilter === f.value
+                ? "btn-primary-gradient text-white border-transparent"
+                : "border-on-surface/20 text-on-surface-variant hover:border-primary/50"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
 
       <DataTable
         columns={[
           { key: "day_of_week", label: "Día", render: (s) => DAYS[s.day_of_week] },
           { key: "start_time", label: "Horario", render: (s) => `${s.start_time.slice(0, 5)} - ${s.end_time.slice(0, 5)}` },
+          { key: "mode", label: "Modalidad", render: (s) => renderModeBadge(s.mode) },
           { key: "discipline_id", label: "Tipo", render: (s) => (
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.disciplines?.color_hex }} />
@@ -293,7 +361,7 @@ export default function AdminHorariosPage() {
           { key: "capacity", label: "Cupos", render: (s) => String(s.capacity) },
           { key: "active", label: "Estado", render: (s) => <StatusBadge status={s.active ? "activo" : "cancelado"} /> },
         ]}
-        data={schedules}
+        data={filteredSchedules}
         loading={loading}
         searchKey="room"
         searchPlaceholder="Buscar clase..."
@@ -302,8 +370,19 @@ export default function AdminHorariosPage() {
         emptyMessage="No hay clases creadas"
       />
 
-      <FormModal open={modalOpen} title={editing ? "Editar Clase" : "Nueva Clase"} onClose={() => setModalOpen(false)}>
+      <FormModal open={modalOpen} title={editing ? "Editar Clase" : form.mode === "personalizado" ? "Nueva Clase Personalizada" : "Nueva Clase Normal"} onClose={() => setModalOpen(false)}>
         <div className="space-y-4">
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Modalidad</label>
+            <div className="px-4 py-2.5 rounded-lg bg-surface-container border border-on-surface/10 text-[14px] text-on-surface">
+              {form.mode === "personalizado" ? "Personalizada" : "Normal"}
+              <span className="ml-2 text-[11px] text-on-surface-variant/60">
+                {form.mode === "personalizado"
+                  ? "Solo acepta planes personalizados y alumnos con pack"
+                  : "Clase de membresías regular (filtra por tipo de membresía)"}
+              </span>
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Tipo de clase *</label>
@@ -358,14 +437,26 @@ export default function AdminHorariosPage() {
           </div>
           <div>
             <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Planes permitidos</label>
-            <p className="text-[11px] text-on-surface-variant/50 mb-2">Selecciona qué planes pueden inscribirse a esta clase. Si no seleccionas ninguno, todos pueden inscribirse.</p>
-            <div className="flex flex-wrap gap-2">
-              {plans.map((p) => (
-                <button key={p.id} type="button" onClick={() => togglePlan(p.id)} className={`px-3 py-1.5 rounded-lg text-[12px] font-[family-name:var(--font-label-sm)] uppercase tracking-wider transition-colors cursor-pointer ${selectedPlans.includes(p.id) ? "btn-primary-gradient text-white" : "border border-on-surface/10 text-on-surface-variant hover:border-primary/30"}`}>
-                  {p.name}
-                </button>
-              ))}
-            </div>
+            <p className="text-[11px] text-on-surface-variant/50 mb-2">
+              {form.mode === "personalizado"
+                ? "Selecciona qué planes personalizados pueden inscribirse a esta clase. Si no seleccionas ninguno, todos los planes personalizados pueden inscribirse."
+                : "Selecciona qué planes pueden inscribirse a esta clase. Si no seleccionas ninguno, todos pueden inscribirse."}
+            </p>
+            {allowedPlans.length === 0 ? (
+              <p className="text-[12px] text-on-surface-variant/60">
+                {form.mode === "personalizado"
+                  ? "Aún no hay planes personalizados activos. Créalos en el panel de membresías."
+                  : "Aún no hay planes de membresía activos."}
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {allowedPlans.map((p) => (
+                  <button key={p.id} type="button" onClick={() => togglePlan(p.id)} className={`px-3 py-1.5 rounded-lg text-[12px] font-[family-name:var(--font-label-sm)] uppercase tracking-wider transition-colors cursor-pointer ${selectedPlans.includes(p.id) ? "btn-primary-gradient text-white" : "border border-on-surface/10 text-on-surface-variant hover:border-primary/30"}`}>
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} className="accent-primary" />

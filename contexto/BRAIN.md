@@ -130,7 +130,7 @@ src/
 │   ├── admin/                    # AdminGuard, AdminSidebar, DataTable, FormModal, DeleteConfirm,
 │   │                             # StatusBadge, ImageUpload, AssignMembershipModal, MembershipReceipt
 │   ├── dashboard/                # DashboardNav, MembershipCard, QuickStats, AlertBanner, etc.
-│   └── *.tsx                     # Landing, EnrollModal, CheckoutModal, GalleryCarousel, etc.
+│   └── *.tsx                     # Landing, EnrollModal, PersonalizedEnrollModal, CheckoutModal, GalleryCarousel, etc.
 ├── lib/
 │   ├── flow.ts                   # signFlowParams, createFlowOrder, verifyFlowPayment
 │   ├── flow-helpers.ts           # confirmAndCreateMembership, markPaymentAsPaid, findPaymentByToken
@@ -332,10 +332,12 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 | `profiles` | Perfiles (id=auth.users.id) | FK → auth.users |
 | `academy_settings` | Config academia (singleton) | — |
 | `disciplines` | Kenpo, Kickboxing, Funcional, MMA | — |
-| `schedules` | Horarios semanales | FK → disciplines, profiles (professor) |
+| `schedules` | Horarios semanales (`mode`: normal/personalizado) | FK → disciplines, profiles (professor) |
 | `class_sessions` | Sesiones generadas desde schedules | FK → schedules |
 | `class_plans` | Restricción de plan por horario | FK → schedules, membership_plans |
 | `class_enrollments` | Inscripciones en horarios | FK → schedules, beneficiaries |
+| `personalized_schedule_plans` | **NUEVO** Planes permitidos por horario personalizado (vacío = todos) | FK → schedules, personalized_plans (CASCADE) |
+| `personalized_enrollments` | **NUEVO** Inscripciones a horarios personalizados (consumen pack) | FK → class_sessions, beneficiaries, personalized_packs |
 | `dependents` | Cargas familiares | FK → profiles (tutor) |
 | `beneficiaries` | Vínculo perfil/dependiente al sistema | FK → profiles OR dependents |
 | `attendance` | Asistencia por sesión | FK → class_sessions, beneficiaries |
@@ -421,9 +423,15 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 
 ### getAttendanceForSession(sessionId)
 1. Query `attendance` para la sesión
-2. Query `class_enrollments` donde `session_id=sessionId` OR `schedule_id=session.schedule_id`
-3. Query `memberships` activas para enrolled beneficiary_ids
-4. Construye lista de beneficiarios con estado de asistencia
+2. Si el schedule es `mode='personalizado'` → lista desde `personalized_enrollments` (sin filtro de membresía)
+3. Si es normal → `class_enrollments` donde `session_id=sessionId` OR `schedule_id=session.schedule_id`
+4. Query `memberships` activas para enrolled beneficiary_ids (solo modo normal)
+5. Construye lista de beneficiarios con estado de asistencia
+
+### Inscripción a horario personalizado (RPC `enroll_personalized_class`)
+1. Lock de la sesión `FOR UPDATE` (aforo, patrón B-006)
+2. Por beneficiario: idempotente (ya inscrito → success), autorización (admin u `owns_beneficiary`), restricción de plan permitido (`personalized_schedule_plans`; vacío = todos), consumo atómico del pack (`used_classes < total_classes AND status='activa' AND end_date >= hoy`; `NO_PACK` si no hay; `agotada` al llenarse)
+3. Insert en `personalized_enrollments` (UNIQUE session+beneficiary). **No toca `class_enrollments`**
 
 ### Schedule grid building
 1. Query `schedules` activas con joins a `disciplines`, `profiles`, `class_plans`
@@ -462,8 +470,9 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 14. **`beneficiaries`** no tiene columna `category` — el category viene del `dependent` o se asume `'adulto'`.
 15. **Spanish** en todo el contenido visible.
 16. **Zonas Horarias**: NUNCA usar `new Date().toISOString().split("T")[0]` para calcular "hoy", ya que usa UTC y genera un desfase después de las 20:00 hora Chile. SIEMPRE importar y usar `getChileToday()` y `addDaysChile()` desde `src/lib/dates.ts`. Para límites de mes/trimestre usar los helpers Chile-aware de `dates.ts` (`chileMonthStartDate()`, `chileMonthEndDate()`, `chileQuarterStartDate()`, `chileQuarterEndDate()`, etc.) y convertir a instantes UTC con `chileDateToUtc()` cuando se comparen columnas TIMESTAMPTZ. El scan estático de `scripts/test-flows.mjs` falla (exit 1) si reaparecen los patrones `toISOString().split("T")[0]` o `new Date(y, m, 1).toISOString()`.
-17. **Suite de pruebas**: `scripts/test-flows.mjs` (Node 24+, sin deps) cubre zona horaria Chile, firma HMAC de Flow, contratos de esquema/RLS y ciclo de vida de inscripción. Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`.
+17. **Suite de pruebas**: `scripts/test-flows.mjs` (Node 24+, sin deps) cubre zona horaria Chile, firma HMAC de Flow, contratos de esquema/RLS, ciclo de vida de inscripción y el módulo de clases personalizadas (secciones P/Q, 295 tests). Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`.
 17. **Guía de trabajo obligatoria**: Antes de implementar CUALQUIER nueva funcionalidad, leer y ejecutar el workflow definido en `documentacion/guia-de-trabajo.md`. Las 4 fases son obligatorias: planificación → análisis de impacto → implementación → documentación post-implementación (incluye actualizar `squema-sql-actualizado.sql`).
+18. **Modalidad personalizada en horarios**: `schedules.mode` ('normal'|'personalizado') se fija al crear y es inmutable al editar. Las clases personalizadas NO usan QR/check-in (`/api/checkin` devuelve 403); se inscriben vía RPC `enroll_personalized_class` (consume pack) y su asistencia se registra manualmente reusando `attendance`. En admin/público/dashboard filtrar por `mode` y ramificar `EnrollModal`/`PersonalizedEnrollModal`.
 
 ---
 
@@ -475,6 +484,10 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 | `contexto/01-project-context-flow.md` | Detalle de cada funcionalidad y flujo |
 | `contexto/02-database-interaction.md` | Interacciones con BD por módulo, queries, RLS |
 | `documentacion/guia-de-trabajo.md` | **SOP obligatorio** — leer y seguir antes de toda implementación |
+| `documentacion/plan-clases-personalizadas.md` | Plan por fases del módulo de packs personalizados (v1) |
+| `documentacion/plan-clases-horario-personalizadas.md` | Plan por fases de clases de horario personalizadas |
+| `contexto/requisitos/clases-horario-personalizadas.md` | Requisito + análisis de impacto (horarios personalizados) |
+| `contexto/migrations/010_personalized_schedule_classes.sql` | Migración 010: mode en schedules + tablas/RPC de personalizadas (pendiente aplicar) |
 | `contexto/schema-complete.sql` | SQL completo: 26 tablas, 190 cols, 32 FKs, 59 RLS, 33 indexes |
 | `project-context/brain.md` | Contexto legacy (parcialmente obsoleto) |
 | `project-context/changelog.md` | Historial de cambios detallado |

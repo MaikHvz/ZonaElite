@@ -139,4 +139,11 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Migraciones creadas**: `002_unique_active_membership.sql` (aplicada), `003_chile_today_rls.sql` (aplicada), `004_enroll_class_rpc.sql` (aplicada), `005_tokens_membership_window.sql` (aplicada). Esquema documentado sincronizado (`squema-sql-actualizado.sql`).
 - **Estado**: Fases 1–9 completadas. Suite en verde (131 tests), build OK. Pendientes de negocio (Fase 10): RLS `user_insert_enrollment_flow`/QR walk-in/auto-asistencia y constraint UNIQUE legacy.
 
+## 14. Clases de Horario para Modalidad Personalizada (2026-08-04)
+**Requisito**: Habilitar bloques horarios propios para el plan personalizado (`mode` en `schedules`), desacoplados de membresías, tokens y check-in QR, con CRUD en admin, filtro en admin + público + dashboard, inscripción restringida a packs activos y asistencia reutilizando la tabla `attendance`.
+- **Decisiones de diseño (confirmadas con el usuario)**: 1) columna `mode` en `schedules` + tablas propias (`personalized_schedule_plans`, `personalized_enrollments`) + RPC `enroll_personalized_class`; 2) reuso de asistencia existente, sin QR; 3) filtro en admin + público `/horarios` + dashboard.
+- **Migración**: `contexto/migrations/010_personalized_schedule_classes.sql` (creada; **pendiente aplicar en Supabase**). Espejo 1:1 en `documentacion/squema-sql-actualizado.sql`.
+- **Componentes**: `PersonalizedEnrollModal.tsx` (nuevo); `admin/horarios`, `admin/asistencia`, `horarios` público, `dashboard/membresias`, `src/lib/supabase/dashboard.ts` (getUpcomingSessions/getAttendanceForSession con `mode`), guarda 403 en `/api/checkin`.
+- **Estado**: Implementado. Suite secciones A–Q en verde (295 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Requisito/detalle en `contexto/requisitos/clases-horario-personalizadas.md`, plan por fases en `documentacion/plan-clases-horario-personalizadas.md`.
+
 

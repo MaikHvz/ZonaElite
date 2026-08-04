@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Footer from "@/components/Footer";
 import PageCTA from "@/components/PageCTA";
 import EnrollModal from "@/components/EnrollModal";
+import PersonalizedEnrollModal from "@/components/PersonalizedEnrollModal";
 
 interface Schedule {
   id: string;
@@ -19,9 +20,11 @@ interface Schedule {
   category: string;
   active: boolean;
   description: string | null;
+  mode: string;
   disciplines: { name: string; color_hex: string; icon: string } | null;
   profiles: { full_name: string } | null;
   class_plans: { plan_id: string }[];
+  personalized_schedule_plans?: { plan_id: string }[];
 }
 
 interface ScheduleCell {
@@ -65,6 +68,7 @@ export default function HorariosPage() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [modeFilter, setModeFilter] = useState<string>("normal");
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -82,18 +86,20 @@ export default function HorariosPage() {
   const loadSchedule = useCallback(async () => {
     const { data: schedules } = await supabase
       .from("schedules")
-      .select("*, disciplines(name, color_hex, icon), profiles(full_name), class_plans(plan_id)")
+      .select("*, disciplines(name, color_hex, icon), profiles(full_name), class_plans(plan_id), personalized_schedule_plans(plan_id)")
       .eq("active", true)
       .order("start_time");
 
     if (!schedules) { setLoading(false); return; }
+
+    const modeSchedules = (schedules as Schedule[]).filter((s) => s.mode === modeFilter);
 
     const todayObj = new Date();
     const today = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, "0")}-${String(todayObj.getDate()).padStart(2, "0")}`;
     const enriched: Record<string, Record<string, ScheduleCell>> = {};
     const timeSet = new Set<string>();
 
-    for (const s of schedules as Schedule[]) {
+    for (const s of modeSchedules) {
       const time = s.start_time.slice(0, 5);
       const day = String(s.day_of_week);
       timeSet.add(time);
@@ -129,7 +135,7 @@ export default function HorariosPage() {
     setTimes(sortedTimes);
     setGrid(enriched);
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, modeFilter]);
 
   const loadUser = useCallback(async () => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -148,6 +154,12 @@ export default function HorariosPage() {
     }
     setSelectedSchedule(schedule);
     setModalOpen(true);
+  };
+
+  const handleModeChange = (mode: string) => {
+    if (mode === modeFilter) return;
+    setActiveFilter("all");
+    setModeFilter(mode);
   };
 
   const handleEnrolled = () => {
@@ -189,13 +201,23 @@ export default function HorariosPage() {
         </div>
 
         {/* Enroll Modal */}
-        <EnrollModal
-          open={modalOpen}
-          schedule={selectedSchedule}
-          userId={userId || ""}
-          onClose={() => setModalOpen(false)}
-          onEnrolled={handleEnrolled}
-        />
+        {selectedSchedule?.mode === "personalizado" ? (
+          <PersonalizedEnrollModal
+            open={modalOpen}
+            schedule={selectedSchedule}
+            userId={userId || ""}
+            onClose={() => setModalOpen(false)}
+            onEnrolled={handleEnrolled}
+          />
+        ) : (
+          <EnrollModal
+            open={modalOpen}
+            schedule={selectedSchedule}
+            userId={userId || ""}
+            onClose={() => setModalOpen(false)}
+            onEnrolled={handleEnrolled}
+          />
+        )}
 
         {/* Header */}
         <section className="pt-24 pb-8 px-5 md:px-6">
@@ -209,6 +231,26 @@ export default function HorariosPage() {
             <div className="flex items-center gap-3">
               <span className="font-[family-name:var(--font-headline-md)] text-[20px] leading-[24px] text-on-surface uppercase">Clases disponibles</span>
               <div className="h-px flex-1 bg-on-surface/10" />
+            </div>
+          </div>
+        </section>
+
+        {/* Mode Toggle */}
+        <section className="pb-4 px-5 md:px-6">
+          <div className="max-w-[1280px] mx-auto">
+            <div className="inline-flex items-center gap-1 p-1 rounded-full bg-surface-container border border-on-surface/10">
+              <button
+                onClick={() => handleModeChange("normal")}
+                className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-5 py-2 rounded-full transition-colors cursor-pointer ${modeFilter === "normal" ? "btn-primary-gradient text-white" : "text-on-surface-variant hover:text-on-surface"}`}
+              >
+                Membresías
+              </button>
+              <button
+                onClick={() => handleModeChange("personalizado")}
+                className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-5 py-2 rounded-full transition-colors cursor-pointer ${modeFilter === "personalizado" ? "bg-purple-500 text-white" : "text-on-surface-variant hover:text-on-surface"}`}
+              >
+                Personalizadas
+              </button>
             </div>
           </div>
         </section>

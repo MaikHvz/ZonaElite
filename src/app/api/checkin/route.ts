@@ -27,7 +27,7 @@ export async function POST(req: Request) {
 
   const { data: session, error: sessionErr } = await admin
     .from("class_sessions")
-    .select("id, status")
+    .select("id, status, schedules(mode)")
     .eq("id", session_id)
     .single();
 
@@ -38,6 +38,14 @@ export async function POST(req: Request) {
   if (session.status !== "activa") {
     return NextResponse.json(
       { error: "Esta clase ya no está recibiendo asistencia" },
+      { status: 403 }
+    );
+  }
+
+  const sessionMode = (session.schedules as unknown as { mode?: string } | null)?.mode;
+  if (sessionMode === "personalizado") {
+    return NextResponse.json(
+      { error: "Las clases personalizadas no usan check-in por QR" },
       { status: 403 }
     );
   }

@@ -1124,6 +1124,157 @@ ok("P: RLS de packs usa owns_beneficiary",
   /personalized_packs[\s\S]*?owns_beneficiary/.test(schemaSqlP));
 
 // ============================================================
+// Q. Clases de horario para modalidad personalizada (Fase 0-6)
+// ============================================================
+section("Q. Clases de horario personalizadas (mode en schedules, tablas propias, sin QR)");
+
+const migration010 = readFileSync(join(ROOT, "contexto", "migrations", "010_personalized_schedule_classes.sql"), "utf8");
+const checkinRouteQ = readFileSync(join(ROOT, "src", "app", "api", "checkin", "route.ts"), "utf8");
+const adminHorariosQ = readFileSync(join(ROOT, "src", "app", "admin", "horarios", "page.tsx"), "utf8");
+const publicHorariosQ = readFileSync(join(ROOT, "src", "app", "horarios", "page.tsx"), "utf8");
+const personalizedModalQ = readFileSync(join(ROOT, "src", "components", "PersonalizedEnrollModal.tsx"), "utf8");
+const adminAsistenciaQ = readFileSync(join(ROOT, "src", "app", "admin", "asistencia", "page.tsx"), "utf8");
+const dashboardMembresiasQ = readFileSync(join(ROOT, "src", "app", "dashboard", "membresias", "page.tsx"), "utf8");
+const dashboardTsQ = readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8");
+const enrollModalQ = readFileSync(join(ROOT, "src", "components", "EnrollModal.tsx"), "utf8");
+
+// Q1. Migración 010: DDL idempotente + RPC VOLATILE
+ok("Q: 010 agrega columna mode con ADD COLUMN IF NOT EXISTS (idempotente)",
+  /ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'normal';/.test(migration010));
+ok("Q: 010 crea schedules_mode_check via DO block idempotente",
+  /pg_constraint WHERE conname = 'schedules_mode_check'[\s\S]*?ADD CONSTRAINT schedules_mode_check[\s\S]*?IN \('normal', 'personalizado'\)/.test(migration010));
+ok("Q: 010 crea personalized_schedule_plans con FK cascade a schedules",
+  /CREATE TABLE IF NOT EXISTS public\.personalized_schedule_plans[\s\S]*?schedule_id uuid NOT NULL REFERENCES public\.schedules\(id\) ON DELETE CASCADE/.test(migration010));
+ok("Q: 010 crea personalized_enrollments con UNIQUE(session_id, beneficiary_id)",
+  /CREATE TABLE IF NOT EXISTS public\.personalized_enrollments[\s\S]*?personalized_enrollments_session_beneficiary_unique UNIQUE \(session_id, beneficiary_id\)/.test(migration010));
+ok("Q: 010 crea los 4 índices de búsqueda",
+  /idx_personalized_schedule_plans_schedule/.test(migration010) &&
+  /idx_personalized_schedule_plans_plan/.test(migration010) &&
+  /idx_personalized_enrollments_session/.test(migration010) &&
+  /idx_personalized_enrollments_beneficiary/.test(migration010));
+ok("Q: 010 habilita RLS en las 2 tablas nuevas",
+  /personalized_schedule_plans ENABLE ROW LEVEL SECURITY/.test(migration010) &&
+  /personalized_enrollments ENABLE ROW LEVEL SECURITY/.test(migration010));
+ok("Q: 010 define RPC enroll_personalized_class SECURITY DEFINER VOLATILE",
+  /CREATE OR REPLACE FUNCTION public\.enroll_personalized_class\(\s*p_session_id uuid,\s*p_beneficiary_ids uuid\[\][\s\S]*?SECURITY DEFINER[\s\S]*?VOLATILE/.test(migration010));
+ok("Q: 010 REVOKE/GRANT solo a authenticated",
+  /REVOKE ALL ON FUNCTION public\.enroll_personalized_class\(UUID, UUID\[\]\) FROM PUBLIC;[\s\S]*?GRANT EXECUTE ON FUNCTION public\.enroll_personalized_class\(UUID, UUID\[\]\) TO authenticated;/.test(migration010));
+ok("Q: 010 RPC consume pack de forma atómica (used_classes < total_classes)",
+  /used_classes < total_classes/.test(migration010));
+ok("Q: 010 RPC es idempotente (beneficiario ya inscrito no falla)",
+  /Idempotente: si ya est\u00E1 inscrito[\s\S]*?RETURN QUERY SELECT v_bid, true, NULL, 'Ya inscrito'/.test(migration010));
+
+// Q2. Espejo 1:1 en el esquema documentado
+const schemaSqlQ = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+ok("Q: esquema refleja columna mode en DDL de schedules",
+  /mode text DEFAULT 'normal' NOT NULL,/.test(schemaSqlQ));
+ok("Q: esquema refleja schedules_mode_check",
+  /ADD CONSTRAINT schedules_mode_check[\s\S]*?IN \('normal', 'personalizado'\)/.test(schemaSqlQ));
+ok("Q: esquema refleja tablas del módulo desacoplado",
+  /CREATE TABLE IF NOT EXISTS public\.personalized_schedule_plans/.test(schemaSqlQ) &&
+  /CREATE TABLE IF NOT EXISTS public\.personalized_enrollments/.test(schemaSqlQ));
+ok("Q: esquema refleja UNIQUE(session_id, beneficiary_id) en personalizadas",
+  /personalized_enrollments_session_beneficiary_unique UNIQUE \(session_id, beneficiary_id\)/.test(schemaSqlQ));
+ok("Q: esquema refleja RPC enroll_personalized_class + GRANT a authenticated",
+  /CREATE OR REPLACE FUNCTION public\.enroll_personalized_class/.test(schemaSqlQ) &&
+  /GRANT EXECUTE ON FUNCTION public\.enroll_personalized_class\(UUID, UUID\[\]\) TO authenticated;/.test(schemaSqlQ));
+ok("Q: esquema NO altera class_enrollments ni enroll_class (módulo desacoplado)",
+  !/pack_id/.test(schemaSqlQ.match(/CREATE TABLE IF NOT EXISTS public\.class_enrollments \([\s\S]*?\);/)?.[0] || "") &&
+  /enroll_class/.test(schemaSqlQ));
+
+// Q3. Checkin guard defensivo (personalizadas no usan QR)
+ok("Q: checkin selecciona schedules(mode)",
+  /\.select\("id, status, schedules\(mode\)"\)/.test(checkinRouteQ));
+ok("Q: checkin devuelve 403 si la sesión es personalizada",
+  /if \(sessionMode === "personalizado"\)[\s\S]*?Las clases personalizadas no usan check-in por QR[\s\S]*?status: 403/.test(checkinRouteQ));
+ok("Q: checkin conserva flujo normal de membresías",
+  /class_enrollments/.test(checkinRouteQ) && !/enroll_personalized_class/.test(checkinRouteQ));
+
+// Q4. Admin horarios: CRUD con modo y planes permitidos
+ok("Q: admin horarios tiene botón 'Nueva Clase Personalizada'",
+  adminHorariosQ.includes("Nueva Clase Personalizada"));
+ok("Q: admin horarios ramifica openCreate por modo",
+  /const openCreate = \(mode: "normal" \| "personalizado"\) =>/.test(adminHorariosQ));
+ok("Q: admin horarios filtra por Modalidad (Todas/Membresías/Personalizadas)",
+  /value: "todas", label: "Todas"/.test(adminHorariosQ) &&
+  /value: "personalizado", label: "Personalizadas"/.test(adminHorariosQ) &&
+  /filteredSchedules = schedules\.filter\(\(s\) => modeFilter === "todas" \|\| s\.mode === modeFilter\)/.test(adminHorariosQ));
+ok("Q: admin horarios carga personalized_plans y personalized_schedule_plans",
+  /\.from\("personalized_plans"\)[\s\S]*\.select\("id, name, active"\)/.test(adminHorariosQ) &&
+  /personalized_schedule_plans\(plan_id\)/.test(adminHorariosQ));
+ok("Q: admin horarios edita seleccionando planes desde la tabla de enlace correcta",
+  /setSelectedPlans\([\s\S]*?s\.mode === "personalizado"[\s\S]*?s\.personalized_schedule_plans\?\.map\(\(cp\) => cp\.plan_id\) \|\| \[\]/.test(adminHorariosQ));
+ok("Q: admin horarios al guardar borra e inserta la tabla de enlace correcta",
+  /form\.mode === "personalizado"/.test(adminHorariosQ) &&
+  /\.from\("personalized_schedule_plans"\)\.delete\(\)\.eq\("schedule_id", scheduleId\)/.test(adminHorariosQ));
+ok("Q: admin horarios borra la tabla de enlace antes de eliminar el schedule",
+  /\.from\("personalized_schedule_plans"\)\.delete\(\)\.eq\("schedule_id", deleteTarget\.id\)/.test(adminHorariosQ));
+ok("Q: admin horarios exporta columna Modalidad en Excel",
+  /"Modalidad": s\.mode === "personalizado" \? "Personalizada" \: "Membres\xEDas"/.test(adminHorariosQ));
+
+// Q5. PersonalizedEnrollModal (público/dashboard): pack + RPC
+ok("Q: existe PersonalizedEnrollModal",
+  /export default function PersonalizedEnrollModal/.test(personalizedModalQ));
+ok("Q: PersonalizedEnrollModal consume packs activos con cupos",
+  /\.from\("personalized_packs"\)[\s\S]*?\.eq\("status", "activa"\)[\s\S]*?p\.used_classes < p\.total_classes/.test(personalizedModalQ));
+ok("Q: PersonalizedEnrollModal valida plan permitido de la clase",
+  /allowedPlanIds = schedule\.personalized_schedule_plans\?\.map\(\(p\) => p\.plan_id\) \|\| \[\]/.test(personalizedModalQ) &&
+  /Plan no habilitado para esta clase/.test(personalizedModalQ));
+ok("Q: PersonalizedEnrollModal llama enroll_personalized_class con arreglo",
+  /\.rpc\("enroll_personalized_class", \{\s*p_session_id: selectedSession,\s*p_beneficiary_ids: ids,/.test(personalizedModalQ));
+ok("Q: PersonalizedEnrollModal informa 'consume 1 clase del pack'",
+  personalizedModalQ.includes("consume 1 clase del pack"));
+
+// Q6. Horario público: toggle + modal ramificado
+ok("Q: horario público filtra por mode en la carga",
+  /const modeSchedules = \(schedules as Schedule\[\]\)\.filter\(\(s\) => s\.mode === modeFilter\)/.test(publicHorariosQ));
+ok("Q: horario público integra PersonalizedEnrollModal solo para personalizadas",
+  /selectedSchedule\?\.mode === "personalizado" \? \([\s\S]*?<PersonalizedEnrollModal[\s\S]*?\) : \([\s\S]*?<EnrollModal/.test(publicHorariosQ));
+ok("Q: horario público consulta personalized_schedule_plans",
+  /personalized_schedule_plans\(plan_id\)/.test(publicHorariosQ));
+
+// Q7. Dashboard: sección de próximas clases personalizadas
+ok("Q: dashboard carga schedules mode personalizado activos",
+  /\.from\("schedules"\)[\s\S]*?\.eq\("mode", "personalizado"\)[\s\S]*?\.eq\("active", true\)/.test(dashboardMembresiasQ));
+ok("Q: dashboard cuenta inscripciones de la próxima sesión",
+  /\.from\("personalized_enrollments"\)[\s\S]*?\.eq\("session_id", next\.id\)/.test(dashboardMembresiasQ));
+ok("Q: dashboard marca inscrito si el usuario ya agendó",
+  /userEnrolled = \(myEnrollments \|\| \[\]\)\.length > 0;/.test(dashboardMembresiasQ));
+ok("Q: dashboard renderiza 'Próximas Clases Personalizadas' y el modal",
+  dashboardMembresiasQ.includes("Próximas") &&
+  dashboardMembresiasQ.includes("PersonalizedEnrollModal"));
+
+// Q8. Admin asistencia: badge, sin QR, inscripción por pack
+ok("Q: asistencia marca sesión con badge Personalizada",
+  /s\.schedule\?\.mode === "personalizado"[\s\S]*?Personalizada/.test(adminAsistenciaQ));
+ok("Q: asistencia bloquea activación QR en personalizadas",
+  /if \(sessionRow\?\.schedule\?\.mode === "personalizado"\)[\s\S]*?no usan check-in por QR/.test(adminAsistenciaQ));
+ok("Q: asistencia no inicia polling QR para personalizadas",
+  /sessionStatus === "activa" && !isPersonalized/.test(adminAsistenciaQ));
+ok("Q: asistencia calcula ausentes desde personalized_enrollments al cerrar",
+  /if \(isPersonalized\)[\s\S]*?\.from\("personalized_enrollments"\)[\s\S]*?\.eq\("session_id", expandedSession\)/.test(adminAsistenciaQ));
+ok("Q: asistencia inscribe personalizadas vía RPC (no class_enrollments)",
+  /enrollMode === "personalizado"[\s\S]*?\.rpc\("enroll_personalized_class", \{\s*p_session_id: enrollSessionId,\s*p_beneficiary_ids: \[beneficiaryId\],/.test(adminAsistenciaQ));
+ok("Q: asistencia busca packs (no membresías) para personalizadas",
+  /if \(enrollMode === "personalizado"\)[\s\S]*?\.from\("personalized_packs"\)/.test(adminAsistenciaQ));
+ok("Q: asistencia muestra aviso de registro manual sin QR",
+  /no usan check-in por QR\. La asistencia se registra manualmente/.test(adminAsistenciaQ));
+
+// Q9. dashboard.ts: modo en sesiones y asistencia ramificada
+ok("Q: dashboard.ts trae mode en getUpcomingSessions",
+  /schedule:schedules\(\s*id, day_of_week, start_time, end_time, mode,/.test(dashboardTsQ));
+ok("Q: dashboard.ts ramifica getAttendanceForSession a personalized_enrollments",
+  /const scheduleMode = \(session\.schedules as unknown as \{ mode\?: string \} \| null\)\?\.mode;[\s\S]*?if \(scheduleMode === "personalizado"\)[\s\S]*?\.from\("personalized_enrollments"\)/.test(dashboardTsQ));
+
+// Q10. Regresión: módulos originales intactos
+ok("Q: EnrollModal sigue existiendo sin cambios (membresías intactas)",
+  /export default function EnrollModal/.test(enrollModalQ) && !/personalizado/.test(enrollModalQ));
+ok("Q: checkin conserva el token/QR para membresías (regresión)",
+  /get_remaining_tokens|memberships/.test(checkinRouteQ));
+ok("Q: no se eliminó el RPC enroll_class original",
+  /enroll_class/.test(schemaSqlQ));
+
+// ============================================================
 // RESULTADO
 // ============================================================
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

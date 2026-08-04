@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "@/providers/SessionProvider";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getChileToday } from "@/lib/dates";
@@ -17,6 +17,7 @@ import MembershipCard from "@/components/dashboard/MembershipCard";
 import { MembershipCardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import CheckoutModal from "@/components/CheckoutModal";
 import PersonalizedCheckoutModal from "@/components/PersonalizedCheckoutModal";
+import PersonalizedEnrollModal from "@/components/PersonalizedEnrollModal";
 import StatusBadge from "@/components/admin/StatusBadge";
 import type { EnrollmentPlan } from "@/components/CheckoutModal";
 
@@ -36,6 +37,25 @@ interface BeneficiaryEnrollment {
   endDate: string | null;
 }
 
+interface PersonalizedScheduleRow {
+  schedule: {
+    id: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    capacity: number;
+    room: string | null;
+    mode: string;
+    disciplines: { name: string; color_hex: string; icon: string } | null;
+    profiles: { full_name: string } | null;
+    personalized_schedule_plans: { plan_id: string }[];
+  };
+  nextSession: { id: string; session_date: string; enrolled: number } | null;
+  userEnrolled: boolean;
+}
+
+const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
 export default function MembresiasPage() {
   const { user } = useSession();
   const [memberships, setMemberships] = useState<MembershipData[]>([]);
@@ -49,6 +69,57 @@ export default function MembresiasPage() {
   const [personalizedPlansCount, setPersonalizedPlansCount] = useState(0);
   const [personalizedCheckoutOpen, setPersonalizedCheckoutOpen] = useState(false);
   const [checkoutBeneficiaryId, setCheckoutBeneficiaryId] = useState<string | null>(null);
+  const [personalizedSchedules, setPersonalizedSchedules] = useState<PersonalizedScheduleRow[]>([]);
+  const [enrollScheduleOpen, setEnrollScheduleOpen] = useState(false);
+  const [enrollSchedule, setEnrollSchedule] = useState<PersonalizedScheduleRow["schedule"] | null>(null);
+
+  const loadPersonalizedSchedules = useCallback(async (benIds: string[]) => {
+    const supabase = createClient();
+    const today = getChileToday();
+
+    const { data: pSchedules } = await supabase
+      .from("schedules")
+      .select("*, disciplines(name, color_hex, icon), profiles(full_name), personalized_schedule_plans(plan_id)")
+      .eq("mode", "personalizado")
+      .eq("active", true)
+      .order("start_time");
+
+    const rows: PersonalizedScheduleRow[] = [];
+    for (const s of (pSchedules || []) as unknown as Array<Record<string, unknown>>) {
+      const { data: nextSessions } = await supabase
+        .from("class_sessions")
+        .select("id, session_date")
+        .eq("schedule_id", s.id as string)
+        .gte("session_date", today)
+        .order("session_date")
+        .limit(3);
+
+      const next = (nextSessions || [])[0] as { id: string; session_date: string } | undefined;
+      if (!next) continue;
+
+      const { count } = await supabase
+        .from("personalized_enrollments")
+        .select("*", { count: "exact", head: true })
+        .eq("session_id", next.id);
+
+      let userEnrolled = false;
+      if (benIds.length > 0) {
+        const { data: myEnrollments } = await supabase
+          .from("personalized_enrollments")
+          .select("beneficiary_id")
+          .eq("session_id", next.id)
+          .in("beneficiary_id", benIds);
+        userEnrolled = (myEnrollments || []).length > 0;
+      }
+
+      rows.push({
+        schedule: s as unknown as PersonalizedScheduleRow["schedule"],
+        nextSession: { id: next.id, session_date: next.session_date, enrolled: count || 0 },
+        userEnrolled,
+      });
+    }
+    setPersonalizedSchedules(rows);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -160,11 +231,13 @@ export default function MembresiasPage() {
         getUserPersonalizedData(user.id),
         getActivePersonalizedPlans(),
       ]);
-      setPersonalizedBeneficiaries(persData.data?.beneficiaries || []);
+      const beneficiaries = persData.data?.beneficiaries || [];
+      setPersonalizedBeneficiaries(beneficiaries);
       setPersonalizedPlansCount((persPlans.data || []).length);
+      await loadPersonalizedSchedules(beneficiaries.map((b) => b.id));
       setLoading(false);
     })();
-  }, [user]);
+  }, [user, loadPersonalizedSchedules]);
 
   const filtered = (() => {
     const today = getChileToday();
@@ -429,6 +502,87 @@ export default function MembresiasPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Próximas Clases Personalizadas (Horario) */}
+      {!loading && personalizedSchedules.length > 0 && (
+        <div className="pt-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase tracking-tighter">
+                Próximas <span className="text-primary">Clases Personalizadas</span>
+              </h2>
+              <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant mt-1">
+                Bloques horarios reservados. Agenda con las clases de tu pack.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {personalizedSchedules.map((row) => (
+              <div key={row.schedule.id} className="glass-card p-5 border-on-surface/5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="material-symbols-outlined text-[18px]"
+                      style={{ color: row.schedule.disciplines?.color_hex || "#a855f7" }}
+                    >
+                      {row.schedule.disciplines?.icon || "sports_martial_arts"}
+                    </span>
+                    <h3 className="font-[family-name:var(--font-headline-md)] text-[15px] text-on-surface uppercase">
+                      {row.schedule.disciplines?.name}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEnrollSchedule(row.schedule);
+                      setEnrollScheduleOpen(true);
+                    }}
+                    className={`font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                      row.userEnrolled
+                        ? "text-primary border border-primary/30 hover:bg-primary/10"
+                        : "btn-primary-gradient text-white"
+                    }`}
+                  >
+                    {row.userEnrolled ? "Ver / Cambiar" : "Agendar"}
+                  </button>
+                </div>
+                <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
+                  {DAY_NAMES[row.schedule.day_of_week]} · {row.schedule.start_time.slice(0, 5)} - {row.schedule.end_time.slice(0, 5)}
+                  {row.schedule.room ? ` · Sala ${row.schedule.room}` : ""}
+                </p>
+                {row.nextSession && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70">
+                      Próxima: {new Date(row.nextSession.session_date + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" })}
+                    </span>
+                    <span className={`font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      row.userEnrolled
+                        ? "bg-green-500/10 text-green-400"
+                        : "bg-purple-500/10 text-purple-400"
+                    }`}>
+                      {row.userEnrolled
+                        ? "Inscrito"
+                        : `${Math.max(0, row.schedule.capacity - row.nextSession.enrolled)} cupos`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {enrollScheduleOpen && enrollSchedule && (
+        <PersonalizedEnrollModal
+          open={enrollScheduleOpen}
+          schedule={enrollSchedule as never}
+          userId={user?.id || ""}
+          onClose={() => setEnrollScheduleOpen(false)}
+          onEnrolled={() => {
+            loadPersonalizedSchedules(personalizedBeneficiaries.map((b) => b.id));
+          }}
+        />
       )}
 
       {/* Enrollment-only checkout */}

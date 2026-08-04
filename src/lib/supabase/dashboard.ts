@@ -387,6 +387,7 @@ export interface ClassSessionData {
     end_time: string;
     discipline: { name: string } | null;
     professor: { full_name: string } | null;
+    mode?: string;
   };
 }
 
@@ -417,7 +418,7 @@ export async function getUpcomingSessions() {
         `
         *,
         schedule:schedules(
-          id, day_of_week, start_time, end_time,
+          id, day_of_week, start_time, end_time, mode,
           discipline:disciplines(name),
           professor:profiles(full_name)
         )
@@ -447,11 +448,50 @@ export async function getAttendanceForSession(sessionId: string) {
 
     const { data: session } = await supabase
       .from("class_sessions")
-      .select("schedule_id")
+      .select("schedule_id, schedules(mode)")
       .eq("id", sessionId)
       .single();
 
     if (!session) return { beneficiaries: [] as AttendanceBeneficiary[] };
+
+    const scheduleMode = (session.schedules as unknown as { mode?: string } | null)?.mode;
+    if (scheduleMode === "personalizado") {
+      const { data: enrollments } = await supabase
+        .from("personalized_enrollments")
+        .select("beneficiary_id")
+        .eq("session_id", sessionId);
+
+      const beneficiaryMap = new Map<string, AttendanceBeneficiary>();
+      for (const e of enrollments || []) {
+        const id = e.beneficiary_id;
+        const { data: ben } = await supabase
+          .from("beneficiaries")
+          .select("id, dependent:dependents(full_name, category), profile:profiles(full_name)")
+          .eq("id", id)
+          .single();
+        if (ben) {
+          const b = ben as unknown as {
+            id: string;
+            dependent: { full_name: string; category: string } | null;
+            profile: { full_name: string } | null;
+          };
+          const name = b.dependent?.full_name || b.profile?.full_name || "Sin nombre";
+          const category = b.dependent?.category || "adulto";
+          beneficiaryMap.set(id, {
+            id,
+            full_name: name,
+            category,
+            attendance: attendanceByBeneficiary.get(id) || null,
+          });
+        }
+      }
+
+      return {
+        beneficiaries: Array.from(beneficiaryMap.values()).sort((a, b) =>
+          a.full_name.localeCompare(b.full_name)
+        ),
+      };
+    }
 
     const { data: enrollments } = await supabase
       .from("class_enrollments")

@@ -68,6 +68,7 @@ export default function AdminAsistenciaPage() {
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [enrollSessionId, setEnrollSessionId] = useState<string | null>(null);
   const [enrollSessionName, setEnrollSessionName] = useState("");
+  const [enrollMode, setEnrollMode] = useState<"normal" | "personalizado">("normal");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<EnrollableBeneficiary[]>([]);
   const [searching, setSearching] = useState(false);
@@ -259,7 +260,8 @@ export default function AdminAsistenciaPage() {
       session.status = sessionStatus;
     }
 
-    if (sessionStatus === "activa") {
+    const isPersonalized = session?.schedule?.mode === "personalizado";
+    if (sessionStatus === "activa" && !isPersonalized) {
       setQrSessionId(sessionId);
     } else {
       setQrSessionId(null);
@@ -278,6 +280,12 @@ export default function AdminAsistenciaPage() {
   };
 
   const handleActivateSession = async (sessionId: string) => {
+    const sessionRow = sessions.find((s) => s.id === sessionId);
+    if (sessionRow?.schedule?.mode === "personalizado") {
+      showToast("Las clases personalizadas no usan check-in por QR", "error");
+      return;
+    }
+
     const { error } = await supabase
       .from("class_sessions")
       .update({ status: "activa" })
@@ -301,24 +309,38 @@ export default function AdminAsistenciaPage() {
 
     const sessionRow = sessions.find((s) => s.id === expandedSession);
     const scheduleId = sessionRow?.schedule_id;
+    const isPersonalized = sessionRow?.schedule?.mode === "personalizado";
 
-    const { data: sessionEnrollments } = await supabase
-      .from("class_enrollments")
-      .select("beneficiary_id, source")
-      .eq("session_id", expandedSession);
+    let uniqueEnrollments: { beneficiary_id: string; source?: string }[] = [];
 
-    const { data: scheduleEnrollments } = scheduleId
-      ? await supabase
-          .from("class_enrollments")
-          .select("beneficiary_id, source")
-          .eq("schedule_id", scheduleId)
-          .is("session_id", null)
-      : { data: null };
+    if (isPersonalized) {
+      const { data: pEnrollments } = await supabase
+        .from("personalized_enrollments")
+        .select("beneficiary_id")
+        .eq("session_id", expandedSession);
+      uniqueEnrollments = (pEnrollments || []).map((e) => ({
+        beneficiary_id: e.beneficiary_id,
+        source: "personalizado",
+      }));
+    } else {
+      const { data: sessionEnrollments } = await supabase
+        .from("class_enrollments")
+        .select("beneficiary_id, source")
+        .eq("session_id", expandedSession);
 
-    const allEnrollments = [...(sessionEnrollments || []), ...(scheduleEnrollments || [])];
-    const uniqueEnrollments = Array.from(
-      new Map(allEnrollments.map((e) => [e.beneficiary_id, e])).values()
-    );
+      const { data: scheduleEnrollments } = scheduleId
+        ? await supabase
+            .from("class_enrollments")
+            .select("beneficiary_id, source")
+            .eq("schedule_id", scheduleId)
+            .is("session_id", null)
+        : { data: null };
+
+      const allEnrollments = [...(sessionEnrollments || []), ...(scheduleEnrollments || [])];
+      uniqueEnrollments = Array.from(
+        new Map(allEnrollments.map((e) => [e.beneficiary_id, e])).values()
+      );
+    }
 
     const { data: existingAttendance } = await supabase
       .from("attendance")
@@ -349,7 +371,9 @@ export default function AdminAsistenciaPage() {
       .eq("status", "presente");
 
     const qrBenIds = new Set(
-      uniqueEnrollments.filter((e) => e.source === "qr").map((e) => e.beneficiary_id)
+      isPersonalized
+        ? (allAttendance || []).map((a) => a.beneficiary_id)
+        : uniqueEnrollments.filter((e) => e.source === "qr").map((e) => e.beneficiary_id)
     );
 
     const attendees: SummaryAttendee[] = (allAttendance || [])
@@ -447,18 +471,75 @@ export default function AdminAsistenciaPage() {
   };
 
   const openEnrollModal = (sessionId: string, sessionName: string) => {
+    const sess = sessions.find((s) => s.id === sessionId);
     setEnrollSessionId(sessionId);
     setEnrollSessionName(sessionName);
+    setEnrollMode(sess?.schedule?.mode === "personalizado" ? "personalizado" : "normal");
     setSearchQuery("");
     setSearchResults([]);
     setShowEnrollModal(true);
   };
 
+  const getEligibility = async (benId: string) => {
+    const today = getChileToday();
+
+    if (enrollMode === "personalizado") {
+      const { data: packs } = await supabase
+        .from("personalized_packs")
+        .select("id, plan_id, end_date, total_classes, used_classes")
+        .eq("beneficiary_id", benId)
+        .eq("status", "activa")
+        .gte("end_date", today)
+        .order("end_date", { ascending: false });
+
+      const activePack = (packs || []).find((p) => p.used_classes < p.total_classes) || null;
+      return {
+        activePlan: activePack?.plan_id || null,
+        membershipId: activePack?.id || null,
+        tokensRemaining: activePack ? activePack.total_classes - activePack.used_classes : null,
+        tokensTotal: activePack?.total_classes || null,
+        isUnlimited: false,
+      };
+    }
+
+    const { data: membership } = await supabase
+      .from("memberships")
+      .select("id, plan_id, membership_plans(name, tokens)")
+      .eq("beneficiary_id", benId)
+      .eq("status", "activa")
+      .gte("end_date", today)
+      .maybeSingle();
+
+    let tokensRemaining: number | null = null;
+    let tokensTotal: number | null = null;
+    let isUnlimited = true;
+
+    if (membership) {
+      const { data: tokenData } = await supabase.rpc("get_remaining_tokens", {
+        p_beneficiary_id: benId,
+        p_membership_id: membership.id,
+      });
+
+      if (tokenData && tokenData.length > 0) {
+        const tokenInfo = tokenData[0];
+        tokensRemaining = tokenInfo.remaining;
+        tokensTotal = tokenInfo.total;
+        isUnlimited = tokenInfo.is_unlimited;
+      }
+    }
+
+    return {
+      activePlan: membership?.plan_id || null,
+      membershipId: membership?.id || null,
+      tokensRemaining,
+      tokensTotal,
+      isUnlimited,
+    };
+  };
+
   const searchUsers = async (query: string) => {
     if (query.length < 2) { setSearchResults([]); return; }
     setSearching(true);
-
-    const today = getChileToday();
 
     const [profilesRes, depsRes] = await Promise.all([
       supabase
@@ -484,42 +565,13 @@ export default function AdminAsistenciaPage() {
 
       if (!ben) continue;
 
-      const { data: membership } = await supabase
-        .from("memberships")
-        .select("id, plan_id, membership_plans(name, tokens)")
-        .eq("beneficiary_id", ben.id)
-        .eq("status", "activa")
-        .gte("end_date", today)
-        .maybeSingle();
-
-      let tokensRemaining: number | null = null;
-      let tokensTotal: number | null = null;
-      let isUnlimited = true;
-
-      if (membership) {
-        const { data: tokenData } = await supabase.rpc("get_remaining_tokens", {
-          p_beneficiary_id: ben.id,
-          p_membership_id: membership.id,
-        });
-
-        if (tokenData && tokenData.length > 0) {
-          const tokenInfo = tokenData[0];
-          tokensRemaining = tokenInfo.remaining;
-          tokensTotal = tokenInfo.total;
-          isUnlimited = tokenInfo.is_unlimited;
-        }
-      }
-
+      const eligibility = await getEligibility(ben.id);
       results.push({
         id: p.id,
         full_name: p.full_name,
         category: "adulto",
         beneficiary_id: ben.id,
-        activePlan: membership?.plan_id || null,
-        membershipId: membership?.id || null,
-        tokensRemaining,
-        tokensTotal,
-        isUnlimited,
+        ...eligibility,
       });
     }
 
@@ -535,42 +587,13 @@ export default function AdminAsistenciaPage() {
       const alreadyFound = results.some((r) => r.beneficiary_id === ben.id);
       if (alreadyFound) continue;
 
-      const { data: membership } = await supabase
-        .from("memberships")
-        .select("id, plan_id, membership_plans(name, tokens)")
-        .eq("beneficiary_id", ben.id)
-        .eq("status", "activa")
-        .gte("end_date", today)
-        .maybeSingle();
-
-      let tokensRemaining: number | null = null;
-      let tokensTotal: number | null = null;
-      let isUnlimited = true;
-
-      if (membership) {
-        const { data: tokenData } = await supabase.rpc("get_remaining_tokens", {
-          p_beneficiary_id: ben.id,
-          p_membership_id: membership.id,
-        });
-
-        if (tokenData && tokenData.length > 0) {
-          const tokenInfo = tokenData[0];
-          tokensRemaining = tokenInfo.remaining;
-          tokensTotal = tokenInfo.total;
-          isUnlimited = tokenInfo.is_unlimited;
-        }
-      }
-
+      const eligibility = await getEligibility(ben.id);
       results.push({
         id: d.tutor_id,
         full_name: d.full_name,
         category: d.category,
         beneficiary_id: ben.id,
-        activePlan: membership?.plan_id || null,
-        membershipId: membership?.id || null,
-        tokensRemaining,
-        tokensTotal,
-        isUnlimited,
+        ...eligibility,
       });
     }
 
@@ -581,6 +604,48 @@ export default function AdminAsistenciaPage() {
   const handleEnroll = async (beneficiaryId: string) => {
     if (!enrollSessionId) return;
     setEnrolling(beneficiaryId);
+
+    if (enrollMode === "personalizado") {
+      const { data, error } = await supabase.rpc("enroll_personalized_class", {
+        p_session_id: enrollSessionId,
+        p_beneficiary_ids: [beneficiaryId],
+      });
+
+      setEnrolling(null);
+
+      if (error) {
+        showToast("Error al inscribir", "error");
+        return;
+      }
+
+      const result = ((data || []) as Array<{
+        success: boolean;
+        error_code: string | null;
+        error_message: string | null;
+      }>)[0];
+
+      if (result && !result.success) {
+        const msg =
+          result.error_code === "ALREADY_ENROLLED"
+            ? "Ya está inscrito en esta sesión"
+            : result.error_code === "NO_PACK"
+              ? "No tiene un pack activo"
+              : result.error_code === "PLAN_NOT_ALLOWED"
+                ? "El plan del pack no está habilitado para esta clase"
+                : result.error_code === "FULL"
+                  ? "La clase está llena"
+                  : result.error_message || "Error al inscribir";
+        showToast(msg, "error");
+        return;
+      }
+
+      showToast("Inscrito correctamente", "success");
+      setShowEnrollModal(false);
+      if (expandedSession === enrollSessionId) {
+        await toggleSession(enrollSessionId);
+      }
+      return;
+    }
 
     const { error } = await supabase.from("class_enrollments").insert({
       session_id: enrollSessionId,
@@ -769,20 +834,27 @@ export default function AdminAsistenciaPage() {
                               {r.category === "nino" ? "Niño" : "Adulto"}
                             </span>
                             {r.activePlan ? (
-                              <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full ${r.isUnlimited
-                                  ? "bg-green-500/10 text-green-400"
-                                  : r.tokensRemaining !== null && r.tokensRemaining > 0
-                                    ? "bg-blue-500/10 text-blue-400"
+                              <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
+                                enrollMode === "personalizado"
+                                  ? r.tokensRemaining !== null && r.tokensRemaining > 0
+                                    ? "bg-purple-500/10 text-purple-400"
                                     : "bg-red-500/10 text-red-400"
+                                  : r.isUnlimited
+                                    ? "bg-green-500/10 text-green-400"
+                                    : r.tokensRemaining !== null && r.tokensRemaining > 0
+                                      ? "bg-blue-500/10 text-blue-400"
+                                      : "bg-red-500/10 text-red-400"
                                 }`}>
-                                {r.isUnlimited
-                                  ? "Ilimitado"
-                                  : `${r.tokensRemaining}/${r.tokensTotal} tokens`
+                                {enrollMode === "personalizado"
+                                  ? `${r.tokensRemaining}/${r.tokensTotal} clases`
+                                  : r.isUnlimited
+                                    ? "Ilimitado"
+                                    : `${r.tokensRemaining}/${r.tokensTotal} tokens`
                                 }
                               </span>
                             ) : (
                               <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider text-red-400">
-                                Sin membresía
+                                {enrollMode === "personalizado" ? "Sin pack" : "Sin membresía"}
                               </span>
                             )}
                           </div>
@@ -795,7 +867,7 @@ export default function AdminAsistenciaPage() {
                           {enrolling === r.beneficiary_id ? "..." : "Inscribir"}
                         </button>
                       </div>
-                      {r.activePlan && !r.isUnlimited && r.tokensRemaining !== null && r.tokensRemaining <= 0 && (
+                      {enrollMode !== "personalizado" && r.activePlan && !r.isUnlimited && r.tokensRemaining !== null && r.tokensRemaining <= 0 && (
                         <div className={`mt-2 flex items-center gap-1.5 px-2 py-1.5 rounded-lg ${
                           r.tokensRemaining === 0
                             ? "bg-yellow-500/5 border border-yellow-500/15"
@@ -947,6 +1019,11 @@ export default function AdminAsistenciaPage() {
                                   <p className="font-[family-name:var(--font-headline-md)] text-[15px] text-on-surface uppercase">
                                     {discName}
                                   </p>
+                                  {s.schedule?.mode === "personalizado" && (
+                                    <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                      Personalizada
+                                    </span>
+                                  )}
                                   {isActive && (
                                     <span className="flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[9px] uppercase text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
                                       <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -1021,7 +1098,15 @@ export default function AdminAsistenciaPage() {
                                 </div>
                               )}
 
-                              {!isActive && !showSummary && (
+                              {s.schedule?.mode === "personalizado" && !showSummary && (
+                                <div className="mt-4 mb-4 p-5 bg-surface-container-lowest rounded-xl border border-on-surface/5">
+                                  <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
+                                    Las clases personalizadas no usan check-in por QR. La asistencia se registra manualmente a continuación.
+                                  </p>
+                                </div>
+                              )}
+
+                              {s.schedule?.mode !== "personalizado" && !isActive && !showSummary && (
                                 <div className="mt-4 mb-4">
                                   <button
                                     onClick={() => handleActivateSession(s.id)}
