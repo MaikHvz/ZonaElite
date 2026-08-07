@@ -141,3 +141,21 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
   - Admin `admin/asistencia`: badge "Personalizada" en la sesión; sin QR (se bloquea activación, no inicia polling, aviso de registro manual); `getAttendanceForSession` ramificado (personalizadas leen `personalized_enrollments`); al cerrar sesión los ausentes se calculan desde `personalized_enrollments`; modal "Inscribir" ramificado (personalizadas buscan packs vía `getEligibility` y llaman el RPC; etiquetas "clases"/"Sin pack").
 - **Asistencia**: reuso de `attendance` (neutral, UNIQUE session_id+beneficiary_id) → métricas/export de `AttendanceOverview` suman personalizadas sin cambios.
 - **Verificación**: suite sección Q (contratos migración 010 + espejo de esquema, guarda checkin, admin horarios, modal, público, dashboard, asistencia, regresión de `enroll_class`/`EnrollModal`) + `tsc` + `build`.
+
+## 9. Desinscripción de Usuario en Asistencia (🟢 IMPLEMENTADO — v1)
+
+> Estado: **implementado (2026-08-07)**, suite secciones A–R en verde (310 tests), `npx tsc --noEmit` limpio. Migración `011_cancel_class_enrollment.sql` creada y espejada 1:1 en `documentacion/squema-sql-actualizado.sql`; **pendiente aplicar en Supabase (SQL Editor)**. Requisito en `contexto/requisitos/eliminar-usuario-asistencia.md`.
+
+**Propósito**: Deshacer inscripciones hechas por error desde el panel admin de asistencia, devolviendo el **token real consumido** (modalidad normal) o la **clase del pack** (modalidad personalizada), limpiando la asistencia marcada y la deuda pendiente de la sesión, y notificando al titular.
+
+- **RPC `cancel_class_enrollment(p_session_id uuid, p_beneficiary_id uuid)`** (migración 011, SECURITY DEFINER, VOLATILE):
+  1. Valida `is_admin()` → excepción `P0001` "Sin permisos de administrador" si no.
+  2. Resuelve sesión (fecha, schedule, `mode`, disciplina) y titular del beneficiario (adulto = `profile_id`, niño = `dependents.tutor_id`).
+  3. **Normal**: borra `class_enrollments` por `session_id` **o** por `schedule_id` recurrente (`session_id IS NULL`), borra la deuda `pendiente` de la sesión (la que materializó el check-in QR sin tokens, fase 10) y borra la `attendance`. Como `get_remaining_tokens` cuenta `class_enrollments` dinámicamente, **el token vuelve solo**.
+  4. **Personalizada**: borra `personalized_enrollments` y restaura el pack (`used_classes = GREATEST(used_classes - 1, 0)`, `status = 'activa'`).
+  5. Notifica al titular vía `user_notifications` ("Token devuelto" / "Clase devuelta").
+  6. Retorna `{removed, token_returned, attendance_deleted, message}`; `REVOKE/GRANT` solo a `authenticated`.
+- **UI `admin/asistencia`**: botón de desinscripción por fila (icono `person_remove`) en la lista de inscritos de cada sesión; modal de confirmación "Desinscribir a {nombre}" con aviso de devolución de token/clase; al confirmar llama el RPC y recarga la lista **sin colapsar** la sesión (`reloadExpandedSession`).
+- **Sin policies nuevas**: `class_enrollments_delete_admin` ya existía; el resto de operaciones van dentro del RPC (ignora RLS). Solo se borra la deuda `pendiente`; las pagadas/condonadas quedan como auditoría.
+- **Verificación**: suite sección R (contratos de migración 011 + espejo 1:1 del esquema, frontend) + `tsc` + `build`.
+

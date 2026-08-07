@@ -1275,6 +1275,53 @@ ok("Q: no se eliminó el RPC enroll_class original",
   /enroll_class/.test(schemaSqlQ));
 
 // ============================================================
+// R. Desinscripción en asistencia (cancel_class_enrollment)
+// ============================================================
+section("R. Desinscripción de usuario en asistencia (devolución de token)");
+
+const migration011 = readFileSync(join(ROOT, "contexto", "migrations", "011_cancel_class_enrollment.sql"), "utf8");
+const schemaSqlR = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const adminAsistenciaR = readFileSync(join(ROOT, "src", "app", "admin", "asistencia", "page.tsx"), "utf8");
+const cancelFnRegex = /CREATE OR REPLACE FUNCTION public\.cancel_class_enrollment\([\s\S]*?\$\$\s*;/;
+
+// R1. Migración 011: contrato del RPC
+ok("R: 011 define RPC cancel_class_enrollment SECURITY DEFINER VOLATILE",
+  /CREATE OR REPLACE FUNCTION public\.cancel_class_enrollment\(\s*p_session_id uuid,\s*p_beneficiary_id uuid[\s\S]*?SECURITY DEFINER[\s\S]*?VOLATILE/.test(migration011));
+ok("R: 011 rechaza no-admin (P0001) antes de cualquier operación",
+  /public\.is_admin\(\);[\s\S]*?RAISE EXCEPTION 'Sin permisos de administrador' USING ERRCODE = 'P0001'/.test(migration011));
+ok("R: 011 cubre inscripción por sesión y por horario recurrente (session_id IS NULL)",
+  /session_id = p_session_id\s+OR \(schedule_id = v_schedule_id AND session_id IS NULL\)/.test(migration011));
+ok("R: 011 elimina la deuda pendiente de la sesión (QR sin tokens)",
+  /DELETE FROM public\.debts[\s\S]*?session_id = p_session_id[\s\S]*?status = 'pendiente'/.test(migration011));
+ok("R: 011 limpia attendance de la sesión",
+  /DELETE FROM public\.attendance[\s\S]*?session_id = p_session_id AND beneficiary_id = p_beneficiary_id/.test(migration011));
+ok("R: 011 restaura la clase al pack en personalizadas (used_classes y 'activa')",
+  /personalized_packs[\s\S]*?GREATEST\(used_classes - 1, 0\)[\s\S]*?status = 'activa'/.test(migration011));
+ok("R: 011 notifica al titular (user_notifications)",
+  /INSERT INTO public\.user_notifications/.test(migration011) && /Token devuelto/.test(migration011));
+ok("R: 011 REVOKE/GRANT solo a authenticated",
+  /REVOKE ALL ON FUNCTION public\.cancel_class_enrollment\(UUID, UUID\) FROM PUBLIC;[\s\S]*?GRANT EXECUTE ON FUNCTION public\.cancel_class_enrollment\(UUID, UUID\) TO authenticated;/.test(migration011));
+
+// R2. Espejo 1:1 en el esquema documentado
+ok("R: esquema refleja el RPC cancel_class_enrollment 1:1 (migración 011)",
+  norm(cancelFnRegex.exec(schemaSqlR)?.[0] ?? "") === norm(cancelFnRegex.exec(migration011)?.[0] ?? ""));
+ok("R: cancel_class_enrollment única en el esquema",
+  (schemaSqlR.match(/CREATE OR REPLACE FUNCTION public\.cancel_class_enrollment\(/g) || []).length === 1);
+
+// R3. Panel admin/asistencia: botón + confirmación + RPC + recarga
+ok("R: asistencia muestra botón de desinscripción por fila (person_remove)",
+  adminAsistenciaR.includes("person_remove") && adminAsistenciaR.includes("Desinscribir"));
+ok("R: asistencia abre modal de confirmación con el nombre del beneficiario",
+  adminAsistenciaR.includes("setRemoveTarget({ beneficiary_id: b.id, full_name: b.full_name })") &&
+  /Desinscribir a \{removeTarget\.full_name\}/.test(adminAsistenciaR));
+ok("R: asistencia llama cancel_class_enrollment con sesión y beneficiario",
+  /\.rpc\("cancel_class_enrollment", \{\s*p_session_id: expandedSession,\s*p_beneficiary_id: removeTarget\.beneficiary_id,/.test(adminAsistenciaR));
+ok("R: asistencia recarga la lista tras eliminar (sin colapsar la sesión)",
+  /reloadExpandedSession[\s\S]*?getAttendanceForSession/.test(adminAsistenciaR));
+ok("R: regresión — sigue documentada la policy DELETE admin de class_enrollments",
+  /"class_enrollments_delete_admin"/.test(schemaSqlR));
+
+// ============================================================
 // RESULTADO
 // ============================================================
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

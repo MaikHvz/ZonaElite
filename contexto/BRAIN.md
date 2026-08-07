@@ -386,14 +386,21 @@ class_enrollments.beneficiary_id ──→ beneficiaries.id
 - `blog_posts.status`: `'borrador'` | `'publicado'` | `'programado'`
 - `events.type`: `'clase'` | `'torneo'` | `'seminario'` | `'otro'`
 
-### 5 Funciones RPC
+### Funciones RPC
 
 ```sql
-is_admin()           -- role_id = 1
-is_staff()           -- role_id IN (1,2,3)
+is_admin()             -- role_id = 1
+is_staff()             -- role_id IN (1,2,3)
 owns_beneficiary(b_id) -- usuario es dueño del beneficiario
-handle_new_user()    -- trigger: crea profiles + beneficiaries en signup
-update_updated_at()  -- trigger: updated_at = now() en update
+handle_new_user()      -- trigger: crea profiles + beneficiaries en signup
+update_updated_at()    -- trigger: updated_at = now() en update
+chile_today()          -- fecha Chile DST-safe (timezone America/Santiago)
+enroll_class()         -- B-006: inscripción transaccional (lock sesión, membresía, aforo)
+get_remaining_tokens() -- B-010: tokens dinámicos (cuenta class_enrollments por membresía)
+get_enrollment_debt()  -- B-011: inscripciones que exceden los tokens
+notify_token_return()  -- notificación in-app "Token devuelto" (justificación)
+enroll_personalized_class() -- personalizadas: consume pack atómicamente
+cancel_class_enrollment()   -- migración 011: admin desinscribe + devuelve token/clase
 ```
 
 ### 59 RLS Policies
@@ -470,9 +477,10 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 14. **`beneficiaries`** no tiene columna `category` — el category viene del `dependent` o se asume `'adulto'`.
 15. **Spanish** en todo el contenido visible.
 16. **Zonas Horarias**: NUNCA usar `new Date().toISOString().split("T")[0]` para calcular "hoy", ya que usa UTC y genera un desfase después de las 20:00 hora Chile. SIEMPRE importar y usar `getChileToday()` y `addDaysChile()` desde `src/lib/dates.ts`. Para límites de mes/trimestre usar los helpers Chile-aware de `dates.ts` (`chileMonthStartDate()`, `chileMonthEndDate()`, `chileQuarterStartDate()`, `chileQuarterEndDate()`, etc.) y convertir a instantes UTC con `chileDateToUtc()` cuando se comparen columnas TIMESTAMPTZ. El scan estático de `scripts/test-flows.mjs` falla (exit 1) si reaparecen los patrones `toISOString().split("T")[0]` o `new Date(y, m, 1).toISOString()`.
-17. **Suite de pruebas**: `scripts/test-flows.mjs` (Node 24+, sin deps) cubre zona horaria Chile, firma HMAC de Flow, contratos de esquema/RLS, ciclo de vida de inscripción y el módulo de clases personalizadas (secciones P/Q, 295 tests). Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`.
+17. **Suite de pruebas**: `scripts/test-flows.mjs` (Node 24+, sin deps) cubre zona horaria Chile, firma HMAC de Flow, contratos de esquema/RLS, ciclo de vida de inscripción y los módulos de clases personalizadas y desinscripción en asistencia (secciones P/Q/R, 310 tests). Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`.
 17. **Guía de trabajo obligatoria**: Antes de implementar CUALQUIER nueva funcionalidad, leer y ejecutar el workflow definido en `documentacion/guia-de-trabajo.md`. Las 4 fases son obligatorias: planificación → análisis de impacto → implementación → documentación post-implementación (incluye actualizar `squema-sql-actualizado.sql`).
 18. **Modalidad personalizada en horarios**: `schedules.mode` ('normal'|'personalizado') se fija al crear y es inmutable al editar. Las clases personalizadas NO usan QR/check-in (`/api/checkin` devuelve 403); se inscriben vía RPC `enroll_personalized_class` (consume pack) y su asistencia se registra manualmente reusando `attendance`. En admin/público/dashboard filtrar por `mode` y ramificar `EnrollModal`/`PersonalizedEnrollModal`.
+19. **Desinscripción en asistencia (migración 011)**: para eliminar un beneficiario de una sesión desde `/admin/asistencia` usar SIEMPRE el RPC `cancel_class_enrollment` (validación admin dentro). En normal borra `class_enrollments` (por `session_id` u horario recurrente con `session_id IS NULL`) y la deuda `pendiente` de la sesión → el token vuelve solo por `get_remaining_tokens`; en personalizada restaura 1 clase al pack. Limpia `attendance` y notifica al titular. No crear policies DELETE nuevas (`class_enrollments_delete_admin` ya existe).
 
 ---
 
@@ -487,7 +495,9 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 | `documentacion/plan-clases-personalizadas.md` | Plan por fases del módulo de packs personalizados (v1) |
 | `documentacion/plan-clases-horario-personalizadas.md` | Plan por fases de clases de horario personalizadas |
 | `contexto/requisitos/clases-horario-personalizadas.md` | Requisito + análisis de impacto (horarios personalizados) |
+| `contexto/requisitos/eliminar-usuario-asistencia.md` | Requisito + análisis de impacto (desinscripción con devolución de token) |
 | `contexto/migrations/010_personalized_schedule_classes.sql` | Migración 010: mode en schedules + tablas/RPC de personalizadas (pendiente aplicar) |
+| `contexto/migrations/011_cancel_class_enrollment.sql` | Migración 011: RPC cancel_class_enrollment (pendiente aplicar) |
 | `contexto/schema-complete.sql` | SQL completo: 26 tablas, 190 cols, 32 FKs, 59 RLS, 33 indexes |
 | `project-context/brain.md` | Contexto legacy (parcialmente obsoleto) |
 | `project-context/changelog.md` | Historial de cambios detallado |

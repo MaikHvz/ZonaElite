@@ -85,6 +85,9 @@ export default function AdminAsistenciaPage() {
   const [closingSession, setClosingSession] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
+  const [removeTarget, setRemoveTarget] = useState<{ beneficiary_id: string; full_name: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
+
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
@@ -671,6 +674,51 @@ export default function AdminAsistenciaPage() {
     }
   };
 
+  const handleRemoveBeneficiary = async () => {
+    if (!expandedSession || !removeTarget) return;
+    setRemoving(true);
+
+    const { data, error } = await supabase.rpc("cancel_class_enrollment", {
+      p_session_id: expandedSession,
+      p_beneficiary_id: removeTarget.beneficiary_id,
+    });
+
+    if (error) {
+      showToast("Error al eliminar inscripción", "error");
+      setRemoving(false);
+      return;
+    }
+
+    const result = ((data || []) as Array<{
+      removed: boolean;
+      token_returned: boolean;
+      attendance_deleted: boolean;
+      message: string;
+    }>)[0];
+
+    setRemoveTarget(null);
+    setRemoving(false);
+
+    if (result && result.removed) {
+      showToast(result.message, "success");
+      await reloadExpandedSession();
+    } else {
+      showToast(result?.message || "El beneficiario no está inscrito", "error");
+    }
+  };
+
+  const reloadExpandedSession = async () => {
+    if (!expandedSession) return;
+    const { data } = await getAttendanceForSession(expandedSession);
+    const bens = data?.beneficiaries || [];
+    setBeneficiaries(bens);
+    const session = sessions.find((s) => s.id === expandedSession);
+    if (session) {
+      session.enrolledCount = bens.length;
+      setSessions((prev) => [...prev]);
+    }
+  };
+
   const formatDate = (d: string) =>
     new Date(d + "T12:00:00").toLocaleDateString("es-CL", {
       weekday: "long",
@@ -916,6 +964,35 @@ export default function AdminAsistenciaPage() {
                 className="flex-1 py-2.5 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg shadow-[0_0_16px_rgba(229,57,53,0.3)] disabled:opacity-50 cursor-pointer"
               >
                 {closingSession ? "Cerrando..." : "Finalizar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeTarget && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setRemoveTarget(null)}>
+          <div className="bg-surface-container-lowest border border-on-surface/10 rounded-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <span className="material-symbols-outlined text-red-400 text-[40px] mb-3 block">person_remove</span>
+            <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase mb-2">
+              Desinscribir a {removeTarget.full_name}
+            </h3>
+            <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mb-6">
+              Se devolverá el token o la clase de pack consumido y se eliminará la asistencia marcada de esta sesión.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRemoveTarget(null)}
+                className="flex-1 py-2.5 border border-on-surface/15 text-on-surface font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg hover:bg-on-surface/5 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRemoveBeneficiary}
+                disabled={removing}
+                className="flex-1 py-2.5 bg-red-500/20 text-red-400 border border-red-500/30 font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {removing ? "Eliminando..." : "Eliminar"}
               </button>
             </div>
           </div>
@@ -1229,7 +1306,7 @@ export default function AdminAsistenciaPage() {
                                             </span>
                                           </div>
                                         </div>
-                                        <div className="flex gap-1.5 shrink-0">
+                                        <div className="flex items-center gap-1.5 shrink-0">
                                           {STATUS_OPTIONS.map((opt) => (
                                             <button
                                               key={opt.value}
@@ -1243,6 +1320,14 @@ export default function AdminAsistenciaPage() {
                                               {opt.label}
                                             </button>
                                           ))}
+                                          <div className="w-px h-5 bg-on-surface/10 mx-1" />
+                                          <button
+                                            onClick={() => setRemoveTarget({ beneficiary_id: b.id, full_name: b.full_name })}
+                                            title="Desinscribir"
+                                            className="p-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                                          >
+                                            <span className="material-symbols-outlined text-[16px]">person_remove</span>
+                                          </button>
                                         </div>
                                       </div>
                                     ))}

@@ -146,4 +146,14 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Componentes**: `PersonalizedEnrollModal.tsx` (nuevo); `admin/horarios`, `admin/asistencia`, `horarios` público, `dashboard/membresias`, `src/lib/supabase/dashboard.ts` (getUpcomingSessions/getAttendanceForSession con `mode`), guarda 403 en `/api/checkin`.
 - **Estado**: Implementado. Suite secciones A–Q en verde (295 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Requisito/detalle en `contexto/requisitos/clases-horario-personalizadas.md`, plan por fases en `documentacion/plan-clases-horario-personalizadas.md`.
 
+## 15. Desinscripción de Usuario en Asistencia con Devolución de Token (2026-08-07)
+**Requisito**: Poder eliminar desde `/admin/asistencia` a un beneficiario que se inscribió por error en una sesión, devolviendo automáticamente el token/clase consumido (devolución real), limpiando la deuda pendiente y la asistencia marcada, y notificando al titular.
+- **Implementación**:
+  - RPC `cancel_class_enrollment(p_session_id, p_beneficiary_id)` (migración `011_cancel_class_enrollment.sql`, SECURITY DEFINER): valida `is_admin()`, resuelve la sesión y el titular; en modalidad normal borra `class_enrollments` (por sesión u horario recurrente) y la deuda `pendiente` de la sesión → `get_remaining_tokens` recalcula y devuelve el token solo; en modalidad personalizada restaura 1 clase al pack (`used_classes-1`, `status='activa'`); limpia `attendance` y notifica vía `user_notifications`.
+  - UI en `admin/asistencia`: botón `person_remove` por fila + modal de confirmación "Desinscribir a {nombre}" con aviso de devolución; al confirmar recarga la lista sin colapsar la sesión.
+  - No requiere policies DELETE nuevas (`class_enrollments_delete_admin` ya existía; el resto va dentro del RPC).
+- **Migración**: `contexto/migrations/011_cancel_class_enrollment.sql` (creada; **pendiente aplicar en Supabase**). Espejo 1:1 en `documentacion/squema-sql-actualizado.sql`.
+- **Estado**: Implementado. Suite secciones A–R en verde (310 tests), `npx tsc --noEmit` limpio. Requisito/detalle en `contexto/requisitos/eliminar-usuario-asistencia.md`.
+
+
 
