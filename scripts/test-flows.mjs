@@ -1322,6 +1322,70 @@ ok("R: regresión — sigue documentada la policy DELETE admin de class_enrollme
   /"class_enrollments_delete_admin"/.test(schemaSqlR));
 
 // ============================================================
+// S. Changelog de desarrolladores (migración 012)
+// ============================================================
+section("S. Changelog de desarrolladores en panel admin");
+
+const migration012 = readFileSync(join(ROOT, "contexto", "migrations", "012_changelog.sql"), "utf8");
+const schemaSqlS = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const adminChangelogQ = readFileSync(join(ROOT, "src", "app", "admin", "changelog", "page.tsx"), "utf8");
+const adminSidebarS = readFileSync(join(ROOT, "src", "components", "admin", "AdminSidebar.tsx"), "utf8");
+const changelogTableRegex = /CREATE TABLE IF NOT EXISTS public\.changelog \([\s\S]*?\);/;
+
+// S1. Migración 012: contrato de la tabla
+ok("S: 012 crea la tabla changelog con version/title/summary/created_at",
+  /CREATE TABLE IF NOT EXISTS public\.changelog \([\s\S]*?id uuid PRIMARY KEY DEFAULT gen_random_uuid\(\)[\s\S]*?version text NOT NULL[\s\S]*?title text NOT NULL[\s\S]*?summary text NOT NULL[\s\S]*?created_at timestamptz NOT NULL DEFAULT now\(\)/.test(migration012));
+ok("S: 012 define UNIQUE(version) para seed idempotente",
+  /CONSTRAINT changelog_version_unique UNIQUE \(version\)/.test(migration012));
+ok("S: 012 habilita RLS en changelog",
+  /ALTER TABLE public\.changelog ENABLE ROW LEVEL SECURITY/.test(migration012));
+ok("S: 012 policy de solo lectura admin (changelog_admin_read, is_admin)",
+  /CREATE POLICY "changelog_admin_read"[\s\S]*?FOR SELECT USING \(public\.is_admin\(\)\)/.test(migration012));
+ok("S: 012 seed v1.0.0 menciona membresías, desinscripción y disciplinas",
+  /'v1\.0\.0'/.test(migration012) &&
+  /membres\xEDas rediseñada/.test(migration012) &&
+  /Desinscribir/.test(migration012) &&
+  /transición suave/.test(migration012));
+ok("S: 012 seed es idempotente (ON CONFLICT version DO NOTHING)",
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration012));
+
+// S2. Espejo 1:1 en el esquema documentado
+ok("S: esquema refleja la tabla changelog 1:1 (migración 012)",
+  norm(changelogTableRegex.exec(schemaSqlS)?.[0] ?? "") === norm(changelogTableRegex.exec(migration012)?.[0] ?? ""));
+ok("S: esquema refleja la policy changelog_admin_read única",
+  (schemaSqlS.match(/CREATE POLICY "changelog_admin_read"/g) || []).length === 1);
+ok("S: esquema refleja el seed v1.0.0 con ON CONFLICT",
+  /INSERT INTO public\.changelog \(version, title, summary\)/.test(schemaSqlS) &&
+  /'v1\.0\.0'/.test(schemaSqlS) &&
+  /ON CONFLICT \(version\) DO NOTHING/.test(schemaSqlS));
+
+// S3. Frontend admin/changelog: solo lectura, ordenado por created_at
+ok("S: changelog page es client component con spinner de carga",
+  adminChangelogQ.includes('"use client"') &&
+  /animate-spin/.test(adminChangelogQ));
+ok("S: changelog page consulta la tabla ordenada por created_at DESC",
+  /\.from\("changelog"\)[\s\S]*\.select\("\*"\)[\s\S]*\.order\("created_at", \{ ascending: false \}\)/.test(adminChangelogQ));
+ok("S: changelog page renderiza version/title/summary/fecha",
+  /entry\.version/.test(adminChangelogQ) &&
+  /entry\.title/.test(adminChangelogQ) &&
+  /entry\.summary/.test(adminChangelogQ) &&
+  /toLocaleDateString\("es-CL"/.test(adminChangelogQ));
+ok("S: changelog page usa whitespace-pre-line para el resumen",
+  /whitespace-pre-line/.test(adminChangelogQ));
+ok("S: changelog page no tiene botones de edición (solo lectura)",
+  !/handleSave|\.update\(|\.insert\(|\.delete\(/.test(adminChangelogQ));
+
+// S4. Sidebar: link Changelog con icono update
+ok("S: sidebar agrega link /admin/changelog con icono update",
+  /href: "\/admin\/changelog", label: "Changelog", icon: "update"/.test(adminSidebarS));
+
+// S5. Regresión: módulos originales intactos
+ok("S: no se tocaron los RPCs de asistencia ni el esquema previo",
+  /enroll_class/.test(schemaSqlS) &&
+  /cancel_class_enrollment/.test(schemaSqlS) &&
+  (schemaSqlS.match(/CREATE OR REPLACE FUNCTION public\.cancel_class_enrollment\(/g) || []).length === 1);
+
+// ============================================================
 // RESULTADO
 // ============================================================
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

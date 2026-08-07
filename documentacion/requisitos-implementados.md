@@ -155,5 +155,15 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Migración**: `contexto/migrations/011_cancel_class_enrollment.sql` (creada; **pendiente aplicar en Supabase**). Espejo 1:1 en `documentacion/squema-sql-actualizado.sql`.
 - **Estado**: Implementado. Suite secciones A–R en verde (310 tests), `npx tsc --noEmit` limpio. Requisito/detalle en `contexto/requisitos/eliminar-usuario-asistencia.md`.
 
+## 16. Changelog de Desarrolladores en Panel Admin (2026-08-07)
+**Requisito**: Incorporar a la sección Admin un changelog de desarrolladores muy resumido y versionado, para que el administrador conozca los nuevos cambios realizados, visible solo desde el panel admin.
+- **Implementación**:
+  - Tabla `changelog` (migración `012_changelog.sql`): `id uuid PK`, `version text UNIQUE`, `title text`, `summary text`, `created_at timestamptz DEFAULT now()`. RLS habilitada con una única policy `changelog_admin_read` (`FOR SELECT USING (is_admin())`) → solo el administrador lee; la escritura va por service role / SQL Editor.
+  - Seed idempotente **v1.0.0** que resume el sprint: vista de membresías rediseñada, botón "Desinscribir" en asistencia con devolución de token/clase, y disciplinas con descripción desplegable con transición suave.
+  - Página `admin/changelog` (solo lectura): tarjetas por versión con badge, título, resumen y fecha. Link "Changelog" en el sidebar admin (icono `update`).
+  - Convención: cada feature nueva agrega una entrada de changelog vía SQL seed/migración (regla IA #20 de BRAIN).
+- **Migración**: `contexto/migrations/012_changelog.sql` (creada; **pendiente aplicar en Supabase**). Espejo 1:1 en `documentacion/squema-sql-actualizado.sql`.
+- **Estado**: Implementado. Suite secciones A–S en verde, `npx tsc --noEmit` limpio. Requisito/detalle en `contexto/requisitos/changelog-admin.md`.
+
 
 

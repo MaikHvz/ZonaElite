@@ -19,6 +19,7 @@ const sidebarLinks = [
   { href: "/admin/blog", label: "Blog", icon: "article" },
   { href: "/admin/notificaciones", label: "Notificaciones", icon: "notifications" },
   { href: "/admin/reglamento", label: "Reglamento", icon: "menu_book" },
+  { href: "/admin/changelog", label: "Changelog", icon: "update" },
   { href: "/admin/configuracion", label: "Configuración", icon: "settings" },
 ];
 

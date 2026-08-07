@@ -159,3 +159,16 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Sin policies nuevas**: `class_enrollments_delete_admin` ya existía; el resto de operaciones van dentro del RPC (ignora RLS). Solo se borra la deuda `pendiente`; las pagadas/condonadas quedan como auditoría.
 - **Verificación**: suite sección R (contratos de migración 011 + espejo 1:1 del esquema, frontend) + `tsc` + `build`.
 
+## 10. Changelog de Desarrolladores en Panel Admin (🟢 IMPLEMENTADO — v1)
+
+> Estado: **implementado (2026-08-07)**, suite secciones A–S en verde. Migración `012_changelog.sql` creada y espejada 1:1 en `documentacion/squema-sql-actualizado.sql`; **pendiente aplicar en Supabase (SQL Editor)**. Requisito en `contexto/requisitos/changelog-admin.md`.
+
+**Propósito**: Que el administrador conozca de un vistazo (muy resumido y versionado) los nuevos cambios que hacen los desarrolladores, sin revisar código ni commits.
+
+- **Tabla `changelog`** (migración 012): `id uuid PK`, `version text UNIQUE`, `title text`, `summary text`, `created_at timestamptz DEFAULT now()`. RLS habilitada con una única policy `changelog_admin_read` (`FOR SELECT USING (is_admin())`). La escritura va por service role / SQL Editor (el seed usa `ON CONFLICT (version) DO NOTHING`), la UI es de solo lectura.
+- **Seed v1.0.0**: resume el sprint 2026-08-07 — vista de membresías rediseñada, botón "Desinscribir" en asistencia con devolución de token/clase, y disciplinas con descripción desplegable con transición suave.
+- **UI `admin/changelog`**: `"use client"`, consulta `changelog` ordenada por `created_at DESC`, tarjetas por versión con badge de versión, título, resumen (`whitespace-pre-line`) y fecha (`toLocaleDateString("es-CL")`). Protegida por `AdminGuard` del layout admin.
+- **Sidebar**: link "Changelog" (icono `update`) antes de Configuración.
+- **Convención para futuras features**: cada feature nueva agrega una entrada de changelog (nueva versión) vía SQL seed/migración, respetando la regla IA #20 de BRAIN.
+- **Verificación**: suite sección S (contratos de migración 012 + espejo 1:1 del esquema, política RLS, seed v1.0.0, frontend + sidebar) + `tsc` + `build`.
+

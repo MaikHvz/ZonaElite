@@ -91,6 +91,7 @@ src/
 │   │   ├── page.tsx              # Dashboard con métricas
 │   │   ├── asistencia/page.tsx   # Asistencia por sesión
 │   │   ├── blog/page.tsx         # CRUD blog
+│   │   ├── changelog/page.tsx    # Changelog de desarrolladores (solo lectura)
 │   │   ├── configuracion/page.tsx # Settings + galería
 │   │   ├── eventos/page.tsx      # CRUD eventos
 │   │   ├── horarios/page.tsx     # CRUD horarios
@@ -199,6 +200,7 @@ src/
 | `/admin/asistencia` | Acordeón por sesión, "Generar sesiones", "Todos presentes", "Inscribir usuario" |
 | `/admin/blog` | CRUD: borrador/programado/publicado |
 | `/admin/notificaciones` | CRUD: aviso/recordatorio/comunicado/correo_masivo |
+| `/admin/changelog` | **NUEVO** Changelog de desarrolladores: cambios versionados, solo lectura admin |
 | `/admin/configuracion` | Settings academia + CRUD galería (add/remove/reorder/visibility) |
 
 ### API Routes
@@ -324,10 +326,11 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 
 ## 6. Base de datos
 
-### 28 Tablas
+### 29 Tablas
 
 | Tabla | Descripción | FKs principales |
 |-------|-------------|----------------|
+| `changelog` | **NUEVO** Changelog de desarrolladores para el panel admin (versión + título + resumen) | — |
 | `roles` | 1=admin, 2=instructor, 3=recepcion, 4=alumno | — |
 | `profiles` | Perfiles (id=auth.users.id) | FK → auth.users |
 | `academy_settings` | Config academia (singleton) | — |
@@ -403,7 +406,7 @@ enroll_personalized_class() -- personalizadas: consume pack atómicamente
 cancel_class_enrollment()   -- migración 011: admin desinscribe + devuelve token/clase
 ```
 
-### 59 RLS Policies
+### 60 RLS Policies
 
 Todas las tablas tienen RLS habilitado. Patrón típico:
 - Admin: `is_admin()` → acceso total
@@ -481,6 +484,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 17. **Guía de trabajo obligatoria**: Antes de implementar CUALQUIER nueva funcionalidad, leer y ejecutar el workflow definido en `documentacion/guia-de-trabajo.md`. Las 4 fases son obligatorias: planificación → análisis de impacto → implementación → documentación post-implementación (incluye actualizar `squema-sql-actualizado.sql`).
 18. **Modalidad personalizada en horarios**: `schedules.mode` ('normal'|'personalizado') se fija al crear y es inmutable al editar. Las clases personalizadas NO usan QR/check-in (`/api/checkin` devuelve 403); se inscriben vía RPC `enroll_personalized_class` (consume pack) y su asistencia se registra manualmente reusando `attendance`. En admin/público/dashboard filtrar por `mode` y ramificar `EnrollModal`/`PersonalizedEnrollModal`.
 19. **Desinscripción en asistencia (migración 011)**: para eliminar un beneficiario de una sesión desde `/admin/asistencia` usar SIEMPRE el RPC `cancel_class_enrollment` (validación admin dentro). En normal borra `class_enrollments` (por `session_id` u horario recurrente con `session_id IS NULL`) y la deuda `pendiente` de la sesión → el token vuelve solo por `get_remaining_tokens`; en personalizada restaura 1 clase al pack. Limpia `attendance` y notifica al titular. No crear policies DELETE nuevas (`class_enrollments_delete_admin` ya existe).
+20. **Changelog de desarrolladores (migración 012)**: cada feature nueva debe agregar una entrada de changelog en `changelog` (tabla de solo lectura admin, RLS `changelog_admin_read` con `is_admin()`). Insertar vía SQL seed/actualización (o migración) con `ON CONFLICT (version) DO NOTHING`; versiones correlativas (v1.0.0, v1.1.0, …). La UI (`/admin/changelog`) es solo lectura. No editar entradas desde código cliente.
 
 ---
 
@@ -496,8 +500,10 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 | `documentacion/plan-clases-horario-personalizadas.md` | Plan por fases de clases de horario personalizadas |
 | `contexto/requisitos/clases-horario-personalizadas.md` | Requisito + análisis de impacto (horarios personalizados) |
 | `contexto/requisitos/eliminar-usuario-asistencia.md` | Requisito + análisis de impacto (desinscripción con devolución de token) |
+| `contexto/requisitos/changelog-admin.md` | Requisito + análisis de impacto (changelog de desarrolladores en panel admin) |
 | `contexto/migrations/010_personalized_schedule_classes.sql` | Migración 010: mode en schedules + tablas/RPC de personalizadas (pendiente aplicar) |
 | `contexto/migrations/011_cancel_class_enrollment.sql` | Migración 011: RPC cancel_class_enrollment (pendiente aplicar) |
+| `contexto/migrations/012_changelog.sql` | Migración 012: tabla changelog (solo lectura admin, seed v1.0.0) (pendiente aplicar) |
 | `contexto/schema-complete.sql` | SQL completo: 26 tablas, 190 cols, 32 FKs, 59 RLS, 33 indexes |
 | `project-context/brain.md` | Contexto legacy (parcialmente obsoleto) |
 | `project-context/changelog.md` | Historial de cambios detallado |
