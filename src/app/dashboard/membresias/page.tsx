@@ -14,28 +14,14 @@ import {
 } from "@/lib/supabase/dashboard";
 import { effectiveMembershipStatus } from "@/lib/membership-status";
 import MembershipCard from "@/components/dashboard/MembershipCard";
+import BeneficiaryCard, { type InscriptionInfo } from "@/components/dashboard/BeneficiaryCard";
 import { MembershipCardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import CheckoutModal from "@/components/CheckoutModal";
 import PersonalizedCheckoutModal from "@/components/PersonalizedCheckoutModal";
 import PersonalizedEnrollModal from "@/components/PersonalizedEnrollModal";
-import StatusBadge from "@/components/admin/StatusBadge";
 import type { EnrollmentPlan } from "@/components/CheckoutModal";
 
 type Filter = "all" | "activa" | "vencida" | "cancelada";
-
-interface EnrollmentStatus {
-  hasActive: boolean;
-  planName: string | null;
-  endDate: string | null;
-  beneficiaryId: string | null;
-}
-
-interface BeneficiaryEnrollment {
-  name: string;
-  hasActive: boolean;
-  planName: string | null;
-  endDate: string | null;
-}
 
 interface PersonalizedScheduleRow {
   schedule: {
@@ -61,8 +47,10 @@ export default function MembresiasPage() {
   const [memberships, setMemberships] = useState<MembershipData[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
-  const [enrollment, setEnrollment] = useState<EnrollmentStatus>({ hasActive: false, planName: null, endDate: null, beneficiaryId: null });
-  const [allBeneficiaryEnrollments, setAllBeneficiaryEnrollments] = useState<BeneficiaryEnrollment[]>([]);
+
+  // Per-beneficiary inscription map keyed by beneficiary_id
+  const [inscriptionMap, setInscriptionMap] = useState<Record<string, InscriptionInfo>>({});
+
   const [enrollmentPlans, setEnrollmentPlans] = useState<EnrollmentPlan[]>([]);
   const [enrollCheckoutOpen, setEnrollCheckoutOpen] = useState(false);
   const [personalizedBeneficiaries, setPersonalizedBeneficiaries] = useState<PersonalizedBeneficiary[]>([]);
@@ -130,15 +118,14 @@ export default function MembresiasPage() {
       setMemberships(data?.memberships || []);
 
       const today = getChileToday();
+      const newInscriptionMap: Record<string, InscriptionInfo> = {};
 
-      // Fetch enrollment status for own beneficiary
+      // ── Own beneficiary inscription ───────────────────────────────
       const { data: ownBen } = await supabase
         .from("beneficiaries")
         .select("id")
         .eq("profile_id", user.id)
         .maybeSingle();
-
-      const beneficiaryEnrollments: BeneficiaryEnrollment[] = [];
 
       if (ownBen) {
         const { data: enrollData } = await supabase
@@ -150,28 +137,14 @@ export default function MembresiasPage() {
           .maybeSingle();
 
         const e = enrollData as { end_date: string; enrollment_plans?: { name: string } } | null;
-        setEnrollment({
-          hasActive: !!enrollData,
-          planName: e?.enrollment_plans?.name || null,
-          endDate: e?.end_date || null,
-          beneficiaryId: ownBen.id,
-        });
-
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        beneficiaryEnrollments.push({
-          name: (profile as { full_name: string } | null)?.full_name || "Tú",
+        newInscriptionMap[ownBen.id] = {
           hasActive: !!e,
           planName: e?.enrollment_plans?.name || null,
           endDate: e?.end_date || null,
-        });
+        };
       }
 
-      // Fetch enrollment for dependents
+      // ── Dependents inscriptions ───────────────────────────────────
       const { data: deps } = await supabase
         .from("dependents")
         .select("id, full_name, beneficiaries(id)")
@@ -197,27 +170,30 @@ export default function MembresiasPage() {
           const enrollMap = new Map(
             (depEnrolls || []).map((e: { beneficiary_id: string; end_date: string; enrollment_plans: unknown }) => [
               e.beneficiary_id,
-              { planName: (Array.isArray(e.enrollment_plans) ? e.enrollment_plans[0] : e.enrollment_plans) as { name: string } | null, endDate: e.end_date },
+              {
+                planName: (Array.isArray(e.enrollment_plans) ? e.enrollment_plans[0] : e.enrollment_plans) as { name: string } | null,
+                endDate: e.end_date,
+              },
             ])
           );
 
           for (const dep of deps as Array<{ id: string; full_name: string; beneficiaries: unknown }>) {
             const b = dep.beneficiaries;
             const benId = Array.isArray(b) ? (b[0] as { id: string })?.id : (b as { id: string } | null)?.id;
-            const enroll = benId ? enrollMap.get(benId) : null;
-            beneficiaryEnrollments.push({
-              name: dep.full_name,
+            if (!benId) continue;
+            const enroll = enrollMap.get(benId);
+            newInscriptionMap[benId] = {
               hasActive: !!enroll,
               planName: enroll?.planName?.name || null,
               endDate: enroll?.endDate || null,
-            });
+            };
           }
         }
       }
 
-      setAllBeneficiaryEnrollments(beneficiaryEnrollments);
+      setInscriptionMap(newInscriptionMap);
 
-      // Fetch enrollment plans for checkout
+      // ── Enrollment plans for checkout ─────────────────────────────
       const { data: plans } = await supabase
         .from("enrollment_plans")
         .select("id, name, price, duration_days")
@@ -226,7 +202,7 @@ export default function MembresiasPage() {
 
       setEnrollmentPlans((plans as EnrollmentPlan[]) || []);
 
-      // Clases personalizadas (módulo desacoplado)
+      // ── Clases personalizadas ─────────────────────────────────────
       const [persData, persPlans] = await Promise.all([
         getUserPersonalizedData(user.id),
         getActivePersonalizedPlans(),
@@ -239,6 +215,7 @@ export default function MembresiasPage() {
     })();
   }, [user, loadPersonalizedSchedules]);
 
+  // ── Filters for historical memberships ─────────────────────────────────────
   const filtered = (() => {
     const today = getChileToday();
     if (filter === "all") return memberships;
@@ -254,140 +231,154 @@ export default function MembresiasPage() {
     { key: "cancelada", label: "Canceladas" },
   ];
 
-  const formatDate = (d: string) =>
-    new Date(d + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "long", year: "numeric" });
+  // ── Build beneficiary view models ───────────────────────────────────────────
+  const today = getChileToday();
+  const beneficiaryViewModels = personalizedBeneficiaries.map((b) => ({
+    ...b,
+    inscription: inscriptionMap[b.id] || { hasActive: false, planName: null, endDate: null },
+    activeMembership:
+      memberships.find(
+        (m) =>
+          m.beneficiary_id === b.id &&
+          effectiveMembershipStatus(m.status, m.end_date, today) === "activa"
+      ) || null,
+  }));
 
-  const packEffectiveStatus = (p: { status: string; end_date: string }): string => {
-    if (p.status === "activa" && p.end_date < getChileToday()) return "vencida";
-    return p.status;
-  };
+  const anyMissingInscription = beneficiaryViewModels.some((b) => !b.inscription.hasActive);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[40px] text-on-surface uppercase tracking-tighter">
         Mis <span className="text-primary">Membresías</span>
       </h1>
 
-      {/* Enrollment Status */}
-      {!loading && (
-        <div className={`glass-card p-4 border-l-4 ${
-          allBeneficiaryEnrollments.every((b) => b.hasActive)
-            ? "border-l-green-500"
-            : allBeneficiaryEnrollments.some((b) => b.hasActive)
-              ? "border-l-amber-500"
-              : "border-l-red-500"
-        }`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              allBeneficiaryEnrollments.every((b) => b.hasActive)
-                ? "bg-green-500/10"
-                : "bg-amber-500/10"
-            }`}>
-              <span className={`material-symbols-outlined text-[20px] ${
-                allBeneficiaryEnrollments.every((b) => b.hasActive)
-                  ? "text-green-400"
-                  : "text-amber-400"
-              }`}>
-                badge
-              </span>
+      {/* ── BENEFICIARY CARDS GRID ────────────────────────────────────────── */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <MembershipCardSkeleton />
+          <MembershipCardSkeleton />
+        </div>
+      ) : beneficiaryViewModels.length === 0 ? (
+        <div className="glass-panel rounded-xl p-8 text-center">
+          <span className="material-symbols-outlined text-on-surface/20 text-[48px] mb-4 block">
+            person_off
+          </span>
+          <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant">
+            No se encontró tu perfil de beneficiario. Solicita a la academia que lo configure.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Summary bar */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 text-[12px] text-on-surface-variant font-[family-name:var(--font-body-md)]">
+              <div className="w-2 h-2 rounded-full bg-green-400" />
+              {beneficiaryViewModels.filter((b) => b.inscription.hasActive && !!b.activeMembership).length} con cobertura completa
             </div>
-            <div>
-              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
-                Inscripciones a la academia
-              </p>
-              <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">
-                {allBeneficiaryEnrollments.filter((b) => b.hasActive).length} de {allBeneficiaryEnrollments.length} {allBeneficiaryEnrollments.length === 1 ? "beneficiario con" : "beneficiarios con"} inscripción activa
-              </p>
+            <div className="flex items-center gap-2 text-[12px] text-on-surface-variant font-[family-name:var(--font-body-md)]">
+              <div className="w-2 h-2 rounded-full bg-amber-400" />
+              {beneficiaryViewModels.filter(
+                (b) => b.inscription.hasActive !== !!b.activeMembership
+              ).length} con cobertura parcial
             </div>
+            {anyMissingInscription && enrollmentPlans.length > 0 && (
+              <button
+                onClick={() => setEnrollCheckoutOpen(true)}
+                className="ml-auto flex items-center gap-1.5 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400 border border-amber-400/30 px-3 py-1.5 rounded-full hover:bg-amber-400/10 transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[13px]">add_shopping_cart</span>
+                Comprar inscripción
+              </button>
+            )}
           </div>
 
-          <div className="space-y-2">
-            {allBeneficiaryEnrollments.map((b) => (
-              <div key={b.name} className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                b.hasActive ? "bg-green-500/5" : "bg-amber-500/5"
-              }`}>
-                <span className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface">{b.name}</span>
-                {b.hasActive ? (
-                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-green-400">
-                    {b.planName} — vence {new Date(b.endDate + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short", year: "numeric" })}
-                  </span>
-                ) : (
-                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400">
-                    Sin inscripción
-                  </span>
-                )}
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {beneficiaryViewModels.map((b) => (
+              <BeneficiaryCard
+                key={b.id}
+                beneficiaryId={b.id}
+                name={b.name}
+                isSelf={b.isSelf}
+                inscription={b.inscription}
+                activeMembership={b.activeMembership}
+                packs={b.packs}
+                hasEnrollmentPlans={enrollmentPlans.length > 0}
+                hasPersonalizedPlans={personalizedPlansCount > 0}
+                onBuyInscription={() => setEnrollCheckoutOpen(true)}
+                onBuyPack={(benId) => {
+                  setCheckoutBeneficiaryId(benId);
+                  setPersonalizedCheckoutOpen(true);
+                }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ── HISTORIAL DE MEMBRESÍAS ───────────────────────────────────────── */}
+      {!loading && memberships.length > 0 && (
+        <div className="pt-2">
+          <div className="mb-5">
+            <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase tracking-tighter">
+              Historial de <span className="text-primary">Membresías</span>
+            </h2>
+            <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant mt-1">
+              Todas las membresías de tu cuenta, incluyendo las vencidas y canceladas.
+            </p>
+          </div>
+
+          {/* Filters */}
+          <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
+            {filters.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-4 py-2 rounded-full border transition-colors whitespace-nowrap cursor-pointer ${
+                  filter === f.key
+                    ? "bg-primary/10 text-primary border-primary/30"
+                    : "text-on-surface-variant border-on-surface/10 hover:border-on-surface/20"
+                }`}
+              >
+                {f.label}
+              </button>
             ))}
           </div>
 
-          {allBeneficiaryEnrollments.some((b) => !b.hasActive) && enrollmentPlans.length > 0 && (
-            <button
-              onClick={() => setEnrollCheckoutOpen(true)}
-              className="mt-3 flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400 hover:text-on-surface transition-colors cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[14px]">add_shopping_cart</span>
-              Comprar inscripción
-            </button>
+          {filtered.length === 0 ? (
+            <div className="glass-panel rounded-xl p-8 text-center">
+              <span className="material-symbols-outlined text-on-surface/20 text-[48px] mb-4 block">
+                card_membership
+              </span>
+              <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant mb-4">
+                No hay membresías con este filtro
+              </p>
+              <Link
+                href="/#membresias"
+                className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary border border-primary/30 px-6 py-2 rounded-lg hover:bg-primary/10 transition-colors"
+              >
+                Ver planes de membresía →
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filtered.map((m) => (
+                <MembershipCard key={m.id} membership={m} />
+              ))}
+            </div>
           )}
         </div>
       )}
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {filters.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-4 py-2 rounded-full border transition-colors whitespace-nowrap cursor-pointer ${
-              filter === f.key
-                ? "bg-primary/10 text-primary border-primary/30"
-                : "text-on-surface-variant border-on-surface/10 hover:border-on-surface/20"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div className="space-y-4">
-          <MembershipCardSkeleton />
-          <MembershipCardSkeleton />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="glass-panel rounded-xl p-8 text-center">
-          <span className="material-symbols-outlined text-on-surface/20 text-[48px] mb-4 block">
-            card_membership
-          </span>
-          <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant mb-4">
-            {filter === "all"
-              ? "Aún no tienes membresías"
-              : "No hay membresías con este filtro"}
-          </p>
-          <Link
-            href="/#membresias"
-            className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary border border-primary/30 px-6 py-2 rounded-lg hover:bg-primary/10 transition-colors"
-          >
-            Ver planes de membresía →
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filtered.map((m) => (
-            <MembershipCard key={m.id} membership={m} />
-          ))}
-        </div>
-      )}
-
-      {/* Mis Clases Personalizadas */}
-      {!loading && (
+      {/* ── PRÓXIMAS CLASES PERSONALIZADAS ───────────────────────────────── */}
+      {!loading && personalizedSchedules.length > 0 && (
         <div className="pt-2">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase tracking-tighter">
-                Mis <span className="text-primary">Clases Personalizadas</span>
+                Próximas <span className="text-primary">Clases Personalizadas</span>
               </h2>
               <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant mt-1">
-                Packs 1 a 1 o grupos pequeños, desacoplados de tu membresía regular.
+                Bloques horarios reservados. Agenda con las clases de tu pack.
               </p>
             </div>
             {personalizedPlansCount > 0 && (
@@ -402,120 +393,6 @@ export default function MembresiasPage() {
                 Comprar pack
               </button>
             )}
-          </div>
-
-          {personalizedPlansCount === 0 ? (
-            <div className="glass-panel rounded-xl p-6 text-center">
-              <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant">
-                No hay planes de clases personalizadas disponibles por ahora.
-              </p>
-            </div>
-          ) : personalizedBeneficiaries.length === 0 ? (
-            <div className="glass-panel rounded-xl p-6 text-center">
-              <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant">
-                No encontramos tu perfil de beneficiario. Solicita a la academia que lo cree.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {personalizedBeneficiaries.map((b) => (
-                <div key={b.id} className="glass-card p-5 border-on-surface/5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-primary text-[18px]">person</span>
-                      <h3 className="font-[family-name:var(--font-headline-md)] text-[15px] text-on-surface uppercase">
-                        {b.name}
-                        {b.isSelf && (
-                          <span className="ml-1.5 text-[10px] text-on-surface-variant font-[family-name:var(--font-label-sm)]">
-                            Titular
-                          </span>
-                        )}
-                      </h3>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setCheckoutBeneficiaryId(b.id);
-                        setPersonalizedCheckoutOpen(true);
-                      }}
-                      className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-primary border border-primary/30 px-3 py-1.5 rounded-lg hover:bg-primary/10 transition-colors cursor-pointer"
-                    >
-                      Comprar
-                    </button>
-                  </div>
-
-                  {b.packs.length === 0 ? (
-                    <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant/60 italic">
-                      Sin packs de clases personalizadas
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {b.packs.map((p) => {
-                        const effective = packEffectiveStatus(p);
-                        const remaining = Math.max(0, p.total_classes - p.used_classes);
-                        return (
-                          <div key={p.id} className="p-3 rounded-lg bg-surface-container-lowest/50 border border-on-surface/5">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
-                                {p.plan?.name || "Plan"}
-                              </p>
-                              <StatusBadge status={effective} />
-                            </div>
-                            <div className="flex items-center justify-between mt-2 font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant">
-                              <span>
-                                {p.used_classes} de {p.total_classes} clases usadas
-                              </span>
-                              {effective === "activa" && (
-                                <span className="text-primary/80">
-                                  {remaining} restante{remaining === 1 ? "" : "s"}
-                                </span>
-                              )}
-                            </div>
-                            <div className="mt-1.5">
-                              <div className="h-1.5 rounded-full bg-on-surface/10 overflow-hidden">
-                                <div
-                                  className="h-full rounded-full"
-                                  style={{
-                                    width: `${p.total_classes > 0 ? Math.min(100, (p.used_classes / p.total_classes) * 100) : 0}%`,
-                                    background:
-                                      effective === "activa"
-                                        ? "linear-gradient(90deg, #ff544c, #d32f2f)"
-                                        : "linear-gradient(90deg, #78716c, #57534e)",
-                                  }}
-                                />
-                              </div>
-                            </div>
-                            <p className="mt-1.5 font-[family-name:var(--font-body-sm)] text-[10px] text-on-surface-variant">
-                              Vigencia hasta{" "}
-                              {new Date(p.end_date + "T12:00:00").toLocaleDateString("es-CL", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Próximas Clases Personalizadas (Horario) */}
-      {!loading && personalizedSchedules.length > 0 && (
-        <div className="pt-2">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase tracking-tighter">
-                Próximas <span className="text-primary">Clases Personalizadas</span>
-              </h2>
-              <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant mt-1">
-                Bloques horarios reservados. Agenda con las clases de tu pack.
-              </p>
-            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -556,11 +433,13 @@ export default function MembresiasPage() {
                     <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70">
                       Próxima: {new Date(row.nextSession.session_date + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" })}
                     </span>
-                    <span className={`font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                      row.userEnrolled
-                        ? "bg-green-500/10 text-green-400"
-                        : "bg-purple-500/10 text-purple-400"
-                    }`}>
+                    <span
+                      className={`font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                        row.userEnrolled
+                          ? "bg-green-500/10 text-green-400"
+                          : "bg-purple-500/10 text-purple-400"
+                      }`}
+                    >
                       {row.userEnrolled
                         ? "Inscrito"
                         : `${Math.max(0, row.schedule.capacity - row.nextSession.enrolled)} cupos`}
@@ -573,6 +452,25 @@ export default function MembresiasPage() {
         </div>
       )}
 
+      {/* ── EMPTY STATE (no memberships at all) ─────────────────────────── */}
+      {!loading && memberships.length === 0 && (
+        <div className="glass-panel rounded-xl p-8 text-center">
+          <span className="material-symbols-outlined text-on-surface/20 text-[48px] mb-4 block">
+            card_membership
+          </span>
+          <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant mb-4">
+            Aún no tienes membresías
+          </p>
+          <Link
+            href="/#membresias"
+            className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary border border-primary/30 px-6 py-2 rounded-lg hover:bg-primary/10 transition-colors"
+          >
+            Ver planes de membresía →
+          </Link>
+        </div>
+      )}
+
+      {/* ── MODALS ───────────────────────────────────────────────────────── */}
       {enrollScheduleOpen && enrollSchedule && (
         <PersonalizedEnrollModal
           open={enrollScheduleOpen}
@@ -585,7 +483,6 @@ export default function MembresiasPage() {
         />
       )}
 
-      {/* Enrollment-only checkout */}
       {enrollCheckoutOpen && (
         <CheckoutModal
           open={enrollCheckoutOpen}
@@ -595,7 +492,6 @@ export default function MembresiasPage() {
         />
       )}
 
-      {/* Personalized classes checkout */}
       {personalizedCheckoutOpen && (
         <PersonalizedCheckoutModal
           open={personalizedCheckoutOpen}
