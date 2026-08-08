@@ -13,7 +13,7 @@ interface DataTableProps<T> {
   data: T[];
   loading?: boolean;
   searchPlaceholder?: string;
-  searchKey?: string;
+  searchKey?: string | string[];
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
   emptyMessage?: string;
@@ -34,11 +34,15 @@ export default function DataTable<T extends { id: string }>({
   const perPage = 10;
 
   const filtered = searchKey
-    ? data.filter((item) =>
-        String((item as Record<string, unknown>)[searchKey] ?? "")
-          .toLowerCase()
-          .includes(search.toLowerCase())
-      )
+    ? data.filter((item) => {
+        const keys = Array.isArray(searchKey) ? searchKey : [searchKey];
+        const term = search.toLowerCase();
+        return keys.some((k) =>
+          String((item as Record<string, unknown>)[k] ?? "")
+            .toLowerCase()
+            .includes(term)
+        );
+      })
     : data;
 
   const totalPages = Math.ceil(filtered.length / perPage);

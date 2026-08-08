@@ -1405,6 +1405,8 @@ const paymentRowT = readFileSync(join(ROOT, "src", "components", "dashboard", "P
 const adminVentasT = readFileSync(join(ROOT, "src", "app", "admin", "ventas", "page.tsx"), "utf8");
 const adminConfigT = readFileSync(join(ROOT, "src", "app", "admin", "configuracion", "page.tsx"), "utf8");
 const perfilT = readFileSync(join(ROOT, "src", "app", "perfil", "page.tsx"), "utf8");
+const adminUsuariosT = readFileSync(join(ROOT, "src", "app", "admin", "usuarios", "page.tsx"), "utf8");
+const dataTableT = readFileSync(join(ROOT, "src", "components", "admin", "DataTable.tsx"), "utf8");
 
 // T1. Migración 013: contrato de la columna de configuración
 ok("T: 013 agrega payment_settings jsonb a academy_settings (idempotente)",
@@ -1692,6 +1694,19 @@ ok("T: pagos page incluye banner + panel con ancla #solicitudes",
   /id="solicitudes"[\s\S]*?<TransferRequestsPanel \/>/.test(dashboardPagosT));
 ok("T: dashboard.ts expone getUserTransferRequests (method='transferencia' por user)",
   /export async function getUserTransferRequests\(userId: string\)[\s\S]*?\.eq\("method", "transferencia"\)/.test(dashboardLibT));
+
+// U. RUT visible y filtrable en admin/usuarios
+ok("U: UserRow tipa rut (string | null)",
+  /interface UserRow \{[\s\S]*?rut\?: string \| null;[\s\S]*?_isDependent\?: boolean;/.test(adminUsuariosT));
+ok("U: admin/usuarios muestra columna RUT (— para dependientes)",
+  /key: "rut", label: "RUT", render: \(u\) => u\._isDependent \? "—" : \(u\.rut \|\| "—"\)/.test(adminUsuariosT));
+ok("U: búsqueda cubre nombre, email y RUT (searchKey multi-campo)",
+  /searchKey=\{\["full_name", "email", "rut"\]\}[\s\S]*?Buscar por nombre, email o RUT\.\.\./.test(adminUsuariosT));
+ok("U: export Excel incluye RUT (— para dependientes)",
+  /"RUT": u\._isDependent \? "—" : \(u\.rut \|\| "—"\),/.test(adminUsuariosT));
+ok("U: DataTable acepta searchKey string | string[] y busca en cualquiera",
+  /searchKey\?: string \| string\[\];/.test(dataTableT) &&
+  /const keys = Array\.isArray\(searchKey\) \? searchKey : \[searchKey\];[\s\S]*?keys\.some\(/.test(dataTableT));
 
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

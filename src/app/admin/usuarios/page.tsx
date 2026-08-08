@@ -19,6 +19,7 @@ interface UserRow {
   active: boolean;
   created_at: string;
   birth_date?: string | null;
+  rut?: string | null;
   _isDependent?: boolean;
   _tutorName?: string;
   _tutorId?: string;
@@ -151,6 +152,7 @@ export default function AdminUsuariosPage() {
         reportData.push({
           "Nombre": u.full_name,
           "Email": u.email,
+          "RUT": u._isDependent ? "—" : (u.rut || "—"),
           "Teléfono": u.phone || "—",
           "Rol / Tipo": rolTipo,
           "Tutor (si es carga)": u._tutorName || "—",
@@ -410,6 +412,7 @@ export default function AdminUsuariosPage() {
             return ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`;
           }},
           { key: "phone", label: "Teléfono", render: (u) => u._isDependent ? "—" : (u.phone || "—") },
+          { key: "rut", label: "RUT", render: (u) => u._isDependent ? "—" : (u.rut || "—") },
           { key: "active", label: "Estado", render: (u) => {
             if (u._isDependent) return <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">—</span>;
             return <StatusBadge status={u.active ? "activo" : "cancelado"} />;
@@ -418,8 +421,8 @@ export default function AdminUsuariosPage() {
         ]}
         data={users}
         loading={loading}
-        searchKey="full_name"
-        searchPlaceholder="Buscar usuario..."
+        searchKey={["full_name", "email", "rut"]}
+        searchPlaceholder="Buscar por nombre, email o RUT..."
         onEdit={openEdit}
         emptyMessage="No hay usuarios registrados"
       />
