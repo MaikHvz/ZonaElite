@@ -54,3 +54,4 @@ La carga creada debe comportarse **igual que una creada por el propio usuario** 
 - `documentacion/requisitos-implementados.md`: entrada del requisito.
 - `contexto/BRAIN.md`: regla de test count + nota del flujo admin→carga.
 - `scripts/test-flows.mjs`: sección V.
+- **Changelog**: migración `contexto/migrations/015_changelog_v1_1_1.sql` (entrada `v1.1.1` "Crear y Asignar Cargas desde el Panel Admin", idempotente `ON CONFLICT (version) DO NOTHING`) + espejo en `documentacion/squema-sql-actualizado.sql`.

@@ -40,6 +40,8 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
   - **Cargas/Dependientes (`/dashboard/cargas/page.tsx`)**:
     - Permite al titular (Tutor) agregar hijos/parejas a través de `AddDependentModal.tsx`.
     - Estos se guardan en la tabla `dependents` y se auto-asignan en la tabla `beneficiaries`.
+    - También puede **editar los datos** de sus cargas (nombre, RUT, fecha de nacimiento, categoría) con `EditDependentModal.tsx` (botón "Editar datos" en `DependentCard`), vía `dependents.update` por browser client (RLS `dependents_update_own_or_admin`).
+    - El **RUT** se valida con `src/lib/rut.ts` (`isValidRut`, dígito verificador módulo 11) al agregar y al editar (y también en el modal admin `CreateDependentModal`).
   - **Fichas Médicas (`/dashboard/cargas/[id]/medico/page.tsx`)**: Utiliza `MedicalInfoCard.tsx` y `EmergencyContactCard.tsx` para hacer *upsert* en la tabla `medical_records` (alergias, lesiones, contactos).
   - **Pagos (`/dashboard/pagos/page.tsx`)**: Lista de transacciones en `PaymentRow.tsx`.
   - **Asistencia (`/dashboard/asistencia/page.tsx`)**: Muestra el porcentaje y listado de clases asistidas mediante `AttendanceSummary.tsx`.

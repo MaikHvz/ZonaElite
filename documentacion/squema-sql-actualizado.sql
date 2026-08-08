@@ -1629,3 +1629,21 @@ VALUES (
   E'• Nuevo modo de pago por transferencia: el administrador puede activarlo por tipo de producto (Membresías, Clases Personalizadas e Inscripciones) desde Configuración, sin usar Flow.\n• Cuando está activo, el usuario elige "Pagar por transferencia" en el checkout, ve los datos bancarios de la academia y envía su comprobante adjunto (imagen o PDF).\n• El administrador recibe un correo y una notificación con cada solicitud, y la revisa en la pestaña "Solicitudes" de la sección Ventas, pudiendo ver el comprobante completo antes de aprobar o rechazar.\n• Aviso permanente de solicitudes pendientes: el menú de administración muestra en "Ventas" un contador de solicitudes sin revisar y aparece un aviso destacado con botón para revisarlas de inmediato.\n• Nuevo panel "Mis Solicitudes de Pago" en el panel del usuario: ahí puede ver en qué estado está cada solicitud (en revisión, aprobada o rechazada), el monto, la referencia y su comprobante. Si una solicitud fue rechazada, se muestra el motivo indicado por el administrador. Un contador en el menú y un aviso destacado avisan cuando hay solicitudes pendientes.\n• Al aprobar, el beneficio se asigna automáticamente con las mismas reglas que el pago en línea (la membresía corre desde la fecha de aprobación; los packs personalizados se acumulan; la inscripción se extiende).\n• Cada vez que el administrador revisa una solicitud, el usuario recibe un correo con el resultado: si fue aprobada, avisa que el beneficio ya está asignado; si fue rechazada, incluye el motivo. En ambos casos el correo enlaza a la sección "Mis Solicitudes de Pago" de su panel.\n• Al rechazar, el usuario ve el motivo indicado por el administrador en su historial de pagos.\n• El perfil ahora incluye el campo RUT, usado como referencia en las transferencias. En la sección Usuarios del panel de administración, el RUT se muestra en la lista y el buscador permite filtrar por nombre, email o RUT.'
 )
 ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.1.1 — Crear y asignar carga desde el panel admin
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.1.1',
+  'Crear y Asignar Cargas desde el Panel Admin',
+  E'• Nuevo botón "Crear y Asignar Carga" en la sección Usuarios del panel de administración: el administrador selecciona al usuario (padre/madre) al que se le asignará la carga e ingresa los datos completos del hijo/familiar (nombre, RUT, fecha de nacimiento y categoría).\n• La carga queda lista con el mismo comportamiento que una creada por el propio usuario: aparece en el panel del tutor y puede comprar membresía o inscripción para ella.\n• Las cargas existentes también pueden editarse directamente desde la misma tabla de usuarios.'
+)
+ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.1.2 — Editar cargas desde el panel del usuario + validación RUT
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.1.2',
+  'Editar Cargas y Validación de RUT',
+  E'• En la sección "Mis Cargas" del panel del usuario, ahora puedes editar los datos de cada carga (nombre, RUT, fecha de nacimiento y categoría) con el botón "Editar datos".\n• El RUT se valida automáticamente con el formato chileno (dígito verificador): si el RUT ingresado no es válido, se muestra un aviso y no se guarda. La validación aplica tanto al agregar como al editar cargas.'
+)
+ON CONFLICT (version) DO NOTHING;

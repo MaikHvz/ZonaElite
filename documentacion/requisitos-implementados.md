@@ -188,4 +188,12 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
   - `POST /api/admin/create-dependent` (server-only, admin client, patrón de `create-user`): valida sesión/rol/categoría, inserta en `dependents` (con `tutor_id` del profile seleccionado) y **asegura** el registro en `beneficiaries` con `dependent_id` (idempotente: select previo por `dependent_id`, insert si no existe) para que la carga quede usable en checkout/membresías. Registra en `audit_logs`.
   - `POST /api/admin/update-dependent`: edita los datos de una carga existente desde la tabla (el `onEdit` de filas dependientes ya no retorna temprano).
   - `beneficiaries` no tiene policy INSERT para browser client (solo SELECT), por eso la creación/beneficiary va por API con admin client.
-- **Estado**: Implementado. Suite secciones A-V en verde (439 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Requisito/detalle en `contexto/requisitos/crear-carga-admin.md`. Sin cambios de esquema (no requiere migración).
+- **Estado**: Implementado. Suite secciones A-V en verde (443 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Requisito/detalle en `contexto/requisitos/crear-carga-admin.md`. Sin cambios de esquema (no requiere migración).
+
+## 19. Editar Cargas desde el Dashboard con Validación de RUT (2026-08-08)
+**Requisito**: El usuario (tutor) debe poder editar los datos de sus cargas desde `/dashboard/cargas` (nombre, RUT, fecha de nacimiento, categoría), y el RUT debe validarse con el formato chileno real (dígito verificador módulo 11).
+- **Implementación**:
+  - Helper isomórfico `src/lib/rut.ts`: `normalizeRut` (limpia puntos/guiones/espacios, `k`→`K`), `isValidRut` (cuerpo 1–8 dígitos en rango 1.000.000–25.000.000, DV `[0-9K]`, algoritmo módulo 11), `formatRut` (`12.345.678-9`).
+  - `EditDependentModal.tsx` (dashboard): edita la carga con `dependents.update(...).eq("id", dependent.id)` vía browser client (RLS `dependents_update_own_or_admin` permite; sin API server). Botón "Editar datos" en `DependentCard`, wiring en `cargas/page.tsx`.
+  - La validación de RUT aplica también al **agregar** carga (`AddDependentModal`) y en el modal admin (`CreateDependentModal`) — si el RUT no está vacío debe pasar `isValidRut`, si no muestra error inline.
+- **Estado**: Implementado. Suite secciones A-W en verde (458 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Requisito/detalle en `contexto/requisitos/editar-cargas-dashboard.md`. Sin cambios de esquema (no requiere migración).

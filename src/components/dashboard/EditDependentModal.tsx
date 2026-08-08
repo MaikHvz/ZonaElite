@@ -1,39 +1,29 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
-import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
+import { createClient } from "@/lib/supabase/client";
 import { isValidRut } from "@/lib/rut";
 
-interface TutorOption {
-  id: string;
-  full_name: string;
-  email: string | null;
-}
-
-interface CreateDependentModalProps {
+interface EditDependentModalProps {
   open: boolean;
   onClose: () => void;
-  onSaved: () => void;
-  tutors: TutorOption[];
-  editingDependent?: {
+  onUpdated: () => void;
+  dependent: {
     id: string;
     full_name: string;
     rut: string | null;
-    birth_date: string | null;
+    birth_date: string;
     category: string;
-    tutor_id: string;
   } | null;
 }
 
-export default function CreateDependentModal({
+export default function EditDependentModal({
   open,
   onClose,
-  onSaved,
-  tutors,
-  editingDependent,
-}: CreateDependentModalProps) {
+  onUpdated,
+  dependent,
+}: EditDependentModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
-  const [tutorId, setTutorId] = useState("");
   const [fullName, setFullName] = useState("");
   const [rut, setRut] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -42,23 +32,14 @@ export default function CreateDependentModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) {
-      if (editingDependent) {
-        setTutorId(editingDependent.tutor_id);
-        setFullName(editingDependent.full_name);
-        setRut(editingDependent.rut || "");
-        setBirthDate(editingDependent.birth_date || "");
-        setCategory(editingDependent.category === "adulto" ? "adulto" : "nino");
-      } else {
-        setTutorId(tutors[0]?.id || "");
-        setFullName("");
-        setRut("");
-        setBirthDate("");
-        setCategory("nino");
-      }
+    if (open && dependent) {
+      setFullName(dependent.full_name);
+      setRut(dependent.rut || "");
+      setBirthDate(dependent.birth_date);
+      setCategory(dependent.category === "adulto" ? "adulto" : "nino");
       setError(null);
     }
-  }, [open, editingDependent, tutors]);
+  }, [open, dependent]);
 
   const handleEsc = useCallback(() => onClose(), [onClose]);
 
@@ -79,16 +60,12 @@ export default function CreateDependentModal({
     };
   }, [open, handleEsc]);
 
-  if (!open) return null;
+  if (!open || !dependent) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !birthDate) {
       setError("Nombre y fecha de nacimiento son obligatorios.");
-      return;
-    }
-    if (!editingDependent && !tutorId) {
-      setError("Debes seleccionar el usuario al que se asignará la carga.");
       return;
     }
 
@@ -101,31 +78,27 @@ export default function CreateDependentModal({
     setSaving(true);
     setError(null);
 
-    try {
-      const url = editingDependent ? "/api/admin/update-dependent" : "/api/admin/create-dependent";
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...(editingDependent ? { dependent_id: editingDependent.id } : { tutor_id: tutorId }),
-          full_name: fullName.trim(),
-          rut: rutTrimmed || null,
-          birth_date: birthDate,
-          category,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Error al guardar la carga.");
-        return;
-      }
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(getSupabaseErrorMessage(err, "guardar la carga"));
-    } finally {
-      setSaving(false);
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("dependents")
+      .update({
+        full_name: fullName.trim(),
+        rut: rutTrimmed || null,
+        birth_date: birthDate,
+        category,
+      })
+      .eq("id", dependent.id);
+
+    setSaving(false);
+
+    if (updateError) {
+      setError("Error al guardar. Intenta de nuevo.");
+      console.error(updateError);
+      return;
     }
+
+    onUpdated();
+    onClose();
   };
 
   return (
@@ -133,16 +106,16 @@ export default function CreateDependentModal({
       ref={overlayRef}
       className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onMouseDown={(e) => {
-        if (e.target === overlayRef.current) onClose();
+        if (e.target === overlayRef.current) handleEsc();
       }}
     >
       <div className="bg-surface-container-lowest border border-on-surface/10 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-on-surface/5">
           <h2 className="font-[family-name:var(--font-headline-md)] text-[18px] text-on-surface uppercase">
-            {editingDependent ? "Editar Carga" : "Crear y Asignar Carga"}
+            Editar Carga
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleEsc}
             className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
           >
             <span className="material-symbols-outlined text-[24px]">close</span>
@@ -150,26 +123,6 @@ export default function CreateDependentModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {!editingDependent && (
-            <div>
-              <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
-                Usuario tutor (padre/madre) *
-              </label>
-              <select
-                value={tutorId}
-                onChange={(e) => setTutorId(e.target.value)}
-                className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface focus:outline-none focus:border-primary/50 transition-colors cursor-pointer"
-              >
-                {tutors.length === 0 && <option value="">No hay usuarios disponibles</option>}
-                {tutors.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.full_name}{t.email ? ` — ${t.email}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           <div>
             <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
               Nombre completo *
@@ -233,25 +186,18 @@ export default function CreateDependentModal({
           </div>
 
           {error && (
-            <p className="font-[family-name:var(--font-body-md)] text-[13px] text-red-400">{error}</p>
+            <p className="font-[family-name:var(--font-body-md)] text-[13px] text-red-400">
+              {error}
+            </p>
           )}
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-on-surface/5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-lg border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[14px] cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2.5 rounded-lg btn-primary-gradient text-white text-[14px] disabled:opacity-50 cursor-pointer"
-            >
-              {saving ? "Guardando..." : editingDependent ? "Guardar Cambios" : "Crear Carga"}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider py-3 rounded-lg transition-opacity disabled:opacity-50 cursor-pointer"
+          >
+            {saving ? "Guardando..." : "Guardar cambios"}
+          </button>
         </form>
       </div>
     </div>

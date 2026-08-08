@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { isValidRut } from "@/lib/rut";
 
 interface AddDependentModalProps {
   open: boolean;
@@ -66,6 +67,12 @@ export default function AddDependentModal({
       return;
     }
 
+    const rutTrimmed = rut.trim();
+    if (rutTrimmed && !isValidRut(rutTrimmed)) {
+      setError("El RUT no es válido. Usa el formato 12.345.678-9.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -73,7 +80,7 @@ export default function AddDependentModal({
     const { error: insertError } = await supabase.from("dependents").insert({
       tutor_id: tutorId,
       full_name: fullName.trim(),
-      rut: rut.trim() || null,
+      rut: rutTrimmed || null,
       birth_date: birthDate,
       category,
     });

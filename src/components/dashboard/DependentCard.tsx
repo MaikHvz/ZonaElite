@@ -21,8 +21,10 @@ function formatDate(d: string) {
 
 export default function DependentCard({
   dependent,
+  onEdit,
 }: {
   dependent: DependentData;
+  onEdit?: () => void;
 }) {
   const age = calcAge(dependent.birth_date);
   const beneficiaryList = Array.isArray(dependent.beneficiaries)
@@ -107,6 +109,16 @@ export default function DependentCard({
         <span className="material-symbols-outlined text-[14px]">medical_information</span>
         Ver ficha médica
       </Link>
+
+      {onEdit && (
+        <button
+          onClick={onEdit}
+          className="mt-2 flex items-center justify-center gap-2 w-full font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant border border-on-surface/10 px-4 py-2 rounded-lg hover:bg-on-surface/5 hover:text-primary hover:border-primary/20 transition-colors cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[14px]">edit</span>
+          Editar datos
+        </button>
+      )}
     </div>
   );
 }

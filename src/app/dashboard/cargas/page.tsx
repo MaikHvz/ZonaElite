@@ -8,6 +8,7 @@ import {
 } from "@/lib/supabase/dashboard";
 import DependentCard from "@/components/dashboard/DependentCard";
 import AddDependentModal from "@/components/dashboard/AddDependentModal";
+import EditDependentModal from "@/components/dashboard/EditDependentModal";
 import { MembershipCardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 
 export default function CargasPage() {
@@ -15,6 +16,7 @@ export default function CargasPage() {
   const [dependents, setDependents] = useState<DependentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingDependent, setEditingDependent] = useState<DependentData | null>(null);
 
   const fetchDependents = useCallback(async () => {
     if (!user) return;
@@ -73,7 +75,11 @@ export default function CargasPage() {
       ) : (
         <div className="space-y-4">
           {dependents.map((d) => (
-            <DependentCard key={d.id} dependent={d} />
+            <DependentCard
+              key={d.id}
+              dependent={d}
+              onEdit={() => setEditingDependent(d)}
+            />
           ))}
         </div>
       )}
@@ -86,6 +92,13 @@ export default function CargasPage() {
           tutorId={user.id}
         />
       )}
+
+      <EditDependentModal
+        open={!!editingDependent}
+        onClose={() => setEditingDependent(null)}
+        onUpdated={fetchDependents}
+        dependent={editingDependent}
+      />
     </div>
   );
 }

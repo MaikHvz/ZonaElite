@@ -39,6 +39,7 @@ const {
   isMembershipExpired,
   daysRemaining,
 } = await import("../src/lib/membership-status.ts");
+const { normalizeRut, isValidRut, formatRut } = await import("../src/lib/rut.ts");
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const CHILE_TZ = "America/Santiago";
@@ -1410,6 +1411,11 @@ const dataTableT = readFileSync(join(ROOT, "src", "components", "admin", "DataTa
 const createDependentRouteT = readFileSync(join(ROOT, "src", "app", "api", "admin", "create-dependent", "route.ts"), "utf8");
 const updateDependentRouteT = readFileSync(join(ROOT, "src", "app", "api", "admin", "update-dependent", "route.ts"), "utf8");
 const createDependentModalT = readFileSync(join(ROOT, "src", "components", "admin", "CreateDependentModal.tsx"), "utf8");
+const rutLibT = readFileSync(join(ROOT, "src", "lib", "rut.ts"), "utf8");
+const editDependentModalT = readFileSync(join(ROOT, "src", "components", "dashboard", "EditDependentModal.tsx"), "utf8");
+const dependentCardT = readFileSync(join(ROOT, "src", "components", "dashboard", "DependentCard.tsx"), "utf8");
+const cargasPageT = readFileSync(join(ROOT, "src", "app", "dashboard", "cargas", "page.tsx"), "utf8");
+const addDependentModalT = readFileSync(join(ROOT, "src", "components", "dashboard", "AddDependentModal.tsx"), "utf8");
 
 // T1. Migración 013: contrato de la columna de configuración
 ok("T: 013 agrega payment_settings jsonb a academy_settings (idempotente)",
@@ -1636,7 +1642,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 2);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 4);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -1742,6 +1748,74 @@ ok("V: CreateDependentModal tiene selector de tutor + campos nombre/rut/fecha/ca
 ok("V: CreateDependentModal llama a create/update según modo y valida tutor",
   /editingDependent \? "\/api\/admin\/update-dependent" : "\/api\/admin\/create-dependent"/.test(createDependentModalT) &&
   /Debes seleccionar el usuario al que se asignará la carga/.test(createDependentModalT));
+
+// V2. Changelog v1.1.1 (migración 015: entrada de release para crear/asignar carga)
+const migration015 = readFileSync(join(ROOT, "contexto", "migrations", "015_changelog_v1_1_1.sql"), "utf8");
+ok("V: 015 inserta entrada v1.1.1 con título 'Crear y Asignar Cargas desde el Panel Admin'",
+  /INSERT INTO public\.changelog \(version, title, summary\)/.test(migration015) &&
+  /'v1\.1\.1'/.test(migration015) &&
+  /'Crear y Asignar Cargas desde el Panel Admin'/.test(migration015));
+ok("V: 015 seed es idempotente (ON CONFLICT version DO NOTHING)",
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration015));
+ok("V: 015 resumen cubre el botón, datos de la carga y edición",
+  /"Crear y Asignar Carga"/.test(migration015) &&
+  /datos completos del hijo\/familiar/.test(migration015) &&
+  /editarse directamente desde la misma tabla de usuarios/.test(migration015));
+ok("V: esquema documentado refleja el seed v1.1.1",
+  /'v1\.1\.1'/.test(schemaSqlT) &&
+  /'Crear y Asignar Cargas desde el Panel Admin'/.test(schemaSqlT));
+
+// W. Editar cargas desde el dashboard + validación de RUT (módulo 11)
+ok("W: normalizeRut limpia puntos, guiones y espacios (acepta k/K)",
+  normalizeRut("12.345.678-9") === "123456789" &&
+  normalizeRut(" 11.222.333-4 ") === "112223334" &&
+  normalizeRut("98765432-k") === "98765432K");
+ok("W: isValidRut acepta RUT válido con y sin formato",
+  isValidRut("11.111.111-1") &&
+  isValidRut("11111111-1") &&
+  isValidRut("12345678-5"));
+ok("W: isValidRut rechaza DV incorrecto, cuerpo corto y fuera de rango",
+  !isValidRut("11.111.111-2") &&
+  !isValidRut("1-1") &&
+  !isValidRut("99999-9") &&
+  !isValidRut("10000000-K"));
+ok("W: isValidRut rechaza vacíos, letras en el cuerpo y símbolos",
+  !isValidRut("") &&
+  !isValidRut("abc") &&
+  !isValidRut("11.111.11X-1"));
+ok("W: formatRut agrega puntos y guión",
+  formatRut("111111111") === "11.111.111-1" &&
+  formatRut("123456785") === "12.345.678-5");
+ok("W: EditDependentModal edita via dependents.update por id con validación RUT",
+  /\.from\("dependents"\)\s*\.update\(\{[\s\S]*?rut: rutTrimmed \|\| null,[\s\S]*?\}\s*\)\s*\.eq\("id", dependent\.id\)/.test(editDependentModalT) &&
+  /if \(rutTrimmed && !isValidRut\(rutTrimmed\)\)/.test(editDependentModalT));
+ok("W: EditDependentModal carga valores actuales del dependiente",
+  /setFullName\(dependent\.full_name\);[\s\S]*?setRut\(dependent\.rut \|\| ""\);[\s\S]*?setBirthDate\(dependent\.birth_date\);[\s\S]*?setCategory\(/.test(editDependentModalT));
+ok("W: DependentCard muestra botón Editar datos",
+  /Editar datos[\s\S]*?edit[\s\S]*?onEdit/.test(dependentCardT) ||
+  /onEdit &&[\s\S]*?Editar datos/.test(dependentCardT));
+ok("W: cargas page integra EditDependentModal y pasa onEdit a la tarjeta",
+  /<EditDependentModal[\s\S]*?dependent=\{editingDependent\}/.test(cargasPageT) &&
+  /onEdit=\{\(\) => setEditingDependent\(d\)\}/.test(cargasPageT));
+ok("W: AddDependentModal también valida RUT al agregar",
+  /import \{ isValidRut \} from "@\/lib\/rut";[\s\S]*?if \(rutTrimmed && !isValidRut\(rutTrimmed\)\)/.test(addDependentModalT));
+ok("W: admin CreateDependentModal también valida RUT",
+  /import \{ isValidRut \} from "@\/lib\/rut";[\s\S]*?if \(rutTrimmed && !isValidRut\(rutTrimmed\)\)/.test(createDependentModalT));
+
+// W2. Changelog v1.1.2 (migración 016: entrada de release editar cargas + validación RUT)
+const migration016 = readFileSync(join(ROOT, "contexto", "migrations", "016_changelog_v1_1_2.sql"), "utf8");
+ok("W: 016 inserta entrada v1.1.2 con título 'Editar Cargas y Validación de RUT'",
+  /INSERT INTO public\.changelog \(version, title, summary\)/.test(migration016) &&
+  /'v1\.1\.2'/.test(migration016) &&
+  /'Editar Cargas y Validación de RUT'/.test(migration016));
+ok("W: 016 seed es idempotente (ON CONFLICT version DO NOTHING)",
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration016));
+ok("W: 016 resumen cubre edición y validación del RUT",
+  /Editar datos/.test(migration016) &&
+  /dígito verificador/.test(migration016));
+ok("W: esquema documentado refleja el seed v1.1.2",
+  /'v1\.1\.2'/.test(schemaSqlT) &&
+  /'Editar Cargas y Validación de RUT'/.test(schemaSqlT));
 
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
