@@ -4,6 +4,8 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useSession } from "@/providers/SessionProvider";
 import { createClient } from "@/lib/supabase/client";
 import type { PersonalizedPlanData } from "@/lib/supabase/dashboard";
+import { getPaymentSettings, type BankAccount } from "@/lib/payment-settings";
+import TransferPaymentStep from "@/components/TransferPaymentStep";
 
 interface BeneficiaryOption {
   id: string;
@@ -35,10 +37,14 @@ export default function PersonalizedCheckoutModal({
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manualMode, setManualMode] = useState(false);
+  const [bank, setBank] = useState<BankAccount | null>(null);
+  const [showTransfer, setShowTransfer] = useState(false);
 
   const handleClose = useCallback(() => {
     setSelectedBeneficiaryId("");
     setError(null);
+    setShowTransfer(false);
     onClose();
   }, [onClose]);
 
@@ -68,6 +74,11 @@ export default function PersonalizedCheckoutModal({
     setLoading(true);
     setError(null);
     const supabase = createClient();
+
+    getPaymentSettings(supabase).then((settings) => {
+      setManualMode(settings.personalized === "manual");
+      setBank(settings.bank);
+    });
 
     (async () => {
       try {
@@ -187,6 +198,11 @@ export default function PersonalizedCheckoutModal({
 
   const handlePay = async () => {
     if (!selectedBeneficiaryId || !selectedPlanId) return;
+    if (manualMode) {
+      setShowTransfer(true);
+      setError(null);
+      return;
+    }
     setProcessing(true);
     setError(null);
     await doCreateOrder();
@@ -335,29 +351,49 @@ export default function PersonalizedCheckoutModal({
                 </p>
               )}
 
-              <button
-                onClick={handlePay}
-                disabled={!selectedBeneficiaryId || !selectedPlanId || processing}
-                className="w-full btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider py-3 rounded-lg transition-opacity disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
-              >
-                {processing ? (
-                  <>
-                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                    Procesando...
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-[18px]">
-                      credit_card
-                    </span>
-                    Pagar con Flow
-                  </>
-                )}
-              </button>
+              {manualMode && showTransfer && selectedBeneficiaryId && selectedPlanId && bank ? (
+                <TransferPaymentStep
+                  productType="personalized"
+                  amount={totalAmount}
+                  bank={bank}
+                  beneficiaryId={selectedBeneficiaryId}
+                  planId={selectedPlanId}
+                />
+              ) : (
+                <>
+                  {manualMode && !bank && (
+                    <p className="font-[family-name:var(--font-body-md)] text-[13px] text-red-400 text-center">
+                      La academia aún no configura el pago por transferencia. Intenta más tarde.
+                    </p>
+                  )}
 
-              <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant/50 text-center">
-                Serás redirigido a Flow para completar el pago de forma segura.
-              </p>
+                  <button
+                    onClick={handlePay}
+                    disabled={!selectedBeneficiaryId || !selectedPlanId || processing || (manualMode && !bank)}
+                    className="w-full btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider py-3 rounded-lg transition-opacity disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {processing ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                        Procesando...
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[18px]">
+                          {manualMode ? "account_balance" : "credit_card"}
+                        </span>
+                        {manualMode ? "Pagar por transferencia" : "Pagar con Flow"}
+                      </>
+                    )}
+                  </button>
+
+                  <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant/50 text-center">
+                    {manualMode
+                      ? "Selecciona el botón para ver los datos bancarios y enviar tu comprobante."
+                      : "Serás redirigido a Flow para completar el pago de forma segura."}
+                  </p>
+                </>
+              )}
             </>
           )}
         </div>

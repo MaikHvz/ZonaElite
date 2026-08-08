@@ -24,7 +24,12 @@ interface Payment {
   flow_order: number | null;
   include_enrollment: boolean;
   enrollment_plan_id: string | null;
-  profiles?: { full_name: string; email: string } | null;
+  membership_plan_id: string | null;
+  personalized_plan_id: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  admin_note: string | null;
+  profiles?: { full_name: string; email: string; rut: string | null } | null;
   beneficiaries?: {
     id: string;
     dependent?: { full_name: string } | null;
@@ -60,6 +65,15 @@ export default function AdminVentasPage() {
   const [methodFilter, setMethodFilter] = useState<string>("todos");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [exportTimeframe, setExportTimeframe] = useState<"mes" | "ano" | "historico">("mes");
+
+  const [activeTab, setActiveTab] = useState<"pagos" | "solicitudes">("pagos");
+  const [requests, setRequests] = useState<Payment[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(true);
+  const [requestFilter, setRequestFilter] = useState<string>("pendiente");
+  const [reviewTarget, setReviewTarget] = useState<Payment | null>(null);
+  const [adminNote, setAdminNote] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
   const handleExportExcel = async () => {
     const now = new Date();
@@ -163,6 +177,67 @@ export default function AdminVentasPage() {
     setLoading(false);
   };
 
+  const loadRequests = async () => {
+    setRequestsLoading(true);
+    const { data } = await supabase
+      .from("payments")
+      .select(`
+        *,
+        profiles:user_id(full_name, email, rut),
+        beneficiaries:beneficiary_id(
+          id,
+          dependent:dependents(full_name),
+          profile:profiles(full_name)
+        )
+      `)
+      .eq("method", "transferencia")
+      .order("created_at", { ascending: false });
+
+    setRequests((data as Payment[]) || []);
+    setRequestsLoading(false);
+  };
+
+  useEffect(() => {
+    loadRequests();
+  }, []);
+
+  const filteredRequests = useMemo(() => {
+    return requests.filter((p) => {
+      if (requestFilter === "todos") return true;
+      return p.status === requestFilter;
+    });
+  }, [requests, requestFilter]);
+
+  const doReview = async (action: "aprobar" | "rechazar") => {
+    if (!reviewTarget) return;
+    setReviewing(true);
+    setReviewError(null);
+    try {
+      const res = await fetch("/api/payments/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentId: reviewTarget.id,
+          action,
+          adminNote: adminNote.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setReviewError(data.error || "Error al revisar la solicitud");
+        return;
+      }
+      setReviewTarget(null);
+      setAdminNote("");
+      await loadRequests();
+      await loadData();
+    } catch {
+      setReviewError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setReviewing(false);
+    }
+  };
+
   const filtered = useMemo(() => {
     return payments.filter((p) => {
       if (statusFilter !== "todos" && p.status !== statusFilter) return false;
@@ -251,6 +326,53 @@ export default function AdminVentasPage() {
           </button>
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6">
+        <button
+          onClick={() => setActiveTab("pagos")}
+          className={`font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+            activeTab === "pagos"
+              ? "btn-primary-gradient text-white"
+              : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+          }`}
+        >
+          Pagos
+        </button>
+        <button
+          onClick={() => setActiveTab("solicitudes")}
+          className={`font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider px-4 py-2 rounded-lg transition-colors cursor-pointer relative ${
+            activeTab === "solicitudes"
+              ? "btn-primary-gradient text-white"
+              : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+          }`}
+        >
+          Solicitudes
+          {requests.filter((r) => r.status === "pendiente").length > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+              {requests.filter((r) => r.status === "pendiente").length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === "solicitudes" ? (
+        <SolicitudesSection
+          loading={requestsLoading}
+          requests={filteredRequests}
+          filter={requestFilter}
+          setFilter={setRequestFilter}
+          onReview={(p) => {
+            setAdminNote("");
+            setReviewError(null);
+            setReviewTarget(p);
+          }}
+          getUserName={getUserName}
+          getBeneficiaryName={getBeneficiaryName}
+          getUserEmail={getUserEmail}
+        />
+      ) : (
+        <>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
@@ -674,6 +796,275 @@ export default function AdminVentasPage() {
           </div>
         );
       })()}
+        </>
+      )}
+
+      {/* Review modal */}
+      {reviewTarget && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setReviewTarget(null);
+          }}
+        >
+          <div className="bg-surface-container-lowest border border-on-surface/10 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-on-surface/5">
+              <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase">
+                Revisar solicitud
+              </h3>
+              <button
+                onClick={() => setReviewTarget(null)}
+                className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[22px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
+                  <span className="text-on-surface-variant">Usuario</span>
+                  <span className="text-on-surface">{getUserName(reviewTarget)}</span>
+                </div>
+                <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
+                  <span className="text-on-surface-variant">Email</span>
+                  <span className="text-on-surface">{getUserEmail(reviewTarget) || "—"}</span>
+                </div>
+                <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
+                  <span className="text-on-surface-variant">RUT</span>
+                  <span className="text-on-surface">{reviewTarget.profiles?.rut || "—"}</span>
+                </div>
+                <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
+                  <span className="text-on-surface-variant">Concepto</span>
+                  <span className="text-on-surface text-right">{reviewTarget.concept || "—"}</span>
+                </div>
+                <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
+                  <span className="text-on-surface-variant">Monto</span>
+                  <span className="text-primary font-[family-name:var(--font-headline-sm)]">${(reviewTarget.amount || 0).toLocaleString("es-CL")}</span>
+                </div>
+                <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
+                  <span className="text-on-surface-variant">Referencia</span>
+                  <span className="text-on-surface font-mono text-[12px]">{reviewTarget.commerce_order || "—"}</span>
+                </div>
+              </div>
+
+              {reviewTarget.receipt_url && (
+                <div className="rounded-xl border border-on-surface/10 overflow-hidden">
+                  {reviewTarget.receipt_url.endsWith(".pdf") ? (
+                    <iframe
+                      src={reviewTarget.receipt_url}
+                      title="Comprobante"
+                      className="w-full h-64"
+                    />
+                  ) : (
+                    <img
+                      src={reviewTarget.receipt_url}
+                      alt="Comprobante de transferencia"
+                      className="w-full max-h-64 object-contain bg-black/40"
+                    />
+                  )}
+                  <a
+                    href={reviewTarget.receipt_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 py-2.5 text-[12px] font-[family-name:var(--font-label-sm)] text-primary hover:bg-on-surface/5 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                    Ver comprobante completo
+                  </a>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">
+                  Nota (opcional, visible para el usuario al rechazar)
+                </label>
+                <textarea
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  rows={3}
+                  placeholder="Ej: El comprobante no coincide con el monto..."
+                  className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 resize-none"
+                />
+              </div>
+
+              {reviewError && (
+                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-red-400 text-center">
+                  {reviewError}
+                </p>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => doReview("rechazar")}
+                  disabled={reviewing}
+                  className="flex-1 flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 text-white font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider py-3 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {reviewing ? (
+                    <div className="animate-spin w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full" />
+                  ) : (
+                    <span className="material-symbols-outlined text-[18px]">block</span>
+                  )}
+                  Rechazar
+                </button>
+                <button
+                  onClick={() => doReview("aprobar")}
+                  disabled={reviewing}
+                  className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider py-3 rounded-lg transition-opacity hover:bg-green-700 disabled:opacity-50 cursor-pointer"
+                >
+                  {reviewing ? (
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                  ) : (
+                    <span className="material-symbols-outlined text-[18px]">check</span>
+                  )}
+                  Aprobar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+interface SolicitudesSectionProps {
+  loading: boolean;
+  requests: Payment[];
+  filter: string;
+  setFilter: (f: string) => void;
+  onReview: (p: Payment) => void;
+  getUserName: (p: Payment) => string;
+  getBeneficiaryName: (p: Payment) => string;
+  getUserEmail: (p: Payment) => string;
+}
+
+function SolicitudesSection({
+  loading,
+  requests,
+  filter,
+  setFilter,
+  onReview,
+  getUserName,
+  getBeneficiaryName,
+  getUserEmail,
+}: SolicitudesSectionProps) {
+  return (
+    <>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 mb-6">
+        <div className="flex items-center gap-2">
+          <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">
+            Estado:
+          </span>
+          <div className="flex gap-1">
+            {["pendiente", "pagado", "rechazado", "todos"].map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilter(s)}
+                className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                  filter === s
+                    ? "btn-primary-gradient text-white"
+                    : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+                }`}
+              >
+                {s === "pendiente"
+                  ? "Pendientes"
+                  : s === "pagado"
+                    ? "Aprobadas"
+                    : s === "rechazado"
+                      ? "Rechazadas"
+                      : "Todas"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 rounded-xl bg-surface-container animate-pulse" />
+          ))}
+        </div>
+      ) : requests.length === 0 ? (
+        <div className="bg-surface-container border border-on-surface/5 rounded-2xl py-12 text-center">
+          <span className="material-symbols-outlined text-on-surface/20 text-[48px] mb-4 block">
+            account_balance_wallet
+          </span>
+          <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant">
+            No hay solicitudes de transferencia con este filtro
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {requests.map((p) => {
+            const isPendiente = p.status === "pendiente";
+            return (
+              <div
+                key={p.id}
+                className="bg-surface-container border border-on-surface/5 rounded-2xl p-4 md:p-5"
+              >
+                <div className="flex flex-wrap items-center gap-3 md:gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isPendiente ? "bg-blue-500/10" : p.status === "pagado" ? "bg-green-500/10" : "bg-red-500/10"}`}>
+                    <span className={`material-symbols-outlined text-[20px] ${isPendiente ? "text-blue-400" : p.status === "pagado" ? "text-green-400" : "text-red-400"}`}>
+                      account_balance
+                    </span>
+                  </div>
+
+                  <div className="flex-1 min-w-[200px]">
+                    <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">
+                      {p.concept || "—"}
+                    </p>
+                    <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant">
+                      {getUserName(p)} {getUserEmail(p) && `· ${getUserEmail(p)}`}
+                    </p>
+                    <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant/70">
+                      {getBeneficiaryName(p)} · {new Date(p.created_at).toLocaleDateString("es-CL")}{" "}
+                      {p.commerce_order && <span className="text-primary/80">· {p.commerce_order}</span>}
+                    </p>
+                    {p.status === "rechazado" && p.admin_note && (
+                      <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-red-400/80 mt-1">
+                        Nota: {p.admin_note}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <p className="font-[family-name:var(--font-headline-md)] text-[18px] text-on-surface">
+                      ${(p.amount || 0).toLocaleString("es-CL")}
+                    </p>
+                    <StatusBadge status={p.status} />
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {p.receipt_url && (
+                      <a
+                        href={p.receipt_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2.5 rounded-lg bg-on-surface/5 hover:bg-primary/10 transition-colors cursor-pointer"
+                        title="Ver comprobante"
+                      >
+                        <span className="material-symbols-outlined text-on-surface-variant text-[18px]">receipt_long</span>
+                      </a>
+                    )}
+                    {isPendiente && (
+                      <button
+                        onClick={() => onReview(p)}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">fact_check</span>
+                        Revisar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }

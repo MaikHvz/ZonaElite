@@ -25,6 +25,21 @@ export async function confirmAndCreateMembership(
   paymentId: string,
   userId: string
 ): Promise<{ success: boolean; membershipId?: string; error?: string }> {
+  return createMembershipForPayment(supabase, paymentId, userId);
+}
+
+/**
+ * Crea la membresía asociada a un pago. Usado por el flujo Flow (plan inferido
+ * desde el concepto) y por la aprobación de pagos por transferencia (plan
+ * explícito vía `planId`). Mismas reglas: dedup 10 min, cancela activas,
+ * start_date = getChileToday(), end_date = addDaysChile.
+ */
+export async function createMembershipForPayment(
+  supabase: SupabaseClient,
+  paymentId: string,
+  userId: string,
+  planId?: string
+): Promise<{ success: boolean; membershipId?: string; error?: string }> {
   const { data: payment } = await supabase
     .from("payments")
     .select("id, user_id, concept, membership_id, beneficiary_id")
@@ -41,21 +56,38 @@ export async function confirmAndCreateMembership(
     return { success: true, membershipId: payment.membership_id };
   }
 
-  const planName = extractPlanName(payment.concept);
-  if (!planName) {
-    console.error(HELPERS_LOG, "Could not extract plan name from concept:", payment.concept);
-    return { success: false, error: "No se pudo determinar el plan desde el concepto" };
-  }
+  let plan: { id: string; duration_days: number } | null = null;
 
-  const { data: plan } = await supabase
-    .from("membership_plans")
-    .select("id, duration_days")
-    .ilike("name", planName)
-    .single();
+  if (planId) {
+    const { data: byId } = await supabase
+      .from("membership_plans")
+      .select("id, duration_days")
+      .eq("id", planId)
+      .maybeSingle();
+    plan = byId as { id: string; duration_days: number } | null;
 
-  if (!plan) {
-    console.error(HELPERS_LOG, "Plan not found:", planName);
-    return { success: false, error: `Plan "${planName}" no encontrado` };
+    if (!plan) {
+      console.error(HELPERS_LOG, "Plan not found:", planId);
+      return { success: false, error: "Plan no encontrado" };
+    }
+  } else {
+    const planName = extractPlanName(payment.concept);
+    if (!planName) {
+      console.error(HELPERS_LOG, "Could not extract plan name from concept:", payment.concept);
+      return { success: false, error: "No se pudo determinar el plan desde el concepto" };
+    }
+
+    const { data: byName } = await supabase
+      .from("membership_plans")
+      .select("id, duration_days")
+      .ilike("name", planName)
+      .single();
+    plan = byName as { id: string; duration_days: number } | null;
+
+    if (!plan) {
+      console.error(HELPERS_LOG, "Plan not found:", planName);
+      return { success: false, error: `Plan "${planName}" no encontrado` };
+    }
   }
 
   let targetBeneficiaryId = payment.beneficiary_id;
@@ -193,7 +225,8 @@ function extractPersonalizedPlanName(concept: string | null): string | null {
 export async function confirmPersonalizedPack(
   supabase: SupabaseClient,
   paymentId: string,
-  userId: string
+  userId: string,
+  planId?: string
 ): Promise<{ success: boolean; packId?: string; error?: string }> {
   const { data: payment } = await supabase
     .from("payments")
@@ -217,21 +250,38 @@ export async function confirmPersonalizedPack(
     return { success: true, packId: existingPack.id };
   }
 
-  const planName = extractPersonalizedPlanName(payment.concept);
-  if (!planName) {
-    console.error(HELPERS_LOG, "Could not extract personalized plan name from concept:", payment.concept);
-    return { success: false, error: "No se pudo determinar el plan desde el concepto" };
-  }
+  let plan: { id: string; total_classes: number; validity_days: number } | null = null;
 
-  const { data: plan } = await supabase
-    .from("personalized_plans")
-    .select("id, name, total_classes, validity_days")
-    .ilike("name", planName)
-    .single();
+  if (planId) {
+    const { data: byId } = await supabase
+      .from("personalized_plans")
+      .select("id, total_classes, validity_days")
+      .eq("id", planId)
+      .maybeSingle();
+    plan = byId as { id: string; total_classes: number; validity_days: number } | null;
 
-  if (!plan) {
-    console.error(HELPERS_LOG, "Personalized plan not found:", planName);
-    return { success: false, error: `Plan "${planName}" no encontrado` };
+    if (!plan) {
+      console.error(HELPERS_LOG, "Personalized plan not found:", planId);
+      return { success: false, error: "Plan no encontrado" };
+    }
+  } else {
+    const planName = extractPersonalizedPlanName(payment.concept);
+    if (!planName) {
+      console.error(HELPERS_LOG, "Could not extract personalized plan name from concept:", payment.concept);
+      return { success: false, error: "No se pudo determinar el plan desde el concepto" };
+    }
+
+    const { data: byName } = await supabase
+      .from("personalized_plans")
+      .select("id, total_classes, validity_days")
+      .ilike("name", planName)
+      .single();
+    plan = byName as { id: string; total_classes: number; validity_days: number } | null;
+
+    if (!plan) {
+      console.error(HELPERS_LOG, "Personalized plan not found:", planName);
+      return { success: false, error: `Plan "${planName}" no encontrado` };
+    }
   }
 
   let targetBeneficiaryId = payment.beneficiary_id;

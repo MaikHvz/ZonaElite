@@ -4,6 +4,8 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useSession } from "@/providers/SessionProvider";
 import { createClient } from "@/lib/supabase/client";
 import { getChileToday } from "@/lib/dates";
+import { getPaymentSettings, type BankAccount } from "@/lib/payment-settings";
+import TransferPaymentStep from "@/components/TransferPaymentStep";
 
 interface Plan {
   id: string;
@@ -77,6 +79,9 @@ export default function CheckoutModal({
   const [includeEnrollment, setIncludeEnrollment] = useState(false);
   const [selectedEnrollmentPlanId, setSelectedEnrollmentPlanId] = useState("");
   const [showOverwriteWarning, setShowOverwriteWarning] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [bank, setBank] = useState<BankAccount | null>(null);
+  const [showTransfer, setShowTransfer] = useState(false);
 
   const handleClose = useCallback(() => {
     setSelectedId("");
@@ -84,6 +89,9 @@ export default function CheckoutModal({
     setIncludeEnrollment(false);
     setSelectedEnrollmentPlanId("");
     setShowOverwriteWarning(false);
+    setManualMode(false);
+    setBank(null);
+    setShowTransfer(false);
     onClose();
   }, [onClose]);
 
@@ -113,7 +121,14 @@ export default function CheckoutModal({
     setLoadingBeneficiaries(true);
     setIncludeEnrollment(false);
     setSelectedEnrollmentPlanId("");
+    setShowTransfer(false);
     const supabase = createClient();
+
+    getPaymentSettings(supabase).then((settings) => {
+      const productType = mode === "enrollment-only" ? "enrollment" : "memberships";
+      setManualMode(settings[productType] === "manual");
+      setBank(settings.bank);
+    });
 
     (async () => {
       try {
@@ -339,6 +354,12 @@ export default function CheckoutModal({
       return;
     }
 
+    if (manualMode) {
+      setShowTransfer(true);
+      setError(null);
+      return;
+    }
+
     setProcessing(true);
     setError(null);
     await doCreateOrder();
@@ -346,6 +367,11 @@ export default function CheckoutModal({
 
   const handleConfirmOverwrite = () => {
     setShowOverwriteWarning(false);
+    if (manualMode) {
+      setShowTransfer(true);
+      setError(null);
+      return;
+    }
     setProcessing(true);
     setError(null);
     void doCreateOrder();
@@ -608,29 +634,51 @@ export default function CheckoutModal({
             </p>
           )}
 
-          <button
-            onClick={handlePay}
-            disabled={!selectedId || processing || (showEnrollmentSection && !selectedEnrollmentPlanId && !selectedBeneficiary?.hasActiveEnrollment) || (mode === "enrollment-only" && !!selectedBeneficiary?.hasActiveEnrollment) || (mode === "membership" && !selectedBeneficiary?.hasActiveEnrollment && !selectedEnrollmentPlanId)}
-            className="w-full btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider py-3 rounded-lg transition-opacity disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
-          >
-            {processing ? (
-              <>
-                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                Procesando...
-              </>
-            ) : (
-              <>
-                <span className="material-symbols-outlined text-[18px]">
-                  credit_card
-                </span>
-                Pagar con Flow
-              </>
-            )}
-          </button>
+          {manualMode && showTransfer && selectedId && bank ? (
+            <TransferPaymentStep
+              productType={mode === "enrollment-only" ? "enrollment" : "memberships"}
+              amount={totalAmount}
+              bank={bank}
+              beneficiaryId={selectedId}
+              planId={mode === "membership" && plan ? plan.id : undefined}
+              includeEnrollment={showEnrollmentSection}
+              enrollmentPlanId={selectedEnrollmentPlan?.id}
+            />
+          ) : (
+            <>
+              {manualMode && !bank && (
+                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-red-400 text-center">
+                  La academia aún no configura el pago por transferencia. Intenta más tarde.
+                </p>
+              )}
 
-          <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant/50 text-center">
-            Serás redirigido a Flow para completar el pago de forma segura.
-          </p>
+              <button
+                onClick={handlePay}
+                disabled={!selectedId || processing || (showEnrollmentSection && !selectedEnrollmentPlanId && !selectedBeneficiary?.hasActiveEnrollment) || (mode === "enrollment-only" && !!selectedBeneficiary?.hasActiveEnrollment) || (mode === "membership" && !selectedBeneficiary?.hasActiveEnrollment && !selectedEnrollmentPlanId) || (manualMode && !bank)}
+                className="w-full btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider py-3 rounded-lg transition-opacity disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+              >
+                {processing ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">
+                      {manualMode ? "account_balance" : "credit_card"}
+                    </span>
+                    {manualMode ? "Pagar por transferencia" : "Pagar con Flow"}
+                  </>
+                )}
+              </button>
+
+              <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant/50 text-center">
+                {manualMode
+                  ? "Selecciona el botón para ver los datos bancarios y enviar tu comprobante."
+                  : "Serás redirigido a Flow para completar el pago de forma segura."}
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

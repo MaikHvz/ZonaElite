@@ -79,6 +79,12 @@ export interface PaymentData {
   receipt_url: string | null;
   paid_at: string | null;
   created_at: string;
+  commerce_order?: string | null;
+  membership_plan_id?: string | null;
+  personalized_plan_id?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  admin_note?: string | null;
   membership: {
     plan: { name: string } | null;
   } | null;
@@ -297,16 +303,16 @@ export async function getProfileForEdit(userId: string) {
     const supabase = createClient();
     const { data } = await supabase
       .from("profiles")
-      .select("full_name, phone, birth_date")
+      .select("full_name, phone, birth_date, rut")
       .eq("id", userId)
       .single();
-    return data as { full_name: string; phone: string | null; birth_date: string | null } | null;
+    return data as { full_name: string; phone: string | null; birth_date: string | null; rut: string | null } | null;
   });
 }
 
 export async function updateProfile(
   userId: string,
-  updates: { full_name?: string; phone?: string; birth_date?: string }
+  updates: { full_name?: string; phone?: string; birth_date?: string; rut?: string }
 ) {
   return safeQuery(async () => {
     const supabase = createClient();

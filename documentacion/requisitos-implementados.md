@@ -167,3 +167,16 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 
 
 
+## 17. Pago Manual por Transferencia (2026-08-08)
+**Requisito**: Modo de pago manual por transferencia como alternativa a Flow.cl, activable por tipo de producto (Membresías / Clases Personalizadas / Inscripciones). Cuando un tipo está en modo manual, el checkout no inicia Flow: muestra los datos bancarios de la academia y un formulario para que el usuario suba el comprobante (voucher). El admin recibe correo + notificación in-app, revisa el voucher en `/admin/ventas` (tab "Solicitudes") y aprueba o rechaza la solicitud; al aprobar se asigna el beneficio (sustitución de membresía activa / apilamiento de packs / extensión de inscripción), al rechazar queda `rechazado` con nota visible.
+- **Implementación**:
+  - `academy_settings.payment_settings` jsonb (migración `013_manual_payment_mode.sql`): `{ memberships, personalized, enrollment }` cada uno `"online"|"manual"` + `bank` (datos bancarios). Librería isomórfica `src/lib/payment-settings.ts`. UI de toggle por tipo + datos bancarios en `admin/configuracion`.
+  - `payments` + `membership_plan_id`, `personalized_plan_id`, `reviewed_by`, `reviewed_at`, `admin_note`; `profiles.rut` nullable; 4 índices nuevos (incl. parcial `idx_payments_manual_pending`).
+  - `POST /api/payments/transfer`: valida modo manual + banco + voucher (JPG/PNG/WebP/GIF/PDF =5MB) + beneficiario + plan/monto; sube voucher a `public/vouchers`, inserta `payments` `method='transferencia'` `status='pendiente'` `commerce_order='REF-ZE-xxxxxx'`; notifica staff + `sendTransferRequestEmail` a todos los admins (enlaza voucher, no adjunta).
+  - `POST /api/payments/review`: solo admin; rechazo ? `rechazado` + `admin_note` + notificación; aprobación ? guard de concurrencia `UPDATE ... WHERE status='pendiente'`, marca `pagado` y asigna con `createMembershipForPayment`/`confirmPersonalizedPack` (override de plan) o `extendEnrollment`.
+  - Guarda en `create-order`: tipo en `manual` ? 400 "El pago online está desactivado para este producto. Usa transferencia."
+  - UI cliente: `TransferPaymentStep` (datos bancarios + copiar, RUT autocargado, upload voucher, estado enviado) integrado en `CheckoutModal` y `PersonalizedCheckoutModal` (botón "Pagar por transferencia"); `PaymentRow` muestra "En revisión" + referencia + nota de rechazo.
+  - UI admin: tab "Solicitudes" en `admin/ventas` con badge de pendientes, filtros, modal de revisión con voucher (img/iframe PDF) y aprobar/rechazar.
+  - Perfil: campo RUT (state, load, save).
+- **Migración**: `contexto/migrations/013_manual_payment_mode.sql` (creada; **pendiente aplicar en Supabase**). Espejo 1:1 en `documentacion/squema-sql-actualizado.sql`.
+- **Estado**: Implementado. Suite secciones A-T en verde (396 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Requisito/detalle en `contexto/requisitos/pago-manual-transferencia.md`.

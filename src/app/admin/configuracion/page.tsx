@@ -5,6 +5,11 @@ import { createClient } from "@/lib/supabase/client";
 import ImageUpload from "@/components/admin/ImageUpload";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
+import {
+  normalizePaymentSettings,
+  type BankAccount,
+  type PaymentSettings,
+} from "@/lib/payment-settings";
 
 interface AcademySettings {
   id: string;
@@ -34,12 +39,19 @@ export default function AdminConfiguracionPage() {
   const [galleryLoading, setGalleryLoading] = useState(true);
   const [newImageAlt, setNewImageAlt] = useState("");
   const [addingImage, setAddingImage] = useState(false);
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>({
+    memberships: "online",
+    personalized: "online",
+    enrollment: "online",
+    bank: null,
+  });
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
     supabase.from("academy_settings").select("*").limit(1).single().then(({ data }) => {
       setSettings(data as AcademySettings);
+      setPaymentSettings(normalizePaymentSettings(data?.payment_settings));
       setLoading(false);
     });
 
@@ -65,6 +77,7 @@ export default function AdminConfiguracionPage() {
         whatsapp: settings.whatsapp,
         social_links: settings.social_links,
         qr_alert_duration: settings.qr_alert_duration,
+        payment_settings: paymentSettings,
       }).eq("id", settings.id);
       if (error) {
         setToast({ msg: getSupabaseErrorMessage(error, "Guardar configuración"), type: "error" });
@@ -157,6 +170,17 @@ export default function AdminConfiguracionPage() {
     }
   };
 
+  const handleToggleMode = (type: "memberships" | "personalized" | "enrollment", mode: "online" | "manual") => {
+    setPaymentSettings((prev) => ({ ...prev, [type]: mode }));
+  };
+
+  const handleBankChange = (field: keyof BankAccount, value: string) => {
+    setPaymentSettings((prev) => ({
+      ...prev,
+      bank: { ...(prev.bank || { bank_name: "", account_type: "", account_number: "", account_holder: "", rut: "", email: "" }), [field]: value },
+    }));
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -228,6 +252,111 @@ export default function AdminConfiguracionPage() {
                 />
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Modo de pago */}
+        <div className="border-t border-on-surface/5 pt-5">
+          <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase mb-1">Modo de Pago</h3>
+          <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant mb-4">
+            Cuando un producto está en modo manual, el checkout no usa Flow.cl: el usuario envía un comprobante de transferencia que debes aprobar en Ventas.
+          </p>
+
+          <div className="space-y-2">
+            {([
+              { key: "memberships", label: "Membresías", desc: "Planes de membresía (incluye inscripción si se combina)" },
+              { key: "personalized", label: "Clases Personalizadas", desc: "Packs de clases personalizadas" },
+              { key: "enrollment", label: "Inscripciones", desc: "Solo plan de inscripción sin membresía" },
+            ] as const).map(({ key, label, desc }) => (
+              <div key={key} className="flex items-center justify-between gap-4 p-3 rounded-xl border border-on-surface/5 bg-surface-container-lowest/40">
+                <div className="min-w-0">
+                  <p className="font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider text-on-surface">{label}</p>
+                  <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant/60">{desc}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => handleToggleMode(key, "online")}
+                    className={`px-3 py-1.5 rounded-lg font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider cursor-pointer transition-colors ${
+                      paymentSettings[key] === "online"
+                        ? "bg-primary/15 text-primary border border-primary/30"
+                        : "text-on-surface-variant/60 border border-on-surface/10 hover:text-on-surface-variant"
+                    }`}
+                  >
+                    Online
+                  </button>
+                  <button
+                    onClick={() => handleToggleMode(key, "manual")}
+                    className={`px-3 py-1.5 rounded-lg font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider cursor-pointer transition-colors ${
+                      paymentSettings[key] === "manual"
+                        ? "bg-tertiary/15 text-tertiary border border-tertiary/30"
+                        : "text-on-surface-variant/60 border border-on-surface/10 hover:text-on-surface-variant"
+                    }`}
+                  >
+                    Transferencia
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 bg-surface-container-high/30 rounded-xl p-4 space-y-3">
+            <p className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">Datos bancarios para transferencias</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1">Banco</label>
+                <input
+                  value={paymentSettings.bank?.bank_name || ""}
+                  onChange={(e) => handleBankChange("bank_name", e.target.value)}
+                  placeholder="Ej: Banco Estado"
+                  className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] text-on-surface focus:outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1">Tipo de cuenta</label>
+                <input
+                  value={paymentSettings.bank?.account_type || ""}
+                  onChange={(e) => handleBankChange("account_type", e.target.value)}
+                  placeholder="Cuenta corriente / RUT"
+                  className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] text-on-surface focus:outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1">Número de cuenta</label>
+                <input
+                  value={paymentSettings.bank?.account_number || ""}
+                  onChange={(e) => handleBankChange("account_number", e.target.value)}
+                  placeholder="123456789"
+                  className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] text-on-surface focus:outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1">RUT beneficiario</label>
+                <input
+                  value={paymentSettings.bank?.rut || ""}
+                  onChange={(e) => handleBankChange("rut", e.target.value)}
+                  placeholder="11.222.333-4"
+                  className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] text-on-surface focus:outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1">Titular de la cuenta</label>
+                <input
+                  value={paymentSettings.bank?.account_holder || ""}
+                  onChange={(e) => handleBankChange("account_holder", e.target.value)}
+                  placeholder="Nombre completo"
+                  className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] text-on-surface focus:outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1">Email (opcional)</label>
+                <input
+                  value={paymentSettings.bank?.email || ""}
+                  onChange={(e) => handleBankChange("email", e.target.value)}
+                  placeholder="pagos@zonaelite.cl"
+                  className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] text-on-surface focus:outline-none focus:border-primary/50"
+                />
+              </div>
+            </div>
           </div>
         </div>
 

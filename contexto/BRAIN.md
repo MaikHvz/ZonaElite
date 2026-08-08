@@ -333,7 +333,7 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 | `changelog` | **NUEVO** Changelog de desarrolladores para el panel admin (versión + título + resumen) | — |
 | `roles` | 1=admin, 2=instructor, 3=recepcion, 4=alumno | — |
 | `profiles` | Perfiles (id=auth.users.id) | FK → auth.users |
-| `academy_settings` | Config academia (singleton) | — |
+| `academy_settings` | Config academia (singleton, incl. `payment_settings` jsonb con modo de pago por tipo + datos bancarios) | — |
 | `disciplines` | Kenpo, Kickboxing, Funcional, MMA | — |
 | `schedules` | Horarios semanales (`mode`: normal/personalizado) | FK → disciplines, profiles (professor) |
 | `class_sessions` | Sesiones generadas desde schedules | FK → schedules |
@@ -352,7 +352,7 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 | `product_images` | Imágenes (max 3) | FK → products |
 | `product_orders` | Órdenes | FK → profiles |
 | `order_items` | Items de órdenes | FK → product_orders, products |
-| `payments` | Pagos (Flow, transferencia, efectivo) | FK → profiles, memberships |
+| `payments` | Pagos (Flow, transferencia, efectivo; solicitudes manuales = `method='transferencia'` + `status='pendiente'`, con `membership_plan_id`/`personalized_plan_id`/`reviewed_by`/`reviewed_at`/`admin_note`) | FK → profiles, memberships |
 | `events` | Torneos, ceremonias, seminarios | — |
 | `blog_posts` | Publicaciones blog | — |
 | `notifications` | Notificaciones | — |
@@ -480,11 +480,12 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 14. **`beneficiaries`** no tiene columna `category` — el category viene del `dependent` o se asume `'adulto'`.
 15. **Spanish** en todo el contenido visible.
 16. **Zonas Horarias**: NUNCA usar `new Date().toISOString().split("T")[0]` para calcular "hoy", ya que usa UTC y genera un desfase después de las 20:00 hora Chile. SIEMPRE importar y usar `getChileToday()` y `addDaysChile()` desde `src/lib/dates.ts`. Para límites de mes/trimestre usar los helpers Chile-aware de `dates.ts` (`chileMonthStartDate()`, `chileMonthEndDate()`, `chileQuarterStartDate()`, `chileQuarterEndDate()`, etc.) y convertir a instantes UTC con `chileDateToUtc()` cuando se comparen columnas TIMESTAMPTZ. El scan estático de `scripts/test-flows.mjs` falla (exit 1) si reaparecen los patrones `toISOString().split("T")[0]` o `new Date(y, m, 1).toISOString()`.
-17. **Suite de pruebas**: `scripts/test-flows.mjs` (Node 24+, sin deps) cubre zona horaria Chile, firma HMAC de Flow, contratos de esquema/RLS, ciclo de vida de inscripción y los módulos de clases personalizadas y desinscripción en asistencia (secciones P/Q/R, 310 tests). Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`.
+17. **Suite de pruebas**: `scripts/test-flows.mjs` (Node 24+, sin deps) cubre zona horaria Chile, firma HMAC de Flow, contratos de esquema/RLS, ciclo de vida de inscripción y los módulos de clases personalizadas, desinscripción en asistencia y pago manual por transferencia (secciones P/Q/R/S/T, 398 tests). Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`.
 17. **Guía de trabajo obligatoria**: Antes de implementar CUALQUIER nueva funcionalidad, leer y ejecutar el workflow definido en `documentacion/guia-de-trabajo.md`. Las 4 fases son obligatorias: planificación → análisis de impacto → implementación → documentación post-implementación (incluye actualizar `squema-sql-actualizado.sql`).
 18. **Modalidad personalizada en horarios**: `schedules.mode` ('normal'|'personalizado') se fija al crear y es inmutable al editar. Las clases personalizadas NO usan QR/check-in (`/api/checkin` devuelve 403); se inscriben vía RPC `enroll_personalized_class` (consume pack) y su asistencia se registra manualmente reusando `attendance`. En admin/público/dashboard filtrar por `mode` y ramificar `EnrollModal`/`PersonalizedEnrollModal`.
 19. **Desinscripción en asistencia (migración 011)**: para eliminar un beneficiario de una sesión desde `/admin/asistencia` usar SIEMPRE el RPC `cancel_class_enrollment` (validación admin dentro). En normal borra `class_enrollments` (por `session_id` u horario recurrente con `session_id IS NULL`) y la deuda `pendiente` de la sesión → el token vuelve solo por `get_remaining_tokens`; en personalizada restaura 1 clase al pack. Limpia `attendance` y notifica al titular. No crear policies DELETE nuevas (`class_enrollments_delete_admin` ya existe).
 20. **Changelog de desarrolladores (migración 012)**: cada feature nueva debe agregar una entrada de changelog en `changelog` (tabla de solo lectura admin, RLS `changelog_admin_read` con `is_admin()`). Insertar vía SQL seed/actualización (o migración) con `ON CONFLICT (version) DO NOTHING`; versiones correlativas (v1.0.0, v1.1.0, …). La UI (`/admin/changelog`) es solo lectura. No editar entradas desde código cliente.
+21. **Pago manual por transferencia (migración 013)**: toggle por tipo de producto en `academy_settings.payment_settings` (jsonb `{memberships, personalized, enrollment}` cada uno `"online"|"manual"` + `bank` con datos bancarios). El envío va por `POST /api/payments/transfer` (admin client, voucher ≤5MB a `public/vouchers`, `payments.method='transferencia'`, `status='pendiente'`, `commerce_order='REF-ZE-xxxxxx'`, `membership_plan_id`/`personalized_plan_id`/`include_enrollment`). La revisión va por `POST /api/payments/review` (solo `role_id=1`; aprobar marca `pagado` con guard de concurrencia `WHERE status='pendiente'` y asigna con `createMembershipForPayment`/`confirmPersonalizedPack` con override de plan, o `extendEnrollment`; en el caso combinado membresía+inscripción asigna **ambos** beneficios con `if`s independientes (ninguno se pierde) rechazar deja `admin_note` + `rechazado`). `create-order` rechaza 400 si el tipo está en `manual`. La membresía aprobada corre desde la fecha de aprobación (`start_date = getChileToday()`). Detalle completo en `contexto/requisitos/pago-manual-transferencia.md`.
 
 ---
 
@@ -501,9 +502,11 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 | `contexto/requisitos/clases-horario-personalizadas.md` | Requisito + análisis de impacto (horarios personalizados) |
 | `contexto/requisitos/eliminar-usuario-asistencia.md` | Requisito + análisis de impacto (desinscripción con devolución de token) |
 | `contexto/requisitos/changelog-admin.md` | Requisito + análisis de impacto (changelog de desarrolladores en panel admin) |
+| `contexto/requisitos/pago-manual-transferencia.md` | Requisito + análisis de impacto (modo de pago manual por transferencia) |
 | `contexto/migrations/010_personalized_schedule_classes.sql` | Migración 010: mode en schedules + tablas/RPC de personalizadas (pendiente aplicar) |
 | `contexto/migrations/011_cancel_class_enrollment.sql` | Migración 011: RPC cancel_class_enrollment (pendiente aplicar) |
 | `contexto/migrations/012_changelog.sql` | Migración 012: tabla changelog (solo lectura admin, seed v1.0.0) (pendiente aplicar) |
+| `contexto/migrations/013_manual_payment_mode.sql` | Migración 013: modo de pago manual (payment_settings, payments + plan_id/review, profiles.rut) (pendiente aplicar) |
 | `contexto/schema-complete.sql` | SQL completo: 26 tablas, 190 cols, 32 FKs, 59 RLS, 33 indexes |
 | `project-context/brain.md` | Contexto legacy (parcialmente obsoleto) |
 | `project-context/changelog.md` | Historial de cambios detallado |

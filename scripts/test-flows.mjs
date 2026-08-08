@@ -1386,8 +1386,218 @@ ok("S: no se tocaron los RPCs de asistencia ni el esquema previo",
   (schemaSqlS.match(/CREATE OR REPLACE FUNCTION public\.cancel_class_enrollment\(/g) || []).length === 1);
 
 // ============================================================
-// RESULTADO
+// T. Modo de pago manual por transferencia (migración 013)
 // ============================================================
+section("T. Pago manual por transferencia (migración 013)");
+
+const migration013 = readFileSync(join(ROOT, "contexto", "migrations", "013_manual_payment_mode.sql"), "utf8");
+const schemaSqlT = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const paymentSettingsLibT = readFileSync(join(ROOT, "src", "lib", "payment-settings.ts"), "utf8");
+const transferRouteT = readFileSync(join(ROOT, "src", "app", "api", "payments", "transfer", "route.ts"), "utf8");
+const reviewRouteT = readFileSync(join(ROOT, "src", "app", "api", "payments", "review", "route.ts"), "utf8");
+const createOrderRouteT = readFileSync(join(ROOT, "src", "app", "api", "flow", "create-order", "route.ts"), "utf8");
+const flowHelpersT = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
+const emailT = readFileSync(join(ROOT, "src", "lib", "email.ts"), "utf8");
+const checkoutModalT = readFileSync(join(ROOT, "src", "components", "CheckoutModal.tsx"), "utf8");
+const personalizedModalT = readFileSync(join(ROOT, "src", "components", "PersonalizedCheckoutModal.tsx"), "utf8");
+const transferStepT = readFileSync(join(ROOT, "src", "components", "TransferPaymentStep.tsx"), "utf8");
+const paymentRowT = readFileSync(join(ROOT, "src", "components", "dashboard", "PaymentRow.tsx"), "utf8");
+const adminVentasT = readFileSync(join(ROOT, "src", "app", "admin", "ventas", "page.tsx"), "utf8");
+const adminConfigT = readFileSync(join(ROOT, "src", "app", "admin", "configuracion", "page.tsx"), "utf8");
+const perfilT = readFileSync(join(ROOT, "src", "app", "perfil", "page.tsx"), "utf8");
+
+// T1. Migración 013: contrato de la columna de configuración
+ok("T: 013 agrega payment_settings jsonb a academy_settings (idempotente)",
+  /ALTER TABLE public\.academy_settings[\s\S]*?ADD COLUMN IF NOT EXISTS payment_settings jsonb;/.test(migration013));
+ok("T: 013 default singleton: los 3 tipos en 'online' + bank null",
+  /memberships"?: "online"[\s\S]*?personalized"?: "online"[\s\S]*?enrollment"?: "online"[\s\S]*?bank":? null/.test(migration013));
+ok("T: 013 no pisa config existente (WHERE payment_settings IS NULL)",
+  /WHERE payment_settings IS NULL;/.test(migration013));
+ok("T: 013 payments: membership_plan_id FK a membership_plans",
+  /ADD COLUMN IF NOT EXISTS membership_plan_id uuid REFERENCES public\.membership_plans\(id\),/.test(migration013));
+ok("T: 013 payments: personalized_plan_id FK a personalized_plans",
+  /ADD COLUMN IF NOT EXISTS personalized_plan_id uuid REFERENCES public\.personalized_plans\(id\),/.test(migration013));
+ok("T: 013 payments: reviewed_by / reviewed_at / admin_note",
+  /ADD COLUMN IF NOT EXISTS reviewed_by uuid,[\s\S]*?ADD COLUMN IF NOT EXISTS reviewed_at timestamptz,[\s\S]*?ADD COLUMN IF NOT EXISTS admin_note text;/.test(migration013));
+ok("T: 013 profiles.rut nullable",
+  /ALTER TABLE public\.profiles[\s\S]*?ADD COLUMN IF NOT EXISTS rut text;/.test(migration013));
+ok("T: 013 índice parcial de solicitudes pendientes",
+  /CREATE INDEX IF NOT EXISTS idx_payments_manual_pending[\s\S]*?WHERE method = 'transferencia' AND status = 'pendiente';/.test(migration013));
+ok("T: 013 índices reviewed_by / membership_plan / personalized_plan",
+  /CREATE INDEX IF NOT EXISTS idx_payments_reviewed_by/.test(migration013) &&
+  /CREATE INDEX IF NOT EXISTS idx_payments_membership_plan/.test(migration013) &&
+  /CREATE INDEX IF NOT EXISTS idx_payments_personalized_plan/.test(migration013));
+
+// T2. Espejo 1:1 en el esquema documentado
+ok("T: esquema refleja academy_settings.payment_settings jsonb",
+  /payment_settings jsonb,/.test(schemaSqlT));
+ok("T: esquema refleja el UPDATE singleton con defaults online",
+  /UPDATE public\.academy_settings[\s\S]*?SET payment_settings = .*["']online["'][\s\S]*?WHERE payment_settings IS NULL;/.test(schemaSqlT));
+ok("T: esquema refleja las columnas nuevas de payments 1:1 (migración 013)",
+  /membership_plan_id uuid REFERENCES public\.membership_plans\(id\),[\s\S]*?personalized_plan_id uuid REFERENCES public\.personalized_plans\(id\),[\s\S]*?reviewed_by uuid,[\s\S]*?reviewed_at timestamptz,[\s\S]*?admin_note text,/.test(schemaSqlT));
+ok("T: esquema refleja profiles.rut",
+  /CREATE TABLE IF NOT EXISTS public\.profiles \([\s\S]*?rut text,/.test(schemaSqlT));
+ok("T: esquema refleja los 4 índices de la migración",
+  /idx_payments_manual_pending/.test(schemaSqlT) &&
+  /idx_payments_reviewed_by/.test(schemaSqlT) &&
+  /idx_payments_membership_plan/.test(schemaSqlT) &&
+  /idx_payments_personalized_plan/.test(schemaSqlT));
+ok("T: regresión — RLS de payments intacta en el esquema",
+  /payments_select_own_or_admin/.test(schemaSqlT) &&
+  /payments_insert_admin/.test(schemaSqlT) &&
+  /payments_update_admin/.test(schemaSqlT));
+
+// T3. Librería isomórfica payment-settings.ts
+ok("T: lib exporta normalize/get/update + tipos + defaults",
+  /export function normalizePaymentSettings/.test(paymentSettingsLibT) &&
+  /export async function getPaymentSettings/.test(paymentSettingsLibT) &&
+  /export async function updatePaymentSettings/.test(paymentSettingsLibT) &&
+  /export type PaymentMode/.test(paymentSettingsLibT) &&
+  /export const DEFAULT_PAYMENT_SETTINGS/.test(paymentSettingsLibT));
+ok("T: normalize fuerza 'online' para cualquier valor no-manual",
+  /const mode = \(v: unknown\): PaymentMode => \(v === "manual" \? "manual" : "online"\);/.test(paymentSettingsLibT));
+ok("T: getPaymentSettings lee academy_settings.payment_settings",
+  /\.from\("academy_settings"\)[\s\S]*?\.select\("payment_settings"\)[\s\S]*?\.maybeSingle\(\)/.test(paymentSettingsLibT));
+ok("T: updatePaymentSettings actualiza por id del singleton",
+  /\.from\("academy_settings"\)\s*\.update\(\{ payment_settings: settings \}\)\s*\.eq\("id", row\.id\)/.test(paymentSettingsLibT));
+
+// T4. API de envío de solicitud (/api/payments/transfer)
+ok("T: transfer exige sesión (401)",
+  /const \{\s*data: \{ user \},\s*error: authError,[\s\S]*?\}\s*=\s*await supabase\.auth\.getUser\(\);[\s\S]*?if \(authError \|\| !user\)[\s\S]*?status: 401/.test(transferRouteT));
+ok("T: transfer valida productType en [memberships|personalized|enrollment]",
+  /\[\"memberships\", \"personalized\", \"enrollment\"\]\.includes\(productType\)/.test(transferRouteT));
+ok("T: transfer rechaza si el tipo no está en modo manual (400)",
+  /if \(settings\[modeKey\] !== "manual"\)[\s\S]*?status: 400/.test(transferRouteT));
+ok("T: transfer exige datos bancarios configurados",
+  /if \(!bank \|\| !bank\.bank_name \|\| !bank\.account_number\)/.test(transferRouteT));
+ok("T: transfer acepta JPG/PNG/WebP/GIF/PDF y rechaza 5MB+",
+  /"image\/jpeg",\s*"image\/png",\s*"image\/webp",\s*"image\/gif",\s*"application\/pdf"/.test(transferRouteT) &&
+  /MAX_VOUCHER_BYTES = 5 \* 1024 \* 1024/.test(transferRouteT));
+ok("T: transfer sube el voucher a storage public/vouchers",
+  /admin\.storage\s*\.from\("public"\)\s*\.upload\(path, voucherBytes, \{ contentType: mime, upsert: true \}\)/.test(transferRouteT));
+ok("T: transfer inserta payments method='transferencia' status='pendiente' con REF-ZE-",
+  /commerce_order: reference,[\s\S]*?method: "transferencia",[\s\S]*?status: "pendiente",/.test(transferRouteT) &&
+  /return `REF-ZE-\$\{ref\}`;/.test(transferRouteT));
+ok("T: transfer guarda membership_plan_id / personalized_plan_id / enrollment en el payload",
+  /if \(membershipPlanId\) insertPayload\.membership_plan_id = membershipPlanId;[\s\S]*?if \(personalizedPlanId\) insertPayload\.personalized_plan_id = personalizedPlanId;[\s\S]*?if \(includeEnrollment\) insertPayload\.include_enrollment = true;/.test(transferRouteT));
+ok("T: transfer guarda RUT informativo en profiles sin pisar el existente",
+  /\.from\("profiles"\)[\s\S]*?\.update\(\{ rut: rut\.trim\(\) \}\)[\s\S]*?\.eq\("id", user\.id\)/.test(transferRouteT));
+ok("T: transfer notifica a staff (notifications target staff)",
+  /\.from\("notifications"\)\.insert\([\s\S]*?target: "staff",[\s\S]*?sent_by: adminProfile\.id/.test(transferRouteT));
+ok("T: transfer envía correo a todos los admins role_id=1 con fallback SMTP_USER",
+  /\.from\("profiles"\)[\s\S]*?\.eq\("role_id", 1\)[\s\S]*?fallback = process\.env\.SMTP_USER[\s\S]*?sendTransferRequestEmail/.test(transferRouteT));
+ok("T: transfer usa admin client para insertar (bypass RLS insert_admin)",
+  /const admin = getAdminClient\(\);[\s\S]*?\.from\("payments"\)[\s\S]*?\.insert\(insertPayload\)/.test(transferRouteT));
+
+// T5. API de revisión (/api/payments/review)
+ok("T: review exige rol admin (403)",
+  /if \(!profile \|\| profile\.role_id !== 1\)[\s\S]*?status: 403/.test(reviewRouteT));
+ok("T: review solo acepta transferencia pendiente",
+  /if \(payment\.method !== "transferencia"\)[\s\S]*?if \(payment\.status !== "pendiente"\)/.test(reviewRouteT));
+ok("T: rechazo guarda status+admin_note y notifica rejected",
+  /\.update\(\{[\s\S]*?status: "rechazado",[\s\S]*?admin_note: adminNote \|\| null,[\s\S]*?\)\s*\.eq\("id", paymentId\)\s*\.eq\("status", "pendiente"\)/.test(reviewRouteT) &&
+  /notifyUserPaymentStatus\(admin, payment, "rejected"\)/.test(reviewRouteT));
+ok("T: aprobación usa guard de concurrencia (UPDATE...WHERE status='pendiente')",
+  /\.update\(\{[\s\S]*?status: "pagado",[\s\S]*?reviewed_by: user\.id,[\s\S]*?\)\s*\.eq\("id", paymentId\)\s*\.eq\("status", "pendiente"\)/.test(reviewRouteT));
+ok("T: aprobación asigna con createMembershipForPayment y override de plan",
+  /createMembershipForPayment\(admin, paymentId, payment\.user_id, payment\.membership_plan_id\)/.test(reviewRouteT));
+ok("T: aprobación asigna packs personalizados con confirmPersonalizedPack y override",
+  /confirmPersonalizedPack\(admin, paymentId, payment\.user_id, payment\.personalized_plan_id\)/.test(reviewRouteT));
+ok("T: aprobación extiende inscripción con if independiente (cubre caso combinado)",
+  /if \(payment\.include_enrollment && payment\.enrollment_plan_id && payment\.beneficiary_id\)[\s\S]*?await extendEnrollment\(admin, paymentId, payment\.beneficiary_id, payment\.enrollment_plan_id\)/.test(reviewRouteT));
+ok("T: caso combinado membresía+inscripción asigna ambos beneficios",
+  /if \(payment\.membership_plan_id\) \{[\s\S]*?createMembershipForPayment\(admin, paymentId, payment\.user_id, payment\.membership_plan_id\)[\s\S]*?\}[\s\S]*?if \(payment\.include_enrollment && payment\.enrollment_plan_id[\s\S]*?extendEnrollment\(admin, paymentId, payment\.beneficiary_id, payment\.enrollment_plan_id\)[\s\S]*?assignment = results\.find\(\(r\) => !r\.success\) \|\| null;/.test(reviewRouteT));
+ok("T: fallo en alguno de los dos beneficios dispara notifyPaymentWithoutMembership",
+  /assignment = results\.find\(\(r\) => !r\.success\) \|\| null;[\s\S]*?if \(assignment && !assignment\.success\)/.test(reviewRouteT));
+ok("T: fallo de asignación tras aprobar notifica notifyPaymentWithoutMembership",
+  /if \(assignment && !assignment\.success\)[\s\S]*?notifyPaymentWithoutMembership\(admin, payment, assignment\.error/.test(reviewRouteT));
+ok("T: aprobación notifica approved al usuario",
+  /notifyUserPaymentStatus\(admin, payment, "approved"\)/.test(reviewRouteT));
+
+// T6. Guarda en create-order (Flow desactivado en modo manual)
+ok("T: create-order importa getPaymentSettings",
+  createOrderRouteT.includes('from "@/lib/payment-settings"'));
+ok("T: create-order deriva paymentType por producto (personalized/plan/enrollment)",
+  /const paymentType: "memberships" \| "personalized" \| "enrollment" = personalizedPlanId[\s\S]*?planId[\s\S]*?memberships[\s\S]*?: "enrollment";/.test(createOrderRouteT));
+ok("T: create-order rechaza 400 si el tipo está en modo manual",
+  /if \(settings\[paymentType\] === "manual"\)[\s\S]*?El pago online está desactivado para este producto\. Usa transferencia\.[\s\S]*?status: 400/.test(createOrderRouteT));
+
+// T7. Refactor de flow-helpers (override de plan + wrapper intacto)
+ok("T: createMembershipForPayment acepta planId? (override para transferencia)",
+  /export async function createMembershipForPayment\([\s\S]*?paymentId: string,[\s\S]*?userId: string,[\s\S]*?planId\?: string/.test(flowHelpersT));
+ok("T: wrapper confirmAndCreateMembership delega a createMembershipForPayment",
+  /export async function confirmAndCreateMembership\([\s\S]*?return createMembershipForPayment\(supabase, paymentId, userId\);/.test(flowHelpersT));
+ok("T: confirmPersonalizedPack acepta planId? para transferencia",
+  /export async function confirmPersonalizedPack\([\s\S]*?planId\?: string/.test(flowHelpersT));
+ok("T: membresía aprobada corre desde fecha de aprobación (start_date = getChileToday)",
+  /const today = getChileToday\(\);[\s\S]*?start_date: today,/.test(flowHelpersT));
+ok("T: regresión — confirmación Flow usa el wrapper (sin override)",
+  /confirmAndCreateMembership/.test(readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8")));
+
+// T8. Correo de solicitud de transferencia
+ok("T: email exporta sendTransferRequestEmail con voucherUrl como enlace",
+  /export interface TransferRequestEmailData[\s\S]*?voucherUrl\?: string \| null;[\s\S]*?paymentUrl: string;/.test(emailT) &&
+  /export async function sendTransferRequestEmail\(data: TransferRequestEmailData\)/.test(emailT));
+ok("T: el correo enlaza el voucher (no adjunta) y botón a /admin/ventas",
+  /Comprobante: <a href="\$\{voucherUrl\}"[\s\S]*?ver voucher<\/a>/.test(emailT) &&
+  /\$\{paymentUrl\}" class="btn">Revisar Solicitud/.test(emailT));
+ok("T: el asunto del correo incluye la referencia",
+  /subject: `\$\{academyName\} — Solicitud de pago por transferencia \(\$\{reference\}\)`/.test(emailT));
+
+// T9. Frontend: checkout modal (membresías) en modo manual
+ok("T: CheckoutModal carga getPaymentSettings y decide manualMode",
+  checkoutModalT.includes('from "@/lib/payment-settings"') &&
+  /const \[manualMode, setManualMode\] = useState\(false\);/.test(checkoutModalT) &&
+  /getPaymentSettings\(supabase\)\.then\(\(settings\) => \{/.test(checkoutModalT));
+ok("T: CheckoutModal muestra botón 'Pagar por transferencia' en modo manual",
+  /manualMode \? "Pagar por transferencia" : "Pagar con Flow"/.test(checkoutModalT));
+ok("T: CheckoutModal integra TransferPaymentStep cuando manual con banco",
+  /manualMode && showTransfer && selectedId && bank \?[\s\S]*?<TransferPaymentStep/.test(checkoutModalT));
+ok("T: CheckoutModal muestra error si manual sin datos bancarios",
+  /manualMode && !bank &&/.test(checkoutModalT));
+
+// T10. Frontend: checkout personalizado + paso de transferencia + filas
+ok("T: PersonalizedCheckoutModal usa productType='personalized' en TransferPaymentStep",
+  /manualMode && showTransfer && selectedBeneficiaryId && selectedPlanId && bank \?[\s\S]*?<TransferPaymentStep[\s\S]*?productType="personalized"/.test(personalizedModalT));
+ok("T: TransferPaymentStep valida tipos y tamaño del voucher",
+  /ALLOWED_TYPES = \["image\/jpeg", "image\/png", "image\/webp", "image\/gif", "application\/pdf"\]/.test(transferStepT) &&
+  /MAX_SIZE = 5 \* 1024 \* 1024/.test(transferStepT));
+ok("T: TransferPaymentStep POSTea a /api/payments/transfer con el cuerpo completo",
+  /fetch\("\/api\/payments\/transfer", \{[\s\S]*?body: JSON\.stringify\(\{[\s\S]*?productType,[\s\S]*?rut: rut\.trim\(\) \|\| undefined,[\s\S]*?fileBase64,/.test(transferStepT));
+ok("T: TransferPaymentStep autocarga RUT desde el perfil",
+  /\.from\("profiles"\)[\s\S]*?\.select\("rut"\)[\s\S]*?\.eq\("id", user\.id\)/.test(transferStepT));
+ok("T: PaymentRow marca 'En revisión' para transferencia pendiente",
+  /const isTransferPending = payment\.method === "transferencia" && payment\.status === "pendiente";/.test(paymentRowT) &&
+  /En revisión/.test(paymentRowT));
+ok("T: PaymentRow muestra referencia y nota de rechazo",
+  /showReference =[\s\S]*?isTransferPending && payment\.commerce_order;[\s\S]*?payment\.commerce_order[\s\S]*?payment\.status === "rechazado" && payment\.admin_note/.test(paymentRowT));
+
+// T11. Admin ventas: tab Solicitudes + revisión
+ok("T: admin/ventas tiene tab Solicitudes con badge de pendientes",
+  /setActiveTab\("solicitudes"\)[\s\S]*?Solicitudes[\s\S]*?requests\.filter\(\(r\) => r\.status === "pendiente"\)\.length/.test(adminVentasT));
+ok("T: admin/ventas carga solicitudes method='transferencia' con perfil+beneficiario",
+  /\.from\("payments"\)[\s\S]*?profiles:user_id\(full_name, email, rut\),[\s\S]*?beneficiaries:beneficiary_id\([\s\S]*?\.eq\("method", "transferencia"\)/.test(adminVentasT));
+ok("T: admin/ventas revisa vía POST /api/payments/review (aprobar/rechazar)",
+  /fetch\("\/api\/payments\/review", \{[\s\S]*?paymentId: reviewTarget\.id,[\s\S]*?action,[\s\S]*?adminNote: adminNote\.trim\(\) \|\| undefined,/.test(adminVentasT));
+ok("T: modal de revisión muestra voucher (img o iframe PDF) + 'Ver comprobante completo'",
+  /reviewTarget\.receipt_url\.endsWith\("\.pdf"\) \?[\s\S]*?<iframe[\s\S]*?:[\s\S]*?<img[\s\S]*?Ver comprobante completo/.test(adminVentasT));
+ok("T: modal de revisión permite aprobar o rechazar con nota",
+  /doReview\("rechazar"\)[\s\S]*?Rechazar[\s\S]*?doReview\("aprobar"\)[\s\S]*?Aprobar/.test(adminVentasT));
+ok("T: componente SolicitudesSection existe en el page",
+  /function SolicitudesSection\(/.test(adminVentasT) &&
+  /requests\.map\(\(p\) => \{[\s\S]*?onReview\(p\)/.test(adminVentasT));
+
+// T12. Admin configuración (toggle por tipo) + perfil (RUT)
+ok("T: admin/configuracion renderiza la tarjeta Modo de Pago con toggle por tipo",
+  /Modo de Pago[\s\S]*?handleToggleMode\(key, "online"\)[\s\S]*?handleToggleMode\(key, "manual"\)/.test(adminConfigT));
+ok("T: admin/configuracion guarda payment_settings y datos bancarios en handleSave",
+  /handleToggleMode = \(type: "memberships" \| "personalized" \| "enrollment", mode: "online" \| "manual"\)/.test(adminConfigT) &&
+  /payment_settings: paymentSettings,/.test(adminConfigT) &&
+  /handleBankChange\("account_number"/.test(adminConfigT));
+ok("T: perfil agrega campo RUT (state, load, save)",
+  /const \[rut, setRut\] = useState\(""\);[\s\S]*?setRut\(data\.rut \|\| ""\);[\s\S]*?rut: rut \|\| undefined,/.test(perfilT));
+
+
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {
   console.log("FALLOS:");

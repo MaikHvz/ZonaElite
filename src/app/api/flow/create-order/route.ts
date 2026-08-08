@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { getChileToday } from "@/lib/dates";
 import { createFlowOrder, getFlowConfig, verifyFlowPayment, mapFlowStatus, FLOW_LOG_PREFIX } from "@/lib/flow";
+import { getPaymentSettings } from "@/lib/payment-settings";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
@@ -189,6 +190,22 @@ export async function POST(request: Request) {
       if (existingEnrollment) {
         // Will extend, not create new — this is fine
       }
+    }
+
+    // Modo de pago manual: si el tipo de producto está en "manual",
+    // el pago online con Flow está desactivado (usar transferencia).
+    const settings = await getPaymentSettings(supabase);
+    const paymentType: "memberships" | "personalized" | "enrollment" = personalizedPlanId
+      ? "personalized"
+      : planId
+        ? "memberships"
+        : "enrollment";
+
+    if (settings[paymentType] === "manual") {
+      return NextResponse.json(
+        { error: "El pago online está desactivado para este producto. Usa transferencia." },
+        { status: 400 }
+      );
     }
 
     // Calculate total amount

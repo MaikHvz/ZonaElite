@@ -24,6 +24,10 @@ export default function PaymentRow({ payment }: { payment: PaymentData }) {
     month: "short",
   });
   const config = methodConfig[payment.method] || methodConfig.otro;
+  const isTransferPending = payment.method === "transferencia" && payment.status === "pendiente";
+
+  const showReference =
+    isTransferPending && payment.commerce_order;
 
   return (
     <div className="flex items-center gap-3 md:gap-4 py-3.5 border-b border-on-surface/5 last:border-b-0 flex-wrap sm:flex-nowrap hover:bg-on-surface/[0.02] transition-colors -mx-2 px-2 rounded-lg">
@@ -44,6 +48,16 @@ export default function PaymentRow({ payment }: { payment: PaymentData }) {
         <span className="font-[family-name:var(--font-label-sm)] text-[9px] md:text-[10px] uppercase tracking-wider text-on-surface-variant/50">
           {config.label}
         </span>
+        {showReference && (
+          <span className="font-[family-name:var(--font-label-sm)] text-[9px] md:text-[10px] text-primary/70 block truncate">
+            {payment.commerce_order}
+          </span>
+        )}
+        {payment.status === "rechazado" && payment.admin_note && (
+          <span className="font-[family-name:var(--font-body-sm)] text-[11px] text-red-400/80 block truncate">
+            {payment.admin_note}
+          </span>
+        )}
       </div>
 
       <span className="font-[family-name:var(--font-body-md)] text-[13px] md:text-[14px] text-on-surface font-medium w-20 md:w-24 text-right shrink-0">
@@ -51,7 +65,13 @@ export default function PaymentRow({ payment }: { payment: PaymentData }) {
       </span>
 
       <div className="w-18 md:w-20 shrink-0">
-        <StatusBadge status={payment.status} />
+        {isTransferPending ? (
+          <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-3 py-1 rounded-full border bg-blue-500/10 text-blue-400 border-blue-500/20">
+            En revisión
+          </span>
+        ) : (
+          <StatusBadge status={payment.status} />
+        )}
       </div>
 
       {payment.receipt_url && (

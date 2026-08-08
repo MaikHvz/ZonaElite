@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   birth_date date,
   photo_url text,
   active boolean DEFAULT true NOT NULL,
+  rut text,
   created_at timestamptz DEFAULT now() NOT NULL,
   updated_at timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT profiles_pkey PRIMARY KEY (id)
@@ -143,9 +144,14 @@ CREATE TABLE IF NOT EXISTS public.academy_settings (
   social_links jsonb,
   integrations jsonb,
   qr_alert_duration integer DEFAULT 4 NOT NULL,
+  payment_settings jsonb,
   updated_at timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT academy_settings_pkey PRIMARY KEY (id)
 );
+
+UPDATE public.academy_settings
+SET payment_settings = '{"memberships":"online","personalized":"online","enrollment":"online","bank":null}'::jsonb
+WHERE payment_settings IS NULL;
 
 CREATE TABLE IF NOT EXISTS public.disciplines (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -314,6 +320,11 @@ CREATE TABLE IF NOT EXISTS public.payments (
   beneficiary_id uuid,
   include_enrollment boolean DEFAULT false NOT NULL,
   enrollment_plan_id uuid,
+  membership_plan_id uuid REFERENCES public.membership_plans(id),
+  personalized_plan_id uuid REFERENCES public.personalized_plans(id),
+  reviewed_by uuid,
+  reviewed_at timestamptz,
+  admin_note text,
   CONSTRAINT payments_pkey PRIMARY KEY (id)
 );
 
@@ -505,6 +516,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_memberships_one_active ON public.membershi
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON public.payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON public.payments(status);
 CREATE INDEX IF NOT EXISTS idx_payments_flow_token ON public.payments(flow_token);
+CREATE INDEX IF NOT EXISTS idx_payments_manual_pending ON public.payments(method) WHERE method = 'transferencia' AND status = 'pendiente';
+CREATE INDEX IF NOT EXISTS idx_payments_reviewed_by ON public.payments(reviewed_by);
+CREATE INDEX IF NOT EXISTS idx_payments_membership_plan ON public.payments(membership_plan_id);
+CREATE INDEX IF NOT EXISTS idx_payments_personalized_plan ON public.payments(personalized_plan_id);
 CREATE INDEX IF NOT EXISTS idx_product_orders_user_id ON public.product_orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON public.order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_schedules_discipline_id ON public.schedules(discipline_id);

@@ -18,6 +18,7 @@ export default function PerfilPage() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [birthDate, setBirthDate] = useState("");
+  const [rut, setRut] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -37,6 +38,7 @@ export default function PerfilPage() {
           setFullName(data.full_name || "");
           setPhone(data.phone || "");
           setBirthDate(data.birth_date || "");
+          setRut(data.rut || "");
         }
       });
     }
@@ -50,6 +52,7 @@ export default function PerfilPage() {
       full_name: fullName,
       phone: phone || undefined,
       birth_date: birthDate || undefined,
+      rut: rut || undefined,
     });
     if (error) setSaveMsg(error);
     else {
@@ -173,6 +176,18 @@ export default function PerfilPage() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+56 9 0000 0000"
+                  className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
+                />
+              </div>
+              <div>
+                <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  RUT
+                </label>
+                <input
+                  type="text"
+                  value={rut}
+                  onChange={(e) => setRut(e.target.value)}
+                  placeholder="11.222.333-4"
                   className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
                 />
               </div>
