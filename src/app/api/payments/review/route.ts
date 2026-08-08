@@ -130,7 +130,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "La solicitud ya fue revisada" }, { status: 409 });
       }
 
-      await notifyUserPaymentStatus(admin, payment, "rejected");
+      await notifyUserPaymentStatus(admin, payment, "rejected", adminNote || undefined);
       await notifyTransferReviewEmail("rejected", payment, adminNote || undefined);
       console.log(ROUTE_LOG, "Transfer payment rejected:", paymentId);
 
@@ -145,6 +145,7 @@ export async function POST(request: Request) {
         paid_at: new Date().toISOString(),
         reviewed_by: user.id,
         reviewed_at: new Date().toISOString(),
+        admin_note: adminNote || null,
       })
       .eq("id", paymentId)
       .eq("status", "pendiente")
@@ -183,8 +184,8 @@ export async function POST(request: Request) {
       );
     }
 
-    await notifyUserPaymentStatus(admin, payment, "approved");
-    await notifyTransferReviewEmail("approved", payment);
+    await notifyUserPaymentStatus(admin, payment, "approved", adminNote || undefined);
+    await notifyTransferReviewEmail("approved", payment, adminNote || undefined);
     console.log(ROUTE_LOG, "Transfer payment approved:", paymentId);
 
     return NextResponse.json({ ok: true, status: "pagado" });

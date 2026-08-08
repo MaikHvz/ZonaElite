@@ -184,8 +184,8 @@ export async function sendTransferReviewEmail(data: TransferReviewEmailData) {
   }).format(amount || 0);
 
   const noteBlock = adminNote
-    ? `<div class="credentials" style="border-color:rgba(255,84,76,0.35);">
-      <div class="label">Motivo del rechazo</div>
+    ? `<div class="credentials" style="border-color:${isApproved ? "rgba(99,202,156,0.35)" : "rgba(255,84,76,0.35)"};">
+      <div class="label">${isApproved ? "Nota del administrador" : "Motivo del rechazo"}</div>
       <div class="value">${adminNote}</div>
     </div>`
     : "";
@@ -234,7 +234,7 @@ export async function sendTransferReviewEmail(data: TransferReviewEmailData) {
         ? `<p>Tu pago por transferencia fue aprobado y el beneficio ya está asignado. Puedes ver el detalle en la sección "Mis Solicitudes de Pago" de tu panel.</p>`
         : `<p>Lamentablemente tu solicitud de pago por transferencia fue rechazada por el administrador. Revisa el motivo y, si corresponde, vuelve a intentarlo.</p>`}
       ${rows}
-      ${!isApproved ? noteBlock : ""}
+      ${noteBlock}
       <div style="text-align:center;">
         <a href="${solicitudesUrl}" class="btn">Ver Mis Solicitudes de Pago</a>
       </div>

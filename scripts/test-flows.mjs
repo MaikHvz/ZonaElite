@@ -1509,11 +1509,11 @@ ok("T: review solo acepta transferencia pendiente",
   /if \(payment\.method !== "transferencia"\)[\s\S]*?if \(payment\.status !== "pendiente"\)/.test(reviewRouteT));
 ok("T: rechazo guarda status+admin_note y notifica rejected",
   /\.update\(\{[\s\S]*?status: "rechazado",[\s\S]*?admin_note: adminNote \|\| null,[\s\S]*?\)\s*\.eq\("id", paymentId\)\s*\.eq\("status", "pendiente"\)/.test(reviewRouteT) &&
-  /notifyUserPaymentStatus\(admin, payment, "rejected"\)/.test(reviewRouteT));
+  /notifyUserPaymentStatus\(admin, payment, "rejected", adminNote \|\| undefined\)/.test(reviewRouteT));
 ok("T: rechazo envía correo al usuario con motivo (notifyTransferReviewEmail rejected)",
   /await notifyTransferReviewEmail\("rejected", payment, adminNote \|\| undefined\)/.test(reviewRouteT));
 ok("T: aprobación usa guard de concurrencia (UPDATE...WHERE status='pendiente')",
-  /\.update\(\{[\s\S]*?status: "pagado",[\s\S]*?reviewed_by: user\.id,[\s\S]*?\)\s*\.eq\("id", paymentId\)\s*\.eq\("status", "pendiente"\)/.test(reviewRouteT));
+  /\.update\(\{[\s\S]*?status: "pagado",[\s\S]*?reviewed_by: user\.id,[\s\S]*?admin_note: adminNote \|\| null,[\s\S]*?\)\s*\.eq\("id", paymentId\)\s*\.eq\("status", "pendiente"\)/.test(reviewRouteT));
 ok("T: aprobación asigna con createMembershipForPayment y override de plan",
   /createMembershipForPayment\(admin, paymentId, payment\.user_id, payment\.membership_plan_id\)/.test(reviewRouteT));
 ok("T: aprobación asigna packs personalizados con confirmPersonalizedPack y override",
@@ -1527,9 +1527,11 @@ ok("T: fallo en alguno de los dos beneficios dispara notifyPaymentWithoutMembers
 ok("T: fallo de asignación tras aprobar notifica notifyPaymentWithoutMembership",
   /if \(assignment && !assignment\.success\)[\s\S]*?notifyPaymentWithoutMembership\(admin, payment, assignment\.error/.test(reviewRouteT));
 ok("T: aprobación notifica approved al usuario",
-  /notifyUserPaymentStatus\(admin, payment, "approved"\)/.test(reviewRouteT));
+  /notifyUserPaymentStatus\(admin, payment, "approved", adminNote \|\| undefined\)/.test(reviewRouteT));
 ok("T: aprobación envía correo al usuario (notifyTransferReviewEmail approved)",
-  /await notifyTransferReviewEmail\("approved", payment\)/.test(reviewRouteT));
+  /await notifyTransferReviewEmail\("approved", payment, adminNote \|\| undefined\)/.test(reviewRouteT));
+ok("T: aprobación persiste admin_note para que el usuario la vea",
+  /status: "pagado",[\s\S]*?reviewed_by: user\.id,[\s\S]*?reviewed_at: new Date\(\)\.toISOString\(\),[\s\S]*?admin_note: adminNote \|\| null/.test(reviewRouteT));
 ok("T: notifyTransferReviewEmail consulta email del usuario y apunta a #solicitudes",
   /async function notifyTransferReviewEmail\([\s\S]*?\.from\("profiles"\)[\s\S]*?\.select\("email, full_name, rut"\)[\s\S]*?\.eq\("id", payment\.user_id\)[\s\S]*?if \(!profile\?\.email\)[\s\S]*?sendTransferReviewEmail\(\{[\s\S]*?solicitudesUrl: `\$\{base\}\/dashboard\/pagos#solicitudes`/.test(reviewRouteT));
 ok("T: review select incluye amount y commerce_order para el correo",
@@ -1554,6 +1556,9 @@ ok("T: membresía aprobada corre desde fecha de aprobación (start_date = getChi
   /const today = getChileToday\(\);[\s\S]*?start_date: today,/.test(flowHelpersT));
 ok("T: regresión — confirmación Flow usa el wrapper (sin override)",
   /confirmAndCreateMembership/.test(readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8")));
+ok("T: notifyUserPaymentStatus acepta adminNote opcional y la incluye en el content",
+  /notifyUserPaymentStatus\(\s*\n?\s*supabase: SupabaseClient,/.test(flowHelpersT) &&
+  /adminNote\?: string[\s\S]*?const noteLine = adminNote \? `\\nNota del administrador: \$\{adminNote\}` : "";[\s\S]*?content: msg\.content \+ noteLine/.test(flowHelpersT));
 
 // T8. Correo de solicitud de transferencia
 ok("T: email exporta sendTransferRequestEmail con voucherUrl como enlace",
@@ -1569,8 +1574,9 @@ ok("T: email exporta sendTransferReviewEmail (aprobada/rechazada → Mis Solicit
   /export async function sendTransferReviewEmail\(data: TransferReviewEmailData\)/.test(emailT));
 ok("T: correo de revisión dirige a la sección Mis Solicitudes de Pago",
   /\$\{solicitudesUrl\}" class="btn">Ver Mis Solicitudes de Pago/.test(emailT));
-ok("T: correo de rechazo incluye el motivo (adminNote)",
-  /Motivo del rechazo[\s\S]*?\$\{adminNote\}/.test(emailT));
+ok("T: correo de revisión incluye nota en ambos outcomes con label según outcome",
+  /const noteBlock = adminNote[\s\S]*?\$\{isApproved \? "Nota del administrador" : "Motivo del rechazo"\}[\s\S]*?\$\{adminNote\}/.test(emailT) &&
+  /\$\{rows\}\r?\n      \$\{noteBlock\}/.test(emailT));
 ok("T: asunto de aprobación vs rechazo difieren",
   /subject: `\$\{academyName\} — \$\{isApproved \? "Pago por transferencia aprobado" : "Solicitud de pago rechazada"\} \(\$\{reference\}\)`/.test(emailT));
 
@@ -1601,6 +1607,8 @@ ok("T: PaymentRow marca 'En revisión' para transferencia pendiente",
   /En revisión/.test(paymentRowT));
 ok("T: PaymentRow muestra referencia y nota de rechazo",
   /showReference =[\s\S]*?isTransferPending && payment\.commerce_order;[\s\S]*?payment\.commerce_order[\s\S]*?payment\.status === "rechazado" && payment\.admin_note/.test(paymentRowT));
+ok("T: PaymentRow muestra nota del admin en pagado (aprobación con nota)",
+  /payment\.status === "pagado" && payment\.admin_note[\s\S]*?Nota: \{payment\.admin_note\}/.test(paymentRowT));
 
 // T11. Admin ventas: tab Solicitudes + revisión
 ok("T: admin/ventas tiene tab Solicitudes con badge de pendientes",
@@ -1616,6 +1624,16 @@ ok("T: modal de revisión permite aprobar o rechazar con nota",
 ok("T: componente SolicitudesSection existe en el page",
   /function SolicitudesSection\(/.test(adminVentasT) &&
   /requests\.map\(\(p\) => \{[\s\S]*?onReview\(p\)/.test(adminVentasT));
+ok("T: admin/ventas muestra nota del admin también en aprobadas (SolicitudesSection)",
+  /p\.admin_note && \([\s\S]*?p\.status === "pagado" \? "text-green-400\/80" : "text-red-400\/80"[\s\S]*?Nota: \{p\.admin_note\}/.test(adminVentasT));
+ok("T: admin/ventas da feedback post-revisión con toast de éxito",
+  adminVentasT.includes('from "@/components/admin/Toast"') &&
+  /const \[toast, setToast\] = useState<\{ msg: string; type: "success" \| "error" \} \| null>\(null\);/.test(adminVentasT) &&
+  /Solicitud aprobada y pago registrado\. El usuario fue notificado\./.test(adminVentasT) &&
+  /Solicitud rechazada\. El usuario fue notificado\./.test(adminVentasT) &&
+  /<Toast message=\{toast\.msg\} type=\{toast\.type\} onClose=\{\(\) => setToast\(null\)\} \/>/.test(adminVentasT));
+ok("T: modal de revisión aclara que la nota es visible para el usuario (aprobación y rechazo)",
+  /Nota \(opcional, visible para el usuario\)/.test(adminVentasT));
 
 // T12. Admin configuración (toggle por tipo) + perfil (RUT)
 ok("T: admin/configuracion renderiza la tarjeta Modo de Pago con toggle por tipo",
@@ -1642,7 +1660,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 4);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 5);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -1698,6 +1716,8 @@ ok("T: panel muestra estado, motivo de rechazo (admin_note) y comprobante",
   /rechazado:[\s\S]*?Rechazada/.test(transferRequestsPanelT) &&
   /p\.admin_note \|\| "Sin motivo especificado\."/.test(transferRequestsPanelT) &&
   /p\.receipt_url/.test(transferRequestsPanelT));
+ok("T: panel muestra nota del admin en aprobaciones (verde, 'Nota del administrador')",
+  /p\.status === "pagado" && p\.admin_note[\s\S]*?Nota del administrador[\s\S]*?text-green-300[\s\S]*?\{p\.admin_note\}/.test(transferRequestsPanelT));
 ok("T: pagos page incluye banner + panel con ancla #solicitudes",
   /<UserPendingTransferBanner \/>/.test(dashboardPagosT) &&
   /id="solicitudes"[\s\S]*?<TransferRequestsPanel \/>/.test(dashboardPagosT));
@@ -1816,6 +1836,22 @@ ok("W: 016 resumen cubre edición y validación del RUT",
 ok("W: esquema documentado refleja el seed v1.1.2",
   /'v1\.1\.2'/.test(schemaSqlT) &&
   /'Editar Cargas y Validación de RUT'/.test(schemaSqlT));
+
+// X. Changelog v1.2.0 (migración 017: nota en aprobaciones + feedback)
+const migration017 = readFileSync(join(ROOT, "contexto", "migrations", "017_changelog_v1_2_0.sql"), "utf8");
+ok("X: 017 inserta entrada v1.2.0 con título 'Nota del Administrador en Aprobaciones y Mejor Feedback'",
+  /INSERT INTO public\.changelog \(version, title, summary\)/.test(migration017) &&
+  /'v1\.2\.0'/.test(migration017) &&
+  /'Nota del Administrador en Aprobaciones y Mejor Feedback'/.test(migration017));
+ok("X: 017 seed es idempotente (ON CONFLICT version DO NOTHING)",
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration017));
+ok("X: 017 resumen cubre nota en aprobaciones y feedback para ambos lados",
+  /Nota del administrador/.test(migration017) &&
+  /Mis Solicitudes de Pago/.test(migration017) &&
+  /confirmación visual/.test(migration017));
+ok("X: esquema documentado refleja el seed v1.2.0",
+  /'v1\.2\.0'/.test(schemaSqlT) &&
+  /'Nota del Administrador en Aprobaciones y Mejor Feedback'/.test(schemaSqlT));
 
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

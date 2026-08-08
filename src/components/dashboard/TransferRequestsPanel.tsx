@@ -130,6 +130,21 @@ export default function TransferRequestsPanel() {
                         </div>
                       </div>
                     )}
+                    {p.status === "pagado" && p.admin_note && (
+                      <div className="mt-2 flex items-start gap-2 rounded-lg bg-green-500/10 border border-green-500/20 p-2.5">
+                        <span className="material-symbols-outlined text-green-400 text-[16px] shrink-0">
+                          info
+                        </span>
+                        <div>
+                          <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-green-400">
+                            Nota del administrador
+                          </p>
+                          <p className="font-[family-name:var(--font-body-md)] text-[12px] text-green-300">
+                            {p.admin_note}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     {p.status === "pendiente" && (
                       <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-blue-400/80 mt-1">
                         Estamos revisando tu comprobante. Te avisaremos cuando esté lista.

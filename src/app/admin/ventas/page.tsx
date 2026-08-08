@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import StatusBadge from "@/components/admin/StatusBadge";
+import Toast from "@/components/admin/Toast";
 import { exportProfessionalExcel, type ProfessionalSheetConfig } from "@/lib/excel";
 
 interface Payment {
@@ -78,6 +79,7 @@ export default function AdminVentasPage() {
   const [adminNote, setAdminNote] = useState("");
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const handleExportExcel = async () => {
     const now = new Date();
@@ -233,6 +235,13 @@ export default function AdminVentasPage() {
       }
       setReviewTarget(null);
       setAdminNote("");
+      setToast({
+        msg:
+          action === "aprobar"
+            ? "Solicitud aprobada y pago registrado. El usuario fue notificado."
+            : "Solicitud rechazada. El usuario fue notificado.",
+        type: "success",
+      });
       await loadRequests();
       await loadData();
     } catch {
@@ -881,7 +890,7 @@ export default function AdminVentasPage() {
 
               <div>
                 <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">
-                  Nota (opcional, visible para el usuario al rechazar)
+                  Nota (opcional, visible para el usuario)
                 </label>
                 <textarea
                   value={adminNote}
@@ -928,6 +937,7 @@ export default function AdminVentasPage() {
           </div>
         </div>
       )}
+      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
@@ -1027,8 +1037,12 @@ function SolicitudesSection({
                       {getBeneficiaryName(p)} · {new Date(p.created_at).toLocaleDateString("es-CL")}{" "}
                       {p.commerce_order && <span className="text-primary/80">· {p.commerce_order}</span>}
                     </p>
-                    {p.status === "rechazado" && p.admin_note && (
-                      <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-red-400/80 mt-1">
+                    {p.admin_note && (
+                      <p
+                        className={`font-[family-name:var(--font-body-sm)] text-[12px] mt-1 ${
+                          p.status === "pagado" ? "text-green-400/80" : "text-red-400/80"
+                        }`}
+                      >
                         Nota: {p.admin_note}
                       </p>
                     )}

@@ -58,6 +58,11 @@ export default function PaymentRow({ payment }: { payment: PaymentData }) {
             {payment.admin_note}
           </span>
         )}
+        {payment.status === "pagado" && payment.admin_note && (
+          <span className="font-[family-name:var(--font-body-sm)] text-[11px] text-green-400/80 block truncate">
+            Nota: {payment.admin_note}
+          </span>
+        )}
       </div>
 
       <span className="font-[family-name:var(--font-body-md)] text-[13px] md:text-[14px] text-on-surface font-medium w-20 md:w-24 text-right shrink-0">

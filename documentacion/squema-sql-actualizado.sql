@@ -1647,3 +1647,12 @@ VALUES (
   E'• En la sección "Mis Cargas" del panel del usuario, ahora puedes editar los datos de cada carga (nombre, RUT, fecha de nacimiento y categoría) con el botón "Editar datos".\n• El RUT se valida automáticamente con el formato chileno (dígito verificador): si el RUT ingresado no es válido, se muestra un aviso y no se guarda. La validación aplica tanto al agregar como al editar cargas.'
 )
 ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.2.0 — Nota del administrador en aprobaciones + mejor feedback
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.2.0',
+  'Nota del Administrador en Aprobaciones y Mejor Feedback',
+  E'• Ahora, al aprobar un pago por transferencia, el administrador puede dejar una nota (aunque todo esté en orden). La nota queda guardada y el usuario la ve en su panel "Mis Solicitudes de Pago", en el historial de pagos, en la notificación y en el correo.\n• El correo de aprobación ahora muestra la nota con la etiqueta "Nota del administrador" (y el rechazo conserva "Motivo del rechazo").\n• El administrador recibe una confirmación visual tras aprobar o rechazar una solicitud, y la lista de solicitudes muestra la nota tanto en aprobadas como en rechazadas.'
+)
+ON CONFLICT (version) DO NOTHING;

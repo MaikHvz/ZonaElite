@@ -436,7 +436,8 @@ export async function notifyUserPaymentStatus(
     concept?: string | null;
     beneficiary_id?: string | null;
   },
-  outcome: PaymentNotificationOutcome
+  outcome: PaymentNotificationOutcome,
+  adminNote?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { data: existing } = await supabase
@@ -493,10 +494,12 @@ export async function notifyUserPaymentStatus(
 
     const msg = messages[outcome];
 
+    const noteLine = adminNote ? `\nNota del administrador: ${adminNote}` : "";
+
     const { error } = await supabase.from("user_notifications").insert({
       user_id: payment.user_id,
       title: msg.title,
-      content: msg.content,
+      content: msg.content + noteLine,
       read: false,
     });
 
