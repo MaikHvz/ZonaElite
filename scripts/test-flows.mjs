@@ -1407,6 +1407,9 @@ const adminConfigT = readFileSync(join(ROOT, "src", "app", "admin", "configuraci
 const perfilT = readFileSync(join(ROOT, "src", "app", "perfil", "page.tsx"), "utf8");
 const adminUsuariosT = readFileSync(join(ROOT, "src", "app", "admin", "usuarios", "page.tsx"), "utf8");
 const dataTableT = readFileSync(join(ROOT, "src", "components", "admin", "DataTable.tsx"), "utf8");
+const createDependentRouteT = readFileSync(join(ROOT, "src", "app", "api", "admin", "create-dependent", "route.ts"), "utf8");
+const updateDependentRouteT = readFileSync(join(ROOT, "src", "app", "api", "admin", "update-dependent", "route.ts"), "utf8");
+const createDependentModalT = readFileSync(join(ROOT, "src", "components", "admin", "CreateDependentModal.tsx"), "utf8");
 
 // T1. Migración 013: contrato de la columna de configuración
 ok("T: 013 agrega payment_settings jsonb a academy_settings (idempotente)",
@@ -1698,15 +1701,47 @@ ok("T: dashboard.ts expone getUserTransferRequests (method='transferencia' por u
 // U. RUT visible y filtrable en admin/usuarios
 ok("U: UserRow tipa rut (string | null)",
   /interface UserRow \{[\s\S]*?rut\?: string \| null;[\s\S]*?_isDependent\?: boolean;/.test(adminUsuariosT));
-ok("U: admin/usuarios muestra columna RUT (— para dependientes)",
-  /key: "rut", label: "RUT", render: \(u\) => u\._isDependent \? "—" : \(u\.rut \|\| "—"\)/.test(adminUsuariosT));
+ok("U: admin/usuarios muestra columna RUT (u.rut o —)",
+  /key: "rut", label: "RUT", render: \(u\) => u\.rut \|\| "—"/.test(adminUsuariosT));
+ok("U: carga RUT desde profiles (select *) y desde dependents (select rut)",
+  /\.from\("dependents"\)\.select\("id, full_name, tutor_id, birth_date, category, rut, created_at"\)/.test(adminUsuariosT) &&
+  /rut: d\.rut \|\| null,[\s\S]*?_isDependent: true,/.test(adminUsuariosT));
 ok("U: búsqueda cubre nombre, email y RUT (searchKey multi-campo)",
   /searchKey=\{\["full_name", "email", "rut"\]\}[\s\S]*?Buscar por nombre, email o RUT\.\.\./.test(adminUsuariosT));
-ok("U: export Excel incluye RUT (— para dependientes)",
-  /"RUT": u\._isDependent \? "—" : \(u\.rut \|\| "—"\),/.test(adminUsuariosT));
+ok("U: export Excel incluye RUT (u.rut o —)",
+  /"RUT": u\.rut \|\| "—",/.test(adminUsuariosT));
 ok("U: DataTable acepta searchKey string | string[] y busca en cualquiera",
   /searchKey\?: string \| string\[\];/.test(dataTableT) &&
   /const keys = Array\.isArray\(searchKey\) \? searchKey : \[searchKey\];[\s\S]*?keys\.some\(/.test(dataTableT));
+
+// V. Crear y asignar carga desde admin/usuarios
+ok("V: admin/usuarios tiene botón Crear y Asignar Carga",
+  /setEditingDependent\(null\); setDependentModalOpen\(true\)[\s\S]*?Crear y Asignar Carga/.test(adminUsuariosT));
+ok("V: openEdit de carga abre el modal en modo edición (sin early return)",
+  /if \(u\._isDependent\) \{[\s\S]*?setEditingDependent\(\{[\s\S]*?tutor_id: u\._tutorId \|\| "",[\s\S]*?\}\);\s*setDependentModalOpen\(true\);[\s\S]*?return;[\s\S]*?\}\s*setEditing\(u\);/.test(adminUsuariosT));
+ok("V: página renderiza CreateDependentModal con tutors (no dependientes)",
+  /<CreateDependentModal[\s\S]*?tutors=\{users\.filter\(\(u\) => !u\._isDependent\)[\s\S]*?editingDependent=\{editingDependent\}/.test(adminUsuariosT));
+ok("V: create-dependent inserta en dependents con tutor_id y campos completos",
+  /\.from\("dependents"\)\s*\.insert\(\{[\s\S]*?tutor_id,[\s\S]*?full_name: full_name\.trim\(\),[\s\S]*?rut: rut\?\.trim\(\) \|\| null,[\s\S]*?birth_date,[\s\S]*?category,[\s\S]*?\}\s*\)[\s\S]*?\.select\("id, tutor_id, full_name, rut, birth_date, category, created_at"\)/.test(createDependentRouteT));
+ok("V: create-dependent asegura beneficiaries por dependent_id (idempotente)",
+  /\.from\("beneficiaries"\)\s*\.select\("id"\)[\s\S]*?\.eq\("dependent_id", dependent\.id\)[\s\S]*?if \(!existingBeneficiary\)[\s\S]*?\.from\("beneficiaries"\)\.insert\(\{[\s\S]*?dependent_id: dependent\.id,[\s\S]*?profile_id: null,[\s\S]*?\}\)/.test(createDependentRouteT));
+ok("V: create-dependent valida admin y categoría, registra audit_logs",
+  /role_id !== 1[\s\S]*?Solo administradores pueden crear cargas/.test(createDependentRouteT) &&
+  /VALID_CATEGORIES\.includes\(category\)/.test(createDependentRouteT) &&
+  /action: "create_dependent",[\s\S]*?entity: "dependents"/.test(createDependentRouteT));
+ok("V: update-dependent actualiza campos y registra audit_logs",
+  /\.from\("dependents"\)\s*\.update\(\{[\s\S]*?full_name: full_name\.trim\(\),[\s\S]*?rut: rut\?\.trim\(\) \|\| null,[\s\S]*?birth_date,[\s\S]*?category,[\s\S]*?\}\)[\s\S]*?\.eq\("id", dependent_id\)/.test(updateDependentRouteT) &&
+  /action: "update_dependent",[\s\S]*?entity: "dependents"/.test(updateDependentRouteT));
+ok("V: CreateDependentModal tiene selector de tutor + campos nombre/rut/fecha/categoría",
+  /Usuario tutor \(padre\/madre\) \*/.test(createDependentModalT) &&
+  /Nombre completo \*/.test(createDependentModalT) &&
+  /RUT \(opcional\)/.test(createDependentModalT) &&
+  /Fecha de nacimiento \*/.test(createDependentModalT) &&
+  /Categoría \*/.test(createDependentModalT) &&
+  /setCategory\(cat\)[\s\S]*?cat === "nino" \? "Niño" : "Adulto"/.test(createDependentModalT));
+ok("V: CreateDependentModal llama a create/update según modo y valida tutor",
+  /editingDependent \? "\/api\/admin\/update-dependent" : "\/api\/admin\/create-dependent"/.test(createDependentModalT) &&
+  /Debes seleccionar el usuario al que se asignará la carga/.test(createDependentModalT));
 
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

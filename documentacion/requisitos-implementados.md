@@ -168,15 +168,24 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 
 
 ## 17. Pago Manual por Transferencia (2026-08-08)
-**Requisito**: Modo de pago manual por transferencia como alternativa a Flow.cl, activable por tipo de producto (Membresías / Clases Personalizadas / Inscripciones). Cuando un tipo está en modo manual, el checkout no inicia Flow: muestra los datos bancarios de la academia y un formulario para que el usuario suba el comprobante (voucher). El admin recibe correo + notificación in-app, revisa el voucher en `/admin/ventas` (tab "Solicitudes") y aprueba o rechaza la solicitud; al aprobar se asigna el beneficio (sustitución de membresía activa / apilamiento de packs / extensión de inscripción), al rechazar queda `rechazado` con nota visible.
-- **Implementación**:
-  - `academy_settings.payment_settings` jsonb (migración `013_manual_payment_mode.sql`): `{ memberships, personalized, enrollment }` cada uno `"online"|"manual"` + `bank` (datos bancarios). Librería isomórfica `src/lib/payment-settings.ts`. UI de toggle por tipo + datos bancarios en `admin/configuracion`.
-  - `payments` + `membership_plan_id`, `personalized_plan_id`, `reviewed_by`, `reviewed_at`, `admin_note`; `profiles.rut` nullable; 4 índices nuevos (incl. parcial `idx_payments_manual_pending`).
+**Requisito**: Modo de pago manual por transferencia como alternativa a Flow.cl, activable por tipo de producto (Membresï¿½as / Clases Personalizadas / Inscripciones). Cuando un tipo estï¿½ en modo manual, el checkout no inicia Flow: muestra los datos bancarios de la academia y un formulario para que el usuario suba el comprobante (voucher). El admin recibe correo + notificaciï¿½n in-app, revisa el voucher en `/admin/ventas` (tab "Solicitudes") y aprueba o rechaza la solicitud; al aprobar se asigna el beneficio (sustituciï¿½n de membresï¿½a activa / apilamiento de packs / extensiï¿½n de inscripciï¿½n), al rechazar queda `rechazado` con nota visible.
+- **Implementaciï¿½n**:
+  - `academy_settings.payment_settings` jsonb (migraciï¿½n `013_manual_payment_mode.sql`): `{ memberships, personalized, enrollment }` cada uno `"online"|"manual"` + `bank` (datos bancarios). Librerï¿½a isomï¿½rfica `src/lib/payment-settings.ts`. UI de toggle por tipo + datos bancarios en `admin/configuracion`.
+  - `payments` + `membership_plan_id`, `personalized_plan_id`, `reviewed_by`, `reviewed_at`, `admin_note`; `profiles.rut` nullable; 4 ï¿½ndices nuevos (incl. parcial `idx_payments_manual_pending`).
   - `POST /api/payments/transfer`: valida modo manual + banco + voucher (JPG/PNG/WebP/GIF/PDF =5MB) + beneficiario + plan/monto; sube voucher a `public/vouchers`, inserta `payments` `method='transferencia'` `status='pendiente'` `commerce_order='REF-ZE-xxxxxx'`; notifica staff + `sendTransferRequestEmail` a todos los admins (enlaza voucher, no adjunta).
-  - `POST /api/payments/review`: solo admin; rechazo ? `rechazado` + `admin_note` + notificación; aprobación ? guard de concurrencia `UPDATE ... WHERE status='pendiente'`, marca `pagado` y asigna con `createMembershipForPayment`/`confirmPersonalizedPack` (override de plan) o `extendEnrollment`.
-  - Guarda en `create-order`: tipo en `manual` ? 400 "El pago online está desactivado para este producto. Usa transferencia."
-  - UI cliente: `TransferPaymentStep` (datos bancarios + copiar, RUT autocargado, upload voucher, estado enviado) integrado en `CheckoutModal` y `PersonalizedCheckoutModal` (botón "Pagar por transferencia"); `PaymentRow` muestra "En revisión" + referencia + nota de rechazo.
-  - UI admin: tab "Solicitudes" en `admin/ventas` con badge de pendientes, filtros, modal de revisión con voucher (img/iframe PDF) y aprobar/rechazar.
+  - `POST /api/payments/review`: solo admin; rechazo ? `rechazado` + `admin_note` + notificaciï¿½n; aprobaciï¿½n ? guard de concurrencia `UPDATE ... WHERE status='pendiente'`, marca `pagado` y asigna con `createMembershipForPayment`/`confirmPersonalizedPack` (override de plan) o `extendEnrollment`.
+  - Guarda en `create-order`: tipo en `manual` ? 400 "El pago online estï¿½ desactivado para este producto. Usa transferencia."
+  - UI cliente: `TransferPaymentStep` (datos bancarios + copiar, RUT autocargado, upload voucher, estado enviado) integrado en `CheckoutModal` y `PersonalizedCheckoutModal` (botï¿½n "Pagar por transferencia"); `PaymentRow` muestra "En revisiï¿½n" + referencia + nota de rechazo.
+  - UI admin: tab "Solicitudes" en `admin/ventas` con badge de pendientes, filtros, modal de revisiï¿½n con voucher (img/iframe PDF) y aprobar/rechazar.
   - Perfil: campo RUT (state, load, save).
-- **Migración**: `contexto/migrations/013_manual_payment_mode.sql` (creada; **pendiente aplicar en Supabase**). Espejo 1:1 en `documentacion/squema-sql-actualizado.sql`.
+- **Migraciï¿½n**: `contexto/migrations/013_manual_payment_mode.sql` (creada; **pendiente aplicar en Supabase**). Espejo 1:1 en `documentacion/squema-sql-actualizado.sql`.
 - **Estado**: Implementado. Suite secciones A-T en verde (396 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Requisito/detalle en `contexto/requisitos/pago-manual-transferencia.md`.
+
+## 18. Crear y Asignar Carga desde Panel Admin (2026-08-08)
+**Requisito**: El administrador debe poder crear una carga (hijo/familiar) y asignarla a un usuario (profile padre) directamente desde `/admin/usuarios`, con todos sus datos (nombre, RUT, fecha de nacimiento, categorÃ­a), comportÃ¡ndose igual que una carga creada por el propio usuario.
+- **ImplementaciÃ³n**:
+  - BotÃ³n "Crear y Asignar Carga" en `/admin/usuarios` â†’ `CreateDependentModal` (`src/components/admin/CreateDependentModal.tsx`) con selector del usuario tutor (padre/madre) + campos `full_name`, `rut`, `birth_date`, `category`.
+  - `POST /api/admin/create-dependent` (server-only, admin client, patrÃ³n de `create-user`): valida sesiÃ³n/rol/categorÃ­a, inserta en `dependents` (con `tutor_id` del profile seleccionado) y **asegura** el registro en `beneficiaries` con `dependent_id` (idempotente: select previo por `dependent_id`, insert si no existe) para que la carga quede usable en checkout/membresÃ­as. Registra en `audit_logs`.
+  - `POST /api/admin/update-dependent`: edita los datos de una carga existente desde la tabla (el `onEdit` de filas dependientes ya no retorna temprano).
+  - `beneficiaries` no tiene policy INSERT para browser client (solo SELECT), por eso la creaciÃ³n/beneficiary va por API con admin client.
+- **Estado**: Implementado. Suite secciones A-V en verde (439 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Requisito/detalle en `contexto/requisitos/crear-carga-admin.md`. Sin cambios de esquema (no requiere migraciÃ³n).

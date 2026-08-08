@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
+import CreateDependentModal from "@/components/admin/CreateDependentModal";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
@@ -28,7 +29,7 @@ interface UserRow {
 }
 
 interface Role { id: number; name: string; }
-interface Dependent { id: string; full_name: string; tutor_id: string; birth_date: string; category: string; }
+interface Dependent { id: string; full_name: string; tutor_id: string; birth_date: string; category: string; rut?: string | null; created_at?: string; }
 
 const ROLE_LABELS: Record<number, string> = { 1: "Administrador", 2: "Instructor", 3: "Recepción", 4: "Alumno" };
 
@@ -50,6 +51,16 @@ export default function AdminUsuariosPage() {
   const [resultModalOpen, setResultModalOpen] = useState(false);
   const [createdUser, setCreatedUser] = useState<{ email: string; full_name: string } | null>(null);
   const [tempPassword, setTempPassword] = useState("");
+
+  const [dependentModalOpen, setDependentModalOpen] = useState(false);
+  const [editingDependent, setEditingDependent] = useState<{
+    id: string;
+    full_name: string;
+    rut: string | null;
+    birth_date: string | null;
+    category: string;
+    tutor_id: string;
+  } | null>(null);
 
   const handleExportExcel = async () => {
     setExporting(true);
@@ -152,7 +163,7 @@ export default function AdminUsuariosPage() {
         reportData.push({
           "Nombre": u.full_name,
           "Email": u.email,
-          "RUT": u._isDependent ? "—" : (u.rut || "—"),
+          "RUT": u.rut || "—",
           "Teléfono": u.phone || "—",
           "Rol / Tipo": rolTipo,
           "Tutor (si es carga)": u._tutorName || "—",
@@ -262,7 +273,7 @@ export default function AdminUsuariosPage() {
     const [uRes, rRes, dRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("roles").select("*").order("id"),
-      supabase.from("dependents").select("id, full_name, tutor_id, birth_date, category, created_at"),
+      supabase.from("dependents").select("id, full_name, tutor_id, birth_date, category, rut, created_at"),
     ]);
 
     const profiles = (uRes.data as UserRow[]) || [];
@@ -284,6 +295,7 @@ export default function AdminUsuariosPage() {
           active: true,
           created_at: (d as any).created_at || p.created_at,
           birth_date: d.birth_date,
+          rut: d.rut || null,
           _isDependent: true,
           _tutorName: p.full_name,
           _tutorId: p.id,
@@ -300,7 +312,18 @@ export default function AdminUsuariosPage() {
   useEffect(() => { load(); }, []);
 
   const openEdit = (u: UserRow) => {
-    if (u._isDependent) return;
+    if (u._isDependent) {
+      setEditingDependent({
+        id: u.id,
+        full_name: u.full_name,
+        rut: u.rut || null,
+        birth_date: u._birthDate || null,
+        category: u._category || "nino",
+        tutor_id: u._tutorId || "",
+      });
+      setDependentModalOpen(true);
+      return;
+    }
     setEditing(u);
     setForm({ role_id: u.role_id, active: u.active });
     setModalOpen(true);
@@ -371,6 +394,13 @@ export default function AdminUsuariosPage() {
             <option value="historico">Histórico Completo</option>
           </select>
           <button
+            onClick={() => { setEditingDependent(null); setDependentModalOpen(true); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase"
+          >
+            <span className="material-symbols-outlined text-[18px]">child_care</span>
+            Crear y Asignar Carga
+          </button>
+          <button
             onClick={() => setCreateModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase"
           >
@@ -412,7 +442,7 @@ export default function AdminUsuariosPage() {
             return ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`;
           }},
           { key: "phone", label: "Teléfono", render: (u) => u._isDependent ? "—" : (u.phone || "—") },
-          { key: "rut", label: "RUT", render: (u) => u._isDependent ? "—" : (u.rut || "—") },
+          { key: "rut", label: "RUT", render: (u) => u.rut || "—" },
           { key: "active", label: "Estado", render: (u) => {
             if (u._isDependent) return <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">—</span>;
             return <StatusBadge status={u.active ? "activo" : "cancelado"} />;
@@ -540,6 +570,17 @@ export default function AdminUsuariosPage() {
           </div>
         </div>
       </FormModal>
+
+      <CreateDependentModal
+        open={dependentModalOpen}
+        onClose={() => setDependentModalOpen(false)}
+        onSaved={async () => {
+          await load();
+          setToast({ msg: editingDependent ? "Carga actualizada" : "Carga creada y asignada", type: "success" });
+        }}
+        tutors={users.filter((u) => !u._isDependent).map((u) => ({ id: u.id, full_name: u.full_name, email: u.email }))}
+        editingDependent={editingDependent}
+      />
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
