@@ -1597,6 +1597,49 @@ ok("T: admin/configuracion guarda payment_settings y datos bancarios en handleSa
 ok("T: perfil agrega campo RUT (state, load, save)",
   /const \[rut, setRut\] = useState\(""\);[\s\S]*?setRut\(data\.rut \|\| ""\);[\s\S]*?rut: rut \|\| undefined,/.test(perfilT));
 
+// T13. Changelog v1.1.0 (migración 014: entrada de release para el pago manual)
+const migration014 = readFileSync(join(ROOT, "contexto", "migrations", "014_changelog_v1_1_0.sql"), "utf8");
+ok("T: 014 inserta entrada v1.1.0 con título 'Pago por Transferencia'",
+  /INSERT INTO public\.changelog \(version, title, summary\)/.test(migration014) &&
+  /'v1\.1\.0'/.test(migration014) &&
+  /'Pago por Transferencia'/.test(migration014));
+ok("T: 014 seed es idempotente (ON CONFLICT version DO NOTHING)",
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration014));
+ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
+  /Membresías, Clases Personalizadas e Inscripciones/.test(migration014) &&
+  /envía su comprobante adjunto/.test(migration014) &&
+  /"Solicitudes" de la sección Ventas/.test(migration014));
+ok("T: esquema documentado refleja el seed v1.1.0",
+  /'v1\.1\.0'/.test(schemaSqlT) &&
+  /'Pago por Transferencia'/.test(schemaSqlT) &&
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 2);
+
+// T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
+const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
+const pendingTransferBannerT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferBanner.tsx"), "utf8");
+const adminLayoutT = readFileSync(join(ROOT, "src", "app", "admin", "layout.tsx"), "utf8");
+const adminSidebarT = readFileSync(join(ROOT, "src", "components", "admin", "AdminSidebar.tsx"), "utf8");
+const adminVentasTabT = readFileSync(join(ROOT, "src", "app", "admin", "ventas", "page.tsx"), "utf8");
+ok("T: provider cuenta transferencias pendientes (poll 30s + focus)",
+  /\.from\("payments"\)[\s\S]*?\.select\("\*", \{ count: "exact", head: true \}\)[\s\S]*?\.eq\("method", "transferencia"\)[\s\S]*?\.eq\("status", "pendiente"\)/.test(pendingTransferProviderT) &&
+  /POLL_INTERVAL_MS = 30_000/.test(pendingTransferProviderT) &&
+  /window\.addEventListener\("focus"/.test(pendingTransferProviderT));
+ok("T: provider expone usePendingTransferCount y refresco manual",
+  /export function usePendingTransferCount/.test(pendingTransferProviderT) &&
+  /refresh: \(\) => void/.test(pendingTransferProviderT));
+ok("T: admin/layout envuelve con PendingTransferProvider y renderiza banner",
+  /<PendingTransferProvider>[\s\S]*?<AdminSidebar[\s\S]*?<PendingTransferBanner \/>/.test(adminLayoutT));
+ok("T: sidebar muestra badge de solicitudes pendientes en link Ventas",
+  /usePendingTransferCount\(\)/.test(adminSidebarT) &&
+  /link\.href === "\/admin\/ventas" && pendingCount > 0/.test(adminSidebarT) &&
+  /bg-red-500/.test(adminSidebarT));
+ok("T: banner grande solo cuando hay pendientes con CTA a ?tab=solicitudes",
+  /loading \|\| count === 0[\s\S]*?return null;/.test(pendingTransferBannerT) &&
+  /href="\/admin\/ventas\?tab=solicitudes"/.test(pendingTransferBannerT) &&
+  /Revisar ahora/.test(pendingTransferBannerT));
+ok("T: ventas abre tab Solicitudes con ?tab=solicitudes",
+  /URLSearchParams\(window\.location\.search\)\.get\("tab"\) === "solicitudes"[\s\S]*?"solicitudes"[\s\S]*?"pagos"/.test(adminVentasTabT));
+
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

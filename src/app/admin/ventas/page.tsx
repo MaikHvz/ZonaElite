@@ -66,7 +66,11 @@ export default function AdminVentasPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [exportTimeframe, setExportTimeframe] = useState<"mes" | "ano" | "historico">("mes");
 
-  const [activeTab, setActiveTab] = useState<"pagos" | "solicitudes">("pagos");
+  const [activeTab, setActiveTab] = useState<"pagos" | "solicitudes">(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "solicitudes"
+      ? "solicitudes"
+      : "pagos"
+  );
   const [requests, setRequests] = useState<Payment[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [requestFilter, setRequestFilter] = useState<string>("pendiente");

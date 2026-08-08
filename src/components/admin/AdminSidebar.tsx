@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { usePendingTransferCount } from "@/components/admin/PendingTransferProvider";
 
 const sidebarLinks = [
   { href: "/admin", label: "Dashboard", icon: "dashboard" },
@@ -26,6 +27,7 @@ const sidebarLinks = [
 export default function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { count: pendingCount } = usePendingTransferCount();
 
   return (
     <>
@@ -79,6 +81,16 @@ export default function AdminSidebar({ open, onClose }: { open: boolean; onClose
                 <span className={`font-[family-name:var(--font-body-md)] text-[14px] ${collapsed ? "md:hidden" : ""}`}>
                   {link.label}
                 </span>
+                {link.href === "/admin/ventas" && pendingCount > 0 && (
+                  <span
+                    className={`ml-auto flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-red-500 text-white font-[family-name:var(--font-label-md)] text-[11px] font-bold ${
+                      collapsed ? "md:hidden" : ""
+                    }`}
+                    title={`${pendingCount} ${pendingCount === 1 ? "solicitud pendiente" : "solicitudes pendientes"}`}
+                  >
+                    {pendingCount > 99 ? "99+" : pendingCount}
+                  </span>
+                )}
               </Link>
             );
           })}

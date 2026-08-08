@@ -2,6 +2,8 @@
 
 import AdminGuard from "@/components/admin/AdminGuard";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import PendingTransferBanner from "@/components/admin/PendingTransferBanner";
+import PendingTransferProvider from "@/components/admin/PendingTransferProvider";
 import { signOut } from "@/lib/supabase/auth";
 import { useSession } from "@/providers/SessionProvider";
 import Link from "next/link";
@@ -22,10 +24,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <AdminGuard>
-      <div className="flex min-h-screen bg-background">
-        <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="flex-1 flex flex-col">
-          <header className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-on-surface/5 bg-surface/80 backdrop-blur-xl">
+      <PendingTransferProvider>
+        <div className="flex min-h-screen bg-background">
+          <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+          <div className="flex-1 flex flex-col">
+            <header className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-on-surface/5 bg-surface/80 backdrop-blur-xl">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setSidebarOpen(true)}
@@ -68,9 +71,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
             </div>
           </header>
+          <PendingTransferBanner />
           <main className="flex-1 p-4 md:p-6 overflow-auto">{children}</main>
         </div>
       </div>
+      </PendingTransferProvider>
     </AdminGuard>
   );
 }

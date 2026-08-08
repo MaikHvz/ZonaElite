@@ -3,7 +3,7 @@
 ## Estado
 - **Fecha:** 2026-08-08
 - **Tipo:** Feature (modo de pago alternativo al online)
-- **Estado:** ✅ **IMPLEMENTADO — fases 0-8 completadas.** Suite secciones A-T en verde (396 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Migración `013_manual_payment_mode.sql` creada y espejada 1:1 en `documentacion/squema-sql-actualizado.sql`; **pendiente aplicar en Supabase (SQL Editor)**.
+- **Estado:** ✅ **IMPLEMENTADO — fases 0-8 completadas.** Suite secciones A-T en verde (408 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Migración `013_manual_payment_mode.sql` creada y espejada 1:1 en `documentacion/squema-sql-actualizado.sql`; **pendiente aplicar en Supabase (SQL Editor)**. Incluye feedback admin (badge en Ventas + banner con CTA) vía `PendingTransferProvider`/`PendingTransferBanner`.
 
 ## Requisito
 Flow.cl **no es legal para la venta de boletas** en el contexto del negocio. Se agrega un **modo de pago manual por transferencia** como alternativa: el admin activa este modo **por tipo de producto** (Membresías, Clases Personalizadas, Inscripciones). Cuando un tipo está en modo manual, el checkout de ese producto **no inicia Flow**: muestra los datos bancarios de la academia y un formulario para que el usuario **envíe el comprobante (voucher)** de su transferencia. El admin recibe un **correo + notificación in-app**, revisa el comprobante en `/admin/ventas` (tab "Solicitudes") y **aprueba o rechaza** la solicitud. Al aprobar, se asigna el beneficio con las mismas reglas que Flow (sustitución de membresía activa, apilamiento de packs, extensión de inscripción). Al rechazar, el pago queda `rechazado` con una nota visible para el usuario.
@@ -129,6 +129,11 @@ Notas:
 - Filtro/tab `Solicitudes` = `payments` `method='transferencia'` `status='pendiente'` (y opcional histórico por estado).
 - Cada fila: usuario, concepto, monto, fecha, referencia REF-ZE, RUT, voucher (imagen o PDF en modal), botones **Aprobar** / **Rechazar** (con nota opcional).
 - Acciones llaman `POST /api/payments/review`; refrescan la lista.
+- **Feedback en todo el panel admin** (feedback 100%):
+  - `PendingTransferProvider` (`src/components/admin/PendingTransferProvider.tsx`): cuenta las transferencias `pendiente` vía browser client con poll cada 30s + refresco al ganar foco, expone `usePendingTransferCount()`.
+  - `AdminSidebar`: badge rojo con el contador en el link **Ventas** (solo si > 0).
+  - `PendingTransferBanner` (`src/components/admin/PendingTransferBanner.tsx`): banner grande en `admin/layout` (bajo el header) con CTA "Revisar ahora" → `/admin/ventas?tab=solicitudes`.
+  - `ventas/page.tsx`: el tab inicial se lee de `?tab=solicitudes` (URLSearchParams) para abrir directo en la lista.
 
 ### Fase 6 — Notificaciones usuario / dashboard
 - `notifyUserPaymentStatus` ya cubre el aviso al aprobar/rechazar (se reutiliza).
