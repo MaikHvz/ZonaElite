@@ -197,6 +197,28 @@ export async function getUserPayments(
   });
 }
 
+export async function getUserTransferRequests(userId: string) {
+  return safeQuery(async () => {
+    const supabase = createClient();
+
+    const { data } = await supabase
+      .from("payments")
+      .select(
+        `
+        *,
+        membership:memberships(
+          plan:membership_plans(name)
+        )
+      `
+      )
+      .eq("user_id", userId)
+      .eq("method", "transferencia")
+      .order("created_at", { ascending: false });
+
+    return (data || []) as PaymentData[];
+  });
+}
+
 export async function getUserDependents(userId: string) {
   return safeQuery(async () => {
     const supabase = createClient();

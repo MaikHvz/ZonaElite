@@ -9,6 +9,8 @@ import {
 } from "@/lib/supabase/dashboard";
 import PaymentRow from "@/components/dashboard/PaymentRow";
 import { PaymentRowSkeleton } from "@/components/dashboard/DashboardSkeleton";
+import TransferRequestsPanel from "@/components/dashboard/TransferRequestsPanel";
+import UserPendingTransferBanner from "@/components/dashboard/UserPendingTransferBanner";
 import PaymentSuccessModal, {
   type PaymentSuccessDetails,
 } from "@/components/PaymentSuccessModal";
@@ -213,6 +215,12 @@ export default function PagosPage() {
       {!verifying && !verified && statusParam === "failed" && (
         <PurchaseFailedBanner />
       )}
+
+      <UserPendingTransferBanner />
+
+      <div id="solicitudes" className="scroll-mt-28">
+        <TransferRequestsPanel />
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-surface-container border border-on-surface/5 rounded-2xl p-4">

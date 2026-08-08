@@ -3,7 +3,7 @@
 ## Estado
 - **Fecha:** 2026-08-08
 - **Tipo:** Feature (modo de pago alternativo al online)
-- **Estado:** ✅ **IMPLEMENTADO — fases 0-8 completadas.** Suite secciones A-T en verde (408 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Migración `013_manual_payment_mode.sql` creada y espejada 1:1 en `documentacion/squema-sql-actualizado.sql`; **pendiente aplicar en Supabase (SQL Editor)**. Incluye feedback admin (badge en Ventas + banner con CTA) vía `PendingTransferProvider`/`PendingTransferBanner`.
+- **Estado:** ✅ **IMPLEMENTADO — fases 0-8 completadas.** Suite secciones A-T en verde (424 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Migración `013_manual_payment_mode.sql` creada y espejada 1:1 en `documentacion/squema-sql-actualizado.sql`; **pendiente aplicar en Supabase (SQL Editor)**. Incluye feedback admin (badge en Ventas + banner con CTA), feedback usuario (badge en tab Pagos + banner + panel "Mis Solicitudes de Pago" con motivo de rechazo) y **correos de revisión** que dirigen al usuario a su sección "Mis Solicitudes de Pago" y al admin a la tab "Solicitudes".
 
 ## Requisito
 Flow.cl **no es legal para la venta de boletas** en el contexto del negocio. Se agrega un **modo de pago manual por transferencia** como alternativa: el admin activa este modo **por tipo de producto** (Membresías, Clases Personalizadas, Inscripciones). Cuando un tipo está en modo manual, el checkout de ese producto **no inicia Flow**: muestra los datos bancarios de la academia y un formulario para que el usuario **envíe el comprobante (voucher)** de su transferencia. El admin recibe un **correo + notificación in-app**, revisa el comprobante en `/admin/ventas` (tab "Solicitudes") y **aprueba o rechaza** la solicitud. Al aprobar, se asigna el beneficio con las mismas reglas que Flow (sustitución de membresía activa, apilamiento de packs, extensión de inscripción). Al rechazar, el pago queda `rechazado` con una nota visible para el usuario.
@@ -14,7 +14,8 @@ Flow.cl **no es legal para la venta de boletas** en el contexto del negocio. Se 
 - **Vigencia de membresía aprobada desde la fecha de aprobación**: `start_date = getChileToday()` en el momento en que el admin confirma (no cuando el usuario transfirió).
 - **Referencia de pago: ambas** — código `REF-ZE-xxxxxx` (principal) + RUT del usuario (opcional; se agrega `profiles.rut` nullable).
 - **Voucher**: imagen (JPG/PNG/WebP/GIF) o PDF, máx 5MB, subido a storage bucket `public` (mismo `uploadImage`/bucket que el resto). El correo al admin **enlaza el voucher**, no lo adjunta.
-- **Correo al admin**: a **todos los `profiles` con `role_id=1`**; si no hay emails, fallback a `process.env.SMTP_USER`. Envío best-effort (try/catch), patrón `sendWelcomeEmail`.
+- **Correo al admin**: a **todos los `profiles` con `role_id=1`**; si no hay emails, fallback a `process.env.SMTP_USER`. Envío best-effort (try/catch), patrón `sendWelcomeEmail`. El botón "Revisar Solicitud" deep-linkea a `/admin/ventas?tab=solicitudes`.
+- **Correo al usuario tras la revisión** (`sendTransferReviewEmail`): cuando el admin aprueba o rechaza, `notifyTransferReviewEmail` (en `review/route.ts`, best-effort, consulta `email`/`full_name` del usuario) envía el resultado — aprobada (beneficio asignado) o rechazada (con `admin_note` como "Motivo del rechazo"). El botón "Ver Mis Solicitudes de Pago" enlaza a `/dashboard/pagos#solicitudes`.
 - **No romper Flow**: los routes `create-order`, `confirmation`, `verify`, `force-confirm` y las helpers de asignación quedan intactos. El modo manual solo agrega una guarda en `create-order` y **reutiliza** las mismas helpers de Flow para la aprobación.
 - **Fechas SIEMPRE** con `getChileToday()` / `addDaysChile()` de `src/lib/dates.ts` (regla #16 del BRAIN). Nunca `toISOString().split("T")[0]`.
 
@@ -34,7 +35,7 @@ Flow.cl **no es legal para la venta de boletas** en el contexto del negocio. Se 
 - `confirmAndCreateMembership` (`src/lib/flow-helpers.ts`): dedup 10 min, cancela membresías activas, crea con `addDaysChile`. **Se refactoriza** a `createMembershipForPayment` con override de planId (para distinguir plan miembro vs plan de inscripción), conservando el comportamiento para Flow.
 - `confirmPersonalizedPack` (`src/lib/flow-helpers.ts`): crea el pack con `addDaysChile`, **apila** (no cancela nada).
 - `extendEnrollment` / `notifyUserPaymentStatus` (`src/lib/flow-helpers.ts`): se reutilizan en la aprobación (mismo resultado visible para el usuario que con Flow).
-- `src/lib/email.ts`: **nodemailer** (SMTP_GMAIL, env `SMTP_HOST/PORT/USER/PASS/FROM`). Único uso actual: `sendWelcomeEmail` en `create-user/route.ts` (patrón best-effort). Se agrega `sendTransferRequestEmail`.
+- `src/lib/email.ts`: **nodemailer** (SMTP_GMAIL, env `SMTP_HOST/PORT/USER/PASS/FROM`). Único uso actual: `sendWelcomeEmail` en `create-user/route.ts` (patrón best-effort). Se agrega `sendTransferRequestEmail` y `sendTransferReviewEmail`.
 - `src/lib/supabase/admin.ts`: `getAdminClient()` (service role) para el query de emails de admins y la asignación en la aprobación.
 - `src/lib/supabase/dashboard.ts`: `PaymentData` (línea 70) con `receipt_url`, `method`, `status`; `getUserPayments`/`getProfileForEdit`/`updateProfile` (patrón del perfil). Se extiende el tipo si se agregan campos nuevos.
 - `src/lib/supabase/storage.ts`: `uploadImage(file, folder)` valida JPG/PNG/WebP/GIF ≤5MB y sube al bucket `public`. Se extiende para aceptar **PDF** (`application/pdf`) en la ruta del voucher (la validación de imagen actual la rechazaría).
@@ -137,7 +138,13 @@ Notas:
 
 ### Fase 6 — Notificaciones usuario / dashboard
 - `notifyUserPaymentStatus` ya cubre el aviso al aprobar/rechazar (se reutiliza).
+- **Correo de revisión al usuario**: `notifyTransferReviewEmail` en `review/route.ts` envía `sendTransferReviewEmail` (aprobada/rechazada) con enlace a `/dashboard/pagos#solicitudes`.
 - Dashboard usuario: mostrar solicitudes pendientes y su estado ("En revisión" / "Aprobada" / "Rechazada").
+- **Feedback usuario (espejo del admin)**:
+  - `UserPendingTransferProvider` (`src/components/dashboard/UserPendingTransferProvider.tsx`): cuenta las transferencias `pendiente` **propias** (`user_id` + `method='transferencia'` + `status='pendiente'`) con poll cada 30s + focus; envuelve el dashboard en `dashboard/layout.tsx`.
+  - `DashboardNav`: badge rojo con el contador en la tab **Pagos** (desktop y mobile).
+  - `UserPendingTransferBanner` (`src/components/dashboard/UserPendingTransferBanner.tsx`): banner en `/dashboard/pagos` con CTA "Ver solicitudes" → `#solicitudes`.
+  - `TransferRequestsPanel` (`src/components/dashboard/TransferRequestsPanel.tsx`): lista las solicitudes con estado, monto, fecha, referencia REF-ZE, comprobante y **motivo del rechazo** (`admin_note`) en un bloque destacado. Datos vía `getUserTransferRequests` en `dashboard.ts`.
 
 ### Fase 7 — Tests y build
 - Sección **R** en `scripts/test-flows.mjs`:
@@ -174,7 +181,7 @@ Notas:
 | `flow-helpers.ts` | refactor `confirmAndCreateMembership` → `createMembershipForPayment` (override planId) |
 | `create-order/route.ts` | guarda por modo manual |
 | `storage.ts` | aceptar PDF para vouchers |
-| `email.ts` | + `sendTransferRequestEmail` |
+| `email.ts` | + `sendTransferRequestEmail`, `sendTransferReviewEmail` |
 | Checkout modals | paso manual `TransferPaymentStep` |
 | `/admin/ventas` | tab "Solicitudes" |
 | `/admin/configuracion` | tarjeta modo de pago + datos bancarios |

@@ -295,7 +295,7 @@ export async function POST(request: Request) {
         .eq("id", user.id)
         .maybeSingle();
 
-      const paymentUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "https://zona-elite-six.vercel.app"}/admin/ventas`;
+      const paymentUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "https://zona-elite-six.vercel.app"}/admin/ventas?tab=solicitudes`;
 
       for (const recipient of recipients) {
         try {

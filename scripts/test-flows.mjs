@@ -1486,6 +1486,8 @@ ok("T: transfer notifica a staff (notifications target staff)",
   /\.from\("notifications"\)\.insert\([\s\S]*?target: "staff",[\s\S]*?sent_by: adminProfile\.id/.test(transferRouteT));
 ok("T: transfer envía correo a todos los admins role_id=1 con fallback SMTP_USER",
   /\.from\("profiles"\)[\s\S]*?\.eq\("role_id", 1\)[\s\S]*?fallback = process\.env\.SMTP_USER[\s\S]*?sendTransferRequestEmail/.test(transferRouteT));
+ok("T: transfer deep-linkea al admin a /admin/ventas?tab=solicitudes",
+  /const paymentUrl = \`\$\{process\.env\.NEXT_PUBLIC_BASE_URL[\s\S]*?\/admin\/ventas\?tab=solicitudes\`/.test(transferRouteT));
 ok("T: transfer usa admin client para insertar (bypass RLS insert_admin)",
   /const admin = getAdminClient\(\);[\s\S]*?\.from\("payments"\)[\s\S]*?\.insert\(insertPayload\)/.test(transferRouteT));
 
@@ -1497,6 +1499,8 @@ ok("T: review solo acepta transferencia pendiente",
 ok("T: rechazo guarda status+admin_note y notifica rejected",
   /\.update\(\{[\s\S]*?status: "rechazado",[\s\S]*?admin_note: adminNote \|\| null,[\s\S]*?\)\s*\.eq\("id", paymentId\)\s*\.eq\("status", "pendiente"\)/.test(reviewRouteT) &&
   /notifyUserPaymentStatus\(admin, payment, "rejected"\)/.test(reviewRouteT));
+ok("T: rechazo envía correo al usuario con motivo (notifyTransferReviewEmail rejected)",
+  /await notifyTransferReviewEmail\("rejected", payment, adminNote \|\| undefined\)/.test(reviewRouteT));
 ok("T: aprobación usa guard de concurrencia (UPDATE...WHERE status='pendiente')",
   /\.update\(\{[\s\S]*?status: "pagado",[\s\S]*?reviewed_by: user\.id,[\s\S]*?\)\s*\.eq\("id", paymentId\)\s*\.eq\("status", "pendiente"\)/.test(reviewRouteT));
 ok("T: aprobación asigna con createMembershipForPayment y override de plan",
@@ -1513,6 +1517,12 @@ ok("T: fallo de asignación tras aprobar notifica notifyPaymentWithoutMembership
   /if \(assignment && !assignment\.success\)[\s\S]*?notifyPaymentWithoutMembership\(admin, payment, assignment\.error/.test(reviewRouteT));
 ok("T: aprobación notifica approved al usuario",
   /notifyUserPaymentStatus\(admin, payment, "approved"\)/.test(reviewRouteT));
+ok("T: aprobación envía correo al usuario (notifyTransferReviewEmail approved)",
+  /await notifyTransferReviewEmail\("approved", payment\)/.test(reviewRouteT));
+ok("T: notifyTransferReviewEmail consulta email del usuario y apunta a #solicitudes",
+  /async function notifyTransferReviewEmail\([\s\S]*?\.from\("profiles"\)[\s\S]*?\.select\("email, full_name, rut"\)[\s\S]*?\.eq\("id", payment\.user_id\)[\s\S]*?if \(!profile\?\.email\)[\s\S]*?sendTransferReviewEmail\(\{[\s\S]*?solicitudesUrl: `\$\{base\}\/dashboard\/pagos#solicitudes`/.test(reviewRouteT));
+ok("T: review select incluye amount y commerce_order para el correo",
+  /\.select\("id, user_id, status, method, concept, amount, commerce_order, beneficiary_id[\s\S]*?\)/.test(reviewRouteT));
 
 // T6. Guarda en create-order (Flow desactivado en modo manual)
 ok("T: create-order importa getPaymentSettings",
@@ -1543,6 +1553,15 @@ ok("T: el correo enlaza el voucher (no adjunta) y botón a /admin/ventas",
   /\$\{paymentUrl\}" class="btn">Revisar Solicitud/.test(emailT));
 ok("T: el asunto del correo incluye la referencia",
   /subject: `\$\{academyName\} — Solicitud de pago por transferencia \(\$\{reference\}\)`/.test(emailT));
+ok("T: email exporta sendTransferReviewEmail (aprobada/rechazada → Mis Solicitudes)",
+  /export interface TransferReviewEmailData[\s\S]*?outcome: "approved" \| "rejected";[\s\S]*?solicitudesUrl: string;/.test(emailT) &&
+  /export async function sendTransferReviewEmail\(data: TransferReviewEmailData\)/.test(emailT));
+ok("T: correo de revisión dirige a la sección Mis Solicitudes de Pago",
+  /\$\{solicitudesUrl\}" class="btn">Ver Mis Solicitudes de Pago/.test(emailT));
+ok("T: correo de rechazo incluye el motivo (adminNote)",
+  /Motivo del rechazo[\s\S]*?\$\{adminNote\}/.test(emailT));
+ok("T: asunto de aprobación vs rechazo difieren",
+  /subject: `\$\{academyName\} — \$\{isApproved \? "Pago por transferencia aprobado" : "Solicitud de pago rechazada"\} \(\$\{reference\}\)`/.test(emailT));
 
 // T9. Frontend: checkout modal (membresías) en modo manual
 ok("T: CheckoutModal carga getPaymentSettings y decide manualMode",
@@ -1639,6 +1658,40 @@ ok("T: banner grande solo cuando hay pendientes con CTA a ?tab=solicitudes",
   /Revisar ahora/.test(pendingTransferBannerT));
 ok("T: ventas abre tab Solicitudes con ?tab=solicitudes",
   /URLSearchParams\(window\.location\.search\)\.get\("tab"\) === "solicitudes"[\s\S]*?"solicitudes"[\s\S]*?"pagos"/.test(adminVentasTabT));
+
+// T15. Feedback usuario: panel de solicitudes + badge/banner en dashboard
+const userTransferProviderT = readFileSync(join(ROOT, "src", "components", "dashboard", "UserPendingTransferProvider.tsx"), "utf8");
+const transferRequestsPanelT = readFileSync(join(ROOT, "src", "components", "dashboard", "TransferRequestsPanel.tsx"), "utf8");
+const userTransferBannerT = readFileSync(join(ROOT, "src", "components", "dashboard", "UserPendingTransferBanner.tsx"), "utf8");
+const dashboardNavT = readFileSync(join(ROOT, "src", "components", "dashboard", "DashboardNav.tsx"), "utf8");
+const dashboardLayoutT = readFileSync(join(ROOT, "src", "app", "dashboard", "layout.tsx"), "utf8");
+const dashboardPagosT = readFileSync(join(ROOT, "src", "app", "dashboard", "pagos", "page.tsx"), "utf8");
+const dashboardLibT = readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8");
+ok("T: provider usuario cuenta transferencias pendientes propias (poll 30s + focus)",
+  /\.eq\("user_id", userId\)[\s\S]*?\.eq\("method", "transferencia"\)[\s\S]*?\.eq\("status", "pendiente"\)/.test(userTransferProviderT) &&
+  /POLL_INTERVAL_MS = 30_000/.test(userTransferProviderT) &&
+  /window\.addEventListener\("focus"/.test(userTransferProviderT));
+ok("T: dashboard/layout envuelve con UserPendingTransferProvider",
+  /<UserPendingTransferProvider userId=\{user\.id\}>/.test(dashboardLayoutT));
+ok("T: DashboardNav muestra badge de solicitudes pendientes en tab Pagos",
+  /useUserPendingTransferCount\(\)/.test(dashboardNavT) &&
+  /tab\.href === "\/dashboard\/pagos" && pendingTransferCount > 0/.test(dashboardNavT) &&
+  /bg-red-500/.test(dashboardNavT));
+ok("T: banner usuario avisa solicitudes pendientes con CTA a #solicitudes",
+  /loading \|\| count === 0[\s\S]*?return null;/.test(userTransferBannerT) &&
+  /href="\/dashboard\/pagos#solicitudes"/.test(userTransferBannerT) &&
+  /Ver solicitudes/.test(userTransferBannerT));
+ok("T: panel muestra estado, motivo de rechazo (admin_note) y comprobante",
+  /statusConfig/.test(transferRequestsPanelT) &&
+  /pendiente:[\s\S]*?En revisión/.test(transferRequestsPanelT) &&
+  /rechazado:[\s\S]*?Rechazada/.test(transferRequestsPanelT) &&
+  /p\.admin_note \|\| "Sin motivo especificado\."/.test(transferRequestsPanelT) &&
+  /p\.receipt_url/.test(transferRequestsPanelT));
+ok("T: pagos page incluye banner + panel con ancla #solicitudes",
+  /<UserPendingTransferBanner \/>/.test(dashboardPagosT) &&
+  /id="solicitudes"[\s\S]*?<TransferRequestsPanel \/>/.test(dashboardPagosT));
+ok("T: dashboard.ts expone getUserTransferRequests (method='transferencia' por user)",
+  /export async function getUserTransferRequests\(userId: string\)[\s\S]*?\.eq\("method", "transferencia"\)/.test(dashboardLibT));
 
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

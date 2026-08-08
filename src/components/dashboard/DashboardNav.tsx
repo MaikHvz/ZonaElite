@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useUserPendingTransferCount } from "@/components/dashboard/UserPendingTransferProvider";
 
 const tabs = [
   { label: "Resumen", href: "/dashboard", icon: "dashboard" },
@@ -15,6 +16,7 @@ const tabs = [
 
 export default function DashboardNav() {
   const pathname = usePathname();
+  const { count: pendingTransferCount } = useUserPendingTransferCount();
 
   return (
     <>
@@ -53,6 +55,11 @@ export default function DashboardNav() {
                 >
                   {tab.label}
                 </span>
+                {tab.href === "/dashboard/pagos" && pendingTransferCount > 0 && (
+                  <span className="ml-auto flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-red-500 text-white font-[family-name:var(--font-label-md)] text-[11px] font-bold">
+                    {pendingTransferCount > 99 ? "99+" : pendingTransferCount}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -101,6 +108,11 @@ export default function DashboardNav() {
                 >
                   {tab.icon}
                 </span>
+                {tab.href === "/dashboard/pagos" && pendingTransferCount > 0 && (
+                  <span className="absolute -top-0.5 right-2 flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white font-[family-name:var(--font-label-md)] text-[9px] font-bold">
+                    {pendingTransferCount > 9 ? "9+" : pendingTransferCount}
+                  </span>
+                )}
                 <span
                   className={`font-[family-name:var(--font-label-sm)] leading-none ${
                     isActive ? "text-[9px]" : "text-[8px] opacity-70"

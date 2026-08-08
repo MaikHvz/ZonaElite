@@ -4,6 +4,7 @@ import { useSession } from "@/providers/SessionProvider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import DashboardNav from "@/components/dashboard/DashboardNav";
+import UserPendingTransferProvider from "@/components/dashboard/UserPendingTransferProvider";
 
 export default function DashboardLayout({
   children,
@@ -38,10 +39,14 @@ export default function DashboardLayout({
       <div className="fixed top-0 left-0 w-full h-[300px] pointer-events-none z-0 opacity-40 bg-gradient-to-b from-primary-container/5 via-transparent to-transparent" />
 
       <div className="max-w-[1200px] mx-auto relative z-10">
-        <div className="flex gap-6">
-          <DashboardNav />
-          <main className="flex-1 min-w-0">{children}</main>
-        </div>
+        {user && (
+          <UserPendingTransferProvider userId={user.id}>
+            <div className="flex gap-6">
+              <DashboardNav />
+              <main className="flex-1 min-w-0">{children}</main>
+            </div>
+          </UserPendingTransferProvider>
+        )}
       </div>
     </div>
   );

@@ -8,12 +8,53 @@ import {
   notifyUserPaymentStatus,
   notifyPaymentWithoutMembership,
 } from "@/lib/flow-helpers";
+import { sendTransferReviewEmail } from "@/lib/email";
 import { FLOW_LOG_PREFIX } from "@/lib/flow";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
 
 const ROUTE_LOG = `${FLOW_LOG_PREFIX}/payments/review`;
+
+async function notifyTransferReviewEmail(
+  outcome: "approved" | "rejected",
+  payment: {
+    id: string;
+    user_id: string;
+    amount?: number | null;
+    commerce_order?: string | null;
+    concept?: string | null;
+  },
+  adminNote?: string
+) {
+  try {
+    const admin = getAdminClient();
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("email, full_name, rut")
+      .eq("id", payment.user_id)
+      .maybeSingle();
+
+    if (!profile?.email) {
+      console.warn(ROUTE_LOG, "No user email for review notification, skipping:", payment.id);
+      return;
+    }
+
+    const base = process.env.NEXT_PUBLIC_BASE_URL || "https://zona-elite-six.vercel.app";
+    await sendTransferReviewEmail({
+      to: profile.email,
+      userName: profile.full_name || "Usuario",
+      concept: (payment.concept as string) || "Pago por transferencia",
+      amount: Number(payment.amount) || 0,
+      reference: (payment.commerce_order as string) || payment.id,
+      outcome,
+      adminNote,
+      solicitudesUrl: `${base}/dashboard/pagos#solicitudes`,
+    });
+  } catch (err) {
+    console.error(ROUTE_LOG, "Review email failed:", err);
+  }
+}
 
 interface ReviewBody {
   paymentId?: string;
@@ -57,7 +98,7 @@ export async function POST(request: Request) {
 
     const { data: payment } = await admin
       .from("payments")
-      .select("id, user_id, status, method, concept, beneficiary_id, membership_plan_id, personalized_plan_id, include_enrollment, enrollment_plan_id")
+      .select("id, user_id, status, method, concept, amount, commerce_order, beneficiary_id, membership_plan_id, personalized_plan_id, include_enrollment, enrollment_plan_id")
       .eq("id", paymentId)
       .maybeSingle();
 
@@ -90,6 +131,7 @@ export async function POST(request: Request) {
       }
 
       await notifyUserPaymentStatus(admin, payment, "rejected");
+      await notifyTransferReviewEmail("rejected", payment, adminNote || undefined);
       console.log(ROUTE_LOG, "Transfer payment rejected:", paymentId);
 
       return NextResponse.json({ ok: true, status: "rechazado" });
@@ -142,6 +184,7 @@ export async function POST(request: Request) {
     }
 
     await notifyUserPaymentStatus(admin, payment, "approved");
+    await notifyTransferReviewEmail("approved", payment);
     console.log(ROUTE_LOG, "Transfer payment approved:", paymentId);
 
     return NextResponse.json({ ok: true, status: "pagado" });
