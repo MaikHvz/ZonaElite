@@ -182,7 +182,7 @@ export async function POST(request: Request) {
 
     if (orderError || !order) {
       console.error(ROUTE_LOG, "Failed to create product order:", orderError);
-      throw new Error("no-order");
+      throw new Error(`no-order: ${String(orderError?.message || orderError)}`);
     }
 
     const orderItemsPayload = items.map((item) => {
@@ -201,7 +201,7 @@ export async function POST(request: Request) {
 
     if (itemsError) {
       console.error(ROUTE_LOG, "Failed to insert order items:", itemsError);
-      throw new Error("no-items");
+      throw new Error(`no-items: ${String(itemsError?.message || itemsError)}`);
     }
 
     // Crear el pago Flow (user_id puede ser NULL para invitados).
@@ -225,7 +225,7 @@ export async function POST(request: Request) {
 
     if (paymentError || !payment) {
       console.error(ROUTE_LOG, "Failed to create payment:", paymentError);
-      throw new Error("no-payment");
+      throw new Error(`no-payment: ${String(paymentError?.message || paymentError)}`);
     }
 
     const flowResponse = await createFlowOrder({
@@ -260,8 +260,9 @@ export async function POST(request: Request) {
         console.error(ROUTE_LOG, "Failed to restore stock after error:", restoreErr);
       }
     }
+    const detail = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
-      { error: "Error al procesar el pago. Intenta de nuevo." },
+      { error: "Error al procesar el pago. Intenta de nuevo.", detail },
       { status: 500 }
     );
   }

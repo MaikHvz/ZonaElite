@@ -5,6 +5,7 @@
 - **Tipo:** Feature nueva (v1.4.0)
 - **Plan aprobado por el usuario** (2026-08-09): "agrega lo que estimes pertinente para que el sistema sea profesional en el tema de compras de productos y procede."
 - **IMPLEMENTADO (2026-08-09)**: fases 0–6 completadas. Migración `020_store_checkout.sql` + changelog `020_changelog_v1_4_0.sql` creados (pendientes de aplicar en SQL Editor). Espejo 1:1 actualizado. Suite secciones A–AA en verde (539 tests), `npx tsc --noEmit` limpio, `npm run build` OK. Documentación post-implementación actualizada (flujo-modulos.md, requisitos-implementados.md).
+- **FIX (2026-08-09)**: el checkout fallaba en producción con `23514 violates check constraint "product_orders_status_check"` (el constraint creado con la tabla no incluía `'pendiente'`). Se creó la migración `021_product_orders_status.sql` (idempotente, agrega `'pendiente'` a los estados permitidos) y se actualizó el espejo. El catch del checkout ahora devuelve el error real como `detail` en la respuesta 500.
 
 ## Requisito / Problema
 La base de datos ya tiene las tablas `products`, `product_images`, `product_orders` y `order_items` (creadas en el espejo `documentacion/squema-sql-actualizado.sql`, líneas ~280–317, con RLS propias), y `payments.order_id` (FK → `product_orders`) existe sin uso. **Ningún código** del sistema las utiliza hoy: no hay carrito, no hay checkout, no hay página de confirmación ni ventas visibles en los dashboards.

@@ -15,7 +15,7 @@
 --   schedules.category: 'ninos' | 'adultos' | 'ambos'
 --   attendance.status: 'presente' | 'ausente' | 'justificado'
 --   blog_posts.status: 'borrador' | 'publicado' | 'programado'
---   product_orders.status: 'borrador' | 'pagado' | 'enviado' | 'entregado' | 'cancelado'
+--   product_orders.status: 'borrador' | 'pendiente' | 'pagado' | 'enviado' | 'entregado' | 'cancelado'
 --   payments.status: 'pendiente' | 'pagado' | 'rechazado' | 'cancelado' | 'fallido' | 'reembolsado'
 --   memberships.status: 'activa' | 'vencida' | 'cancelada' | 'suspendida'
 --   notifications.type: 'info' | 'alerta' | 'sistema'
@@ -308,7 +308,8 @@ CREATE TABLE IF NOT EXISTS public.product_orders (
   guest_name text,
   reference text,
   created_at timestamptz DEFAULT now() NOT NULL,
-  CONSTRAINT product_orders_pkey PRIMARY KEY (id)
+  CONSTRAINT product_orders_pkey PRIMARY KEY (id),
+  CONSTRAINT product_orders_status_check CHECK (status IN ('borrador', 'pendiente', 'pagado', 'enviado', 'entregado', 'cancelado'))
 );
 
 CREATE TABLE IF NOT EXISTS public.order_items (
