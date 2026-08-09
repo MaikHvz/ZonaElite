@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { useCart } from "@/context/CartContext";
 
 interface OrderStatusItem {
   product_id: string;
@@ -24,6 +25,7 @@ interface OrderStatusResponse {
 function ConfirmacionContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const { clearCart } = useCart();
 
   const [state, setState] = useState<"loading" | "paid" | "failed" | "pending" | "not_found" | "error">(
     "loading"
@@ -53,6 +55,10 @@ function ConfirmacionContent() {
       setOrder(data);
 
       if (data.status === "pagado" || data.status === "enviado" || data.status === "entregado") {
+        if (sessionStorage.getItem("ze_store_checkout_started")) {
+          clearCart();
+          sessionStorage.removeItem("ze_store_checkout_started");
+        }
         setState("paid");
       } else if (data.status === "cancelado" || data.status === "rechazado") {
         setState("failed");

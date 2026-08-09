@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { getChileToday } from "@/lib/dates";
-import { createFlowOrder, getFlowConfig, verifyFlowPayment, mapFlowStatus, FLOW_LOG_PREFIX } from "@/lib/flow";
+import { createFlowOrder, buildFlowPaymentUrl, verifyFlowPayment, mapFlowStatus, FLOW_LOG_PREFIX } from "@/lib/flow";
 import { getPaymentSettings } from "@/lib/payment-settings";
 
 export const dynamic = "force-dynamic";
@@ -260,8 +260,7 @@ export async function POST(request: Request) {
             .eq("id", existingPending.id);
         } else {
           // status 1 (sigue pendiente) — continuar pagando el mismo token.
-          const { apiUrl } = getFlowConfig();
-          const flowPaymentUrl = apiUrl.replace(/\/api\/?$/, "/payment") + "?token=" + encodeURIComponent(existingPending.flow_token);
+          const flowPaymentUrl = buildFlowPaymentUrl(existingPending.flow_token);
 
           return NextResponse.json({
             url: flowPaymentUrl,
@@ -271,8 +270,7 @@ export async function POST(request: Request) {
         }
       } catch {
         // No se pudo verificar — mantener como pendiente y reutilizar (comportamiento original).
-        const { apiUrl } = getFlowConfig();
-        const flowPaymentUrl = apiUrl.replace(/\/api\/?$/, "/payment") + "?token=" + encodeURIComponent(existingPending.flow_token);
+        const flowPaymentUrl = buildFlowPaymentUrl(existingPending.flow_token);
 
         return NextResponse.json({
           url: flowPaymentUrl,

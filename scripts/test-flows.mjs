@@ -978,6 +978,11 @@ ok("N: create-order responde already_paid cuando el pago ya se confirmó",
   createOrderRoute.includes('status: "already_paid"'));
 ok("N: create-order solo reutiliza token si sigue pendiente (status 1)",
   /mapped === "pagado"[\s\S]*?return NextResponse\.json\(\{[\s\S]*?status: "already_paid"/.test(createOrderRoute));
+ok("N: reuso de token apunta a /app/web/pay.php (no a /payment)",
+  createOrderRoute.includes("buildFlowPaymentUrl(existingPending.flow_token)") &&
+  !createOrderRoute.includes('replace(/\\/api\\/?$/, "/payment")'));
+ok("N: buildFlowPaymentUrl construye /app/web/pay.php?token=...",
+  /export function buildFlowPaymentUrl[\s\S]*?\/app\/web\/pay\.php\?token=/.test(flowSource));
 ok("N: CheckoutModal nunca queda bloqueado (timeout AbortController)",
   checkoutModal.includes("AbortController") &&
   checkoutModal.includes("controller.abort()") &&
@@ -2109,7 +2114,11 @@ ok("AA: Navbar muestra badge de carrito con totalItems",
 ok("AA: página /carrito valida invitado y redirige al checkout Flow",
   /fetch\("\/api\/store\/checkout",/.test(carritoPageT) &&
   /guestEmail\.trim\(\) \|\| !\/\^\[\^\\s@\]\+@\[\^\\s@\]\+\\\.\[\^\\s@\]\+\$\/\.test\(guestEmail\.trim\(\)\)/.test(carritoPageT) &&
-  /clearCart\(\);[\s\S]*?router\.push\(data\.url\)/.test(carritoPageT));
+  /flowUrl\.searchParams\.set\("token", data\.token\)[\s\S]*?sessionStorage\.setItem\("ze_store_checkout_started", "1"\)[\s\S]*?window\.location\.href = flowUrl\.toString\(\)/.test(carritoPageT) &&
+  !/clearCart/.test(carritoPageT));
+ok("AA: confirmación vacía el carrito solo si el pago se confirmó (flag de sesión)",
+  /sessionStorage\.getItem\("ze_store_checkout_started"\)[\s\S]*?clearCart\(\);[\s\S]*?sessionStorage\.removeItem\("ze_store_checkout_started"\)/.test(confirmacionPageT) &&
+  /import \{ useCart \} from "@\/context\/CartContext";/.test(confirmacionPageT));
 ok("AA: /tienda/confirmacion consulta estado de la orden y muestra devolución de stock",
   /\/api\/store\/order-status\?token=/.test(confirmacionPageT) &&
   /setInterval\(/.test(confirmacionPageT) &&

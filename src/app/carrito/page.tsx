@@ -2,14 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import { useSession } from "@/providers/SessionProvider";
 
 export default function CarritoPage() {
-  const { items, totalPrice, setQuantity, removeItem, clearCart } = useCart();
+  const { items, totalPrice, setQuantity, removeItem } = useCart();
   const { user, profile, loading: sessionLoading } = useSession();
-  const router = useRouter();
 
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
@@ -66,8 +64,10 @@ export default function CarritoPage() {
         return;
       }
 
-      clearCart();
-      router.push(data.url);
+      const flowUrl = new URL(data.url);
+      flowUrl.searchParams.set("token", data.token);
+      sessionStorage.setItem("ze_store_checkout_started", "1");
+      window.location.href = flowUrl.toString();
     } catch {
       setError("Error de conexión. Intenta de nuevo.");
       setPaying(false);

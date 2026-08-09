@@ -63,6 +63,17 @@ function buildReturnUrl(returnUrl?: string): string {
   return `${getBaseUrl()}/dashboard/pagos`;
 }
 
+/**
+ * Construye la URL de la página de pago de Flow para un token ya existente.
+ * `payment/create` devuelve la URL base (`/app/web/pay.php`) sin el token en la
+ * query string, así que hay que agregarlo explícitamente (fix 2026-08-09).
+ */
+export function buildFlowPaymentUrl(token: string): string {
+  const { apiUrl } = getConfig();
+  const host = apiUrl.replace(/\/api\/?$/, "");
+  return `${host}/app/web/pay.php?token=${encodeURIComponent(token)}`;
+}
+
 interface CreateOrderParams {
   commerceOrder: string;
   subject: string;
