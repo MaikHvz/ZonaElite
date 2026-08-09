@@ -2005,6 +2005,7 @@ const rootLayoutT = readFileSync(join(ROOT, "src", "app", "layout.tsx"), "utf8")
 const navbarT = readFileSync(join(ROOT, "src", "components", "Navbar.tsx"), "utf8");
 const carritoPageT = readFileSync(join(ROOT, "src", "app", "carrito", "page.tsx"), "utf8");
 const confirmacionPageT = readFileSync(join(ROOT, "src", "app", "tienda", "confirmacion", "page.tsx"), "utf8");
+const storeReturnRouteT = readFileSync(join(ROOT, "src", "app", "api", "store", "return", "route.ts"), "utf8");
 const productosPageT = readFileSync(join(ROOT, "src", "app", "productos", "page.tsx"), "utf8");
 const productoDetailPageT = readFileSync(join(ROOT, "src", "app", "productos", "[id]", "page.tsx"), "utf8");
 const dashboardTiendaPageT = readFileSync(join(ROOT, "src", "app", "dashboard", "tienda", "page.tsx"), "utf8");
@@ -2078,7 +2079,12 @@ ok("AA: checkout reserva stock, crea orden/payment y crea Flow con returnUrl tie
   /reserveStock\(admin, items\)/.test(storeCheckoutRouteT) &&
   /\.from\("product_orders"\)[\s\S]*?\.insert\(orderPayload\)/.test(storeCheckoutRouteT) &&
   /order_id: order\.id,/.test(storeCheckoutRouteT) &&
-  /createFlowOrder\(\{[\s\S]*?returnUrl: "\/tienda\/confirmacion"/.test(storeCheckoutRouteT));
+  /createFlowOrder\(\{[\s\S]*?returnUrl: "\/api\/store\/return"/.test(storeCheckoutRouteT));
+ok("AA: ruta /api/store/return normaliza GET y POST (Flow legacy) hacia /tienda/confirmacion",
+  /export async function POST\(request: Request\)[\s\S]*?formData\(\)[\s\S]*?token/.test(storeReturnRouteT) &&
+  /export async function GET\(request: Request\)[\s\S]*?searchParams\.get\("token"\)/.test(storeReturnRouteT) &&
+  /tienda\/confirmacion\?token=/.test(storeReturnRouteT) &&
+  /NextResponse\.redirect\(new URL\(target, origin\), 303\)/.test(storeReturnRouteT));
 ok("AA: checkout restaura stock si el flujo falla post-reserva",
   /restoreStock\(admin, reservedItems\)/.test(storeCheckoutRouteT));
 ok("AA: order-status resuelve orden por flow_token y es pública",

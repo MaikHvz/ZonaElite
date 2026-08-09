@@ -233,7 +233,7 @@ export async function POST(request: Request) {
       subject: `${concept} - ZONAELITE`,
       amount: Math.round(total),
       email: guestEmail || "",
-      returnUrl: "/tienda/confirmacion",
+      returnUrl: "/api/store/return",
     });
 
     await admin
