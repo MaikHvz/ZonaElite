@@ -79,6 +79,28 @@ export default function DependentCard({
           </div>
         )}
 
+        {dependent.address && (
+          <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px] gap-4">
+            <span className="text-on-surface-variant shrink-0">Dirección</span>
+            <span className="text-on-surface text-right">{dependent.address}</span>
+          </div>
+        )}
+
+        {(dependent.weight != null || dependent.height != null || dependent.dominant_hand) && (
+          <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px] gap-4 pt-2 border-t border-on-surface/5">
+            <span className="text-on-surface-variant shrink-0">Datos físicos</span>
+            <span className="text-on-surface text-right">
+              {[
+                dependent.weight != null ? `${dependent.weight} kg` : null,
+                dependent.height != null ? `${dependent.height} cm` : null,
+                dependent.dominant_hand === "zurdo" ? "Zurdo" : dependent.dominant_hand === "diestro" ? "Diestro" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </div>
+        )}
+
         <div className="flex justify-between font-[family-name:var(--font-body-md)] text-[13px]">
           <span className="text-on-surface-variant">Inscripción</span>
           {activeEnrollment ? (

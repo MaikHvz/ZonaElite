@@ -10,6 +10,7 @@ import {
 } from "@/lib/supabase/dashboard";
 import MedicalInfoCard from "@/components/dashboard/MedicalInfoCard";
 import EmergencyContactCard from "@/components/dashboard/EmergencyContactCard";
+import PhysicalInfoCard from "@/components/dashboard/PhysicalInfoCard";
 import { createClient } from "@/lib/supabase/client";
 
 function calcAge(birthDate: string) {
@@ -32,6 +33,9 @@ export default function MedicoPage() {
     full_name: string;
     birth_date: string;
     category: string;
+    weight: number | null;
+    height: number | null;
+    dominant_hand: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -47,7 +51,7 @@ export default function MedicoPage() {
 
     const { data: dep } = await supabase
       .from("dependents")
-      .select("full_name, birth_date, category, beneficiaries(id)")
+      .select("full_name, birth_date, category, weight, height, dominant_hand, beneficiaries(id)")
       .eq("id", dependentId)
       .eq("tutor_id", user.id)
       .single();
@@ -62,6 +66,9 @@ export default function MedicoPage() {
       full_name: dep.full_name,
       birth_date: dep.birth_date,
       category: dep.category,
+      weight: dep.weight as number | null,
+      height: dep.height as number | null,
+      dominant_hand: dep.dominant_hand as string | null,
     });
 
     const bRaw = dep.beneficiaries as unknown as { id: string }[] | { id: string } | null;
@@ -133,6 +140,35 @@ export default function MedicoPage() {
     return { error: null };
   };
 
+  const handleSavePhysical = async (data: {
+    weight: number | null;
+    height: number | null;
+    dominant_hand: string | null;
+  }) => {
+    if (!user) return { error: "No autenticado" };
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("dependents")
+      .update(data)
+      .eq("id", dependentId)
+      .eq("tutor_id", user.id);
+
+    if (error) return { error: "Error al guardar. Intenta de nuevo." };
+
+    setDependent((prev) =>
+      prev
+        ? {
+            ...prev,
+            weight: data.weight,
+            height: data.height,
+            dominant_hand: data.dominant_hand,
+          }
+        : prev
+    );
+    return { error: null };
+  };
+
   if (sessionLoading || loading) {
     return (
       <div className="space-y-6">
@@ -199,6 +235,13 @@ export default function MedicoPage() {
         record={record}
         beneficiaryId={dependentId}
         onSave={handleSaveMedical}
+      />
+
+      <PhysicalInfoCard
+        weight={dependent?.weight ?? null}
+        height={dependent?.height ?? null}
+        dominantHand={dependent?.dominant_hand ?? null}
+        onSave={handleSavePhysical}
       />
 
       <EmergencyContactCard

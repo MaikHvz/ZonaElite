@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import CreateDependentModal from "@/components/admin/CreateDependentModal";
+import VerFichaModal from "@/components/admin/VerFichaModal";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
@@ -21,15 +22,20 @@ interface UserRow {
   created_at: string;
   birth_date?: string | null;
   rut?: string | null;
+  address?: string | null;
   _isDependent?: boolean;
   _tutorName?: string;
   _tutorId?: string;
   _birthDate?: string | null;
   _category?: string;
+  _address?: string | null;
+  _weight?: number | null;
+  _height?: number | null;
+  _dominantHand?: string | null;
 }
 
 interface Role { id: number; name: string; }
-interface Dependent { id: string; full_name: string; tutor_id: string; birth_date: string; category: string; rut?: string | null; created_at?: string; }
+interface Dependent { id: string; full_name: string; tutor_id: string; birth_date: string; category: string; rut?: string | null; address?: string | null; weight?: number | null; height?: number | null; dominant_hand?: string | null; created_at?: string; }
 
 const ROLE_LABELS: Record<number, string> = { 1: "Administrador", 2: "Instructor", 3: "Recepción", 4: "Alumno" };
 
@@ -60,6 +66,22 @@ export default function AdminUsuariosPage() {
     birth_date: string | null;
     category: string;
     tutor_id: string;
+    address: string | null;
+    weight: number | null;
+    height: number | null;
+    dominant_hand: string | null;
+  } | null>(null);
+
+  const [fichaOpen, setFichaOpen] = useState(false);
+  const [fichaRow, setFichaRow] = useState<{
+    full_name: string;
+    category: string;
+    rut?: string | null;
+    address?: string | null;
+    birth_date?: string | null;
+    weight?: number | null;
+    height?: number | null;
+    dominant_hand?: string | null;
   } | null>(null);
 
   const handleExportExcel = async () => {
@@ -273,7 +295,7 @@ export default function AdminUsuariosPage() {
     const [uRes, rRes, dRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("roles").select("*").order("id"),
-      supabase.from("dependents").select("id, full_name, tutor_id, birth_date, category, rut, created_at"),
+      supabase.from("dependents").select("id, full_name, tutor_id, birth_date, category, rut, address, weight, height, dominant_hand, created_at"),
     ]);
 
     const profiles = (uRes.data as UserRow[]) || [];
@@ -301,6 +323,10 @@ export default function AdminUsuariosPage() {
           _tutorId: p.id,
           _birthDate: d.birth_date,
           _category: d.category,
+          _address: d.address || null,
+          _weight: d.weight ?? null,
+          _height: d.height ?? null,
+          _dominantHand: d.dominant_hand || null,
         });
       }
     }
@@ -320,6 +346,10 @@ export default function AdminUsuariosPage() {
         birth_date: u._birthDate || null,
         category: u._category || "nino",
         tutor_id: u._tutorId || "",
+        address: u._address || null,
+        weight: u._weight ?? null,
+        height: u._height ?? null,
+        dominant_hand: u._dominantHand || null,
       });
       setDependentModalOpen(true);
       return;
@@ -373,6 +403,20 @@ export default function AdminUsuariosPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const openFicha = (u: UserRow) => {
+    setFichaRow({
+      full_name: u.full_name,
+      category: u._category || "nino",
+      rut: u.rut || null,
+      address: u._address || null,
+      birth_date: u._birthDate || null,
+      weight: u._weight ?? null,
+      height: u._height ?? null,
+      dominant_hand: u._dominantHand || null,
+    });
+    setFichaOpen(true);
   };
 
   return (
@@ -454,6 +498,8 @@ export default function AdminUsuariosPage() {
         searchKey={["full_name", "email", "rut"]}
         searchPlaceholder="Buscar por nombre, email o RUT..."
         onEdit={openEdit}
+        onView={openFicha}
+        canView={(u) => !!u._isDependent}
         emptyMessage="No hay usuarios registrados"
       />
 
@@ -578,8 +624,14 @@ export default function AdminUsuariosPage() {
           await load();
           setToast({ msg: editingDependent ? "Carga actualizada" : "Carga creada y asignada", type: "success" });
         }}
-        tutors={users.filter((u) => !u._isDependent).map((u) => ({ id: u.id, full_name: u.full_name, email: u.email }))}
+        tutors={users.filter((u) => !u._isDependent).map((u) => ({ id: u.id, full_name: u.full_name, email: u.email, address: u.address || null }))}
         editingDependent={editingDependent}
+      />
+
+      <VerFichaModal
+        open={fichaOpen}
+        onClose={() => setFichaOpen(false)}
+        dependent={fichaRow}
       />
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}

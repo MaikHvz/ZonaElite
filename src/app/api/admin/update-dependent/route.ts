@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { dependent_id, full_name, rut, birth_date, category } = body;
+    const { dependent_id, full_name, rut, birth_date, category, address, weight, height, dominant_hand } = body;
 
     if (!dependent_id || !full_name || !birth_date) {
       return NextResponse.json({ error: "Carga, nombre y fecha de nacimiento son obligatorios" }, { status: 400 });
@@ -32,6 +32,16 @@ export async function POST(request: Request) {
 
     if (!VALID_CATEGORIES.includes(category)) {
       return NextResponse.json({ error: "Categoría inválida" }, { status: 400 });
+    }
+
+    if (weight != null && (typeof weight !== "number" || weight <= 0 || weight > 300)) {
+      return NextResponse.json({ error: "El peso debe ser mayor a 0 y hasta 300 kg" }, { status: 400 });
+    }
+    if (height != null && (typeof height !== "number" || height <= 0 || height > 250)) {
+      return NextResponse.json({ error: "La altura debe ser mayor a 0 y hasta 250 cm" }, { status: 400 });
+    }
+    if (dominant_hand != null && !["diestro", "zurdo"].includes(dominant_hand)) {
+      return NextResponse.json({ error: "La mano dominante debe ser diestro o zurdo" }, { status: 400 });
     }
 
     const admin = getAdminClient();
@@ -43,9 +53,13 @@ export async function POST(request: Request) {
         rut: rut?.trim() || null,
         birth_date,
         category,
+        address: address?.trim() || null,
+        weight: weight ?? null,
+        height: height ?? null,
+        dominant_hand: dominant_hand || null,
       })
       .eq("id", dependent_id)
-      .select("id, tutor_id, full_name, rut, birth_date, category, created_at")
+      .select("id, tutor_id, full_name, rut, birth_date, category, address, weight, height, dominant_hand, created_at")
       .single();
 
     if (updateError) {
@@ -57,7 +71,7 @@ export async function POST(request: Request) {
       action: "update_dependent",
       entity: "dependents",
       entity_id: dependent.id,
-      metadata: { full_name: dependent.full_name, category },
+      metadata: { full_name: dependent.full_name, category, address: dependent.address, weight: dependent.weight, height: dependent.height, dominant_hand: dependent.dominant_hand },
     });
 
     return NextResponse.json({ dependent });

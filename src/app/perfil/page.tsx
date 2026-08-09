@@ -8,6 +8,12 @@ import {
   getProfileForEdit,
   updateProfile,
 } from "@/lib/supabase/dashboard";
+import {
+  parseMedida,
+  isValidPeso,
+  isValidAltura,
+  isValidDominantHand,
+} from "@/lib/medidas";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
@@ -19,6 +25,10 @@ export default function PerfilPage() {
   const [phone, setPhone] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [rut, setRut] = useState("");
+  const [address, setAddress] = useState("");
+  const [weight, setWeight] = useState("");
+  const [height, setHeight] = useState("");
+  const [dominantHand, setDominantHand] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -39,6 +49,10 @@ export default function PerfilPage() {
           setPhone(data.phone || "");
           setBirthDate(data.birth_date || "");
           setRut(data.rut || "");
+          setAddress(data.address || "");
+          setWeight(data.weight != null ? String(data.weight) : "");
+          setHeight(data.height != null ? String(data.height) : "");
+          setDominantHand(data.dominant_hand || "");
         }
       });
     }
@@ -46,6 +60,18 @@ export default function PerfilPage() {
 
   const handleSave = async () => {
     if (!user) return;
+    if (weight.trim() && !isValidPeso(weight)) {
+      setSaveMsg("El peso debe ser mayor a 0 y hasta 300 kg, solo dígitos y un separador decimal.");
+      return;
+    }
+    if (height.trim() && !isValidAltura(height)) {
+      setSaveMsg("La altura debe ser mayor a 0 y hasta 250 cm, solo dígitos y un separador decimal.");
+      return;
+    }
+    if (dominantHand && !isValidDominantHand(dominantHand)) {
+      setSaveMsg("La mano dominante debe ser diestro o zurdo.");
+      return;
+    }
     setSaving(true);
     setSaveMsg(null);
     const { error } = await updateProfile(user.id, {
@@ -53,6 +79,10 @@ export default function PerfilPage() {
       phone: phone || undefined,
       birth_date: birthDate || undefined,
       rut: rut || undefined,
+      address: address || undefined,
+      weight: weight.trim() ? parseMedida(weight) : null,
+      height: height.trim() ? parseMedida(height) : null,
+      dominant_hand: dominantHand || null,
     });
     if (error) setSaveMsg(error);
     else {
@@ -201,6 +231,62 @@ export default function PerfilPage() {
                   onChange={(e) => setBirthDate(e.target.value)}
                   className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface input-glow transition-all duration-300"
                 />
+              </div>
+            </div>
+
+            <div>
+              <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                Dirección
+              </label>
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Calle, número, comuna"
+                className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Peso (kg)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  placeholder="Ej: 70.5"
+                  className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
+                />
+              </div>
+              <div>
+                <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Altura (cm)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={height}
+                  onChange={(e) => setHeight(e.target.value)}
+                  placeholder="Ej: 170"
+                  className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
+                />
+              </div>
+              <div>
+                <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Mano dominante
+                </label>
+                <select
+                  value={dominantHand}
+                  onChange={(e) => setDominantHand(e.target.value)}
+                  className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface focus:outline-none focus:border-primary/50 input-glow transition-all duration-300 cursor-pointer"
+                >
+                  <option value="">Sin especificar</option>
+                  <option value="diestro">Diestro</option>
+                  <option value="zurdo">Zurdo</option>
+                </select>
               </div>
             </div>
 

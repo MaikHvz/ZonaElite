@@ -130,9 +130,16 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   photo_url text,
   active boolean DEFAULT true NOT NULL,
   rut text,
+  address text,
+  weight numeric,
+  height numeric,
+  dominant_hand text,
   created_at timestamptz DEFAULT now() NOT NULL,
   updated_at timestamptz DEFAULT now() NOT NULL,
-  CONSTRAINT profiles_pkey PRIMARY KEY (id)
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_weight_check CHECK (weight > 0 AND weight <= 300),
+  CONSTRAINT profiles_height_check CHECK (height > 0 AND height <= 250),
+  CONSTRAINT profiles_dominant_hand_check CHECK (dominant_hand IN ('diestro', 'zurdo'))
 );
 
 CREATE TABLE IF NOT EXISTS public.academy_settings (
@@ -215,9 +222,16 @@ CREATE TABLE IF NOT EXISTS public.dependents (
   rut text,
   birth_date date NOT NULL,
   category text NOT NULL,
+  address text,
+  weight numeric,
+  height numeric,
+  dominant_hand text,
   created_at timestamptz DEFAULT now() NOT NULL,
   updated_at timestamptz DEFAULT now() NOT NULL,
-  CONSTRAINT dependents_pkey PRIMARY KEY (id)
+  CONSTRAINT dependents_pkey PRIMARY KEY (id),
+  CONSTRAINT dependents_weight_check CHECK (weight > 0 AND weight <= 300),
+  CONSTRAINT dependents_height_check CHECK (height > 0 AND height <= 250),
+  CONSTRAINT dependents_dominant_hand_check CHECK (dominant_hand IN ('diestro', 'zurdo'))
 );
 
 CREATE TABLE IF NOT EXISTS public.beneficiaries (
@@ -1654,5 +1668,23 @@ VALUES (
   'v1.2.0',
   'Nota del Administrador en Aprobaciones y Mejor Feedback',
   E'• Ahora, al aprobar un pago por transferencia, el administrador puede dejar una nota (aunque todo esté en orden). La nota queda guardada y el usuario la ve en su panel "Mis Solicitudes de Pago", en el historial de pagos, en la notificación y en el correo.\n• El correo de aprobación ahora muestra la nota con la etiqueta "Nota del administrador" (y el rechazo conserva "Motivo del rechazo").\n• El administrador recibe una confirmación visual tras aprobar o rechazar una solicitud, y la lista de solicitudes muestra la nota tanto en aprobadas como en rechazadas.'
+)
+ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.2.1 — Dirección en perfil del tutor y en cargas (migración 018)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.2.1',
+  'Dirección en Perfil y Cargas',
+  E'• El perfil del tutor ahora tiene un campo "Dirección".\n• Al crear o editar una carga (niño/adulto) desde el dashboard del usuario o desde el panel de administración, se puede indicar su dirección o usar el checkbox "Usar la misma dirección que el tutor", que autocompleta el dato desde el perfil.\n• Las cargas muestran su dirección en la tarjeta del dashboard.'
+)
+ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.3.0 — Datos físicos y ver ficha (migración 019)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.3.0',
+  'Datos Físicos y Ver Ficha',
+  E'• El perfil del tutor ahora incluye datos físicos: peso (kg), altura (cm) y mano dominante (diestro o zurdo), validados con rangos permitidos (peso hasta 300 kg y altura hasta 250 cm).\n• Las cargas (niño/adulto) también tienen datos físicos: se pueden registrar al crear o editar la carga, y cada tarjeta los muestra si existen.\n• La ficha médica del dashboard incluye una card editable "Datos Físicos" donde el tutor actualiza peso, altura y mano dominante de la carga.\n• En la sección Usuarios del panel de administración, cada carga tiene un botón "Ver Ficha" que abre una ficha de solo lectura con los datos físicos y personales.'
 )
 ON CONFLICT (version) DO NOTHING;

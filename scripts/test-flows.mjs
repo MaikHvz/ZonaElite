@@ -1660,7 +1660,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 5);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 7);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -1730,7 +1730,7 @@ ok("U: UserRow tipa rut (string | null)",
 ok("U: admin/usuarios muestra columna RUT (u.rut o —)",
   /key: "rut", label: "RUT", render: \(u\) => u\.rut \|\| "—"/.test(adminUsuariosT));
 ok("U: carga RUT desde profiles (select *) y desde dependents (select rut)",
-  /\.from\("dependents"\)\.select\("id, full_name, tutor_id, birth_date, category, rut, created_at"\)/.test(adminUsuariosT) &&
+  /\.from\("dependents"\)\.select\("id, full_name, tutor_id, birth_date, category, rut, address, weight, height, dominant_hand, created_at"\)/.test(adminUsuariosT) &&
   /rut: d\.rut \|\| null,[\s\S]*?_isDependent: true,/.test(adminUsuariosT));
 ok("U: búsqueda cubre nombre, email y RUT (searchKey multi-campo)",
   /searchKey=\{\["full_name", "email", "rut"\]\}[\s\S]*?Buscar por nombre, email o RUT\.\.\./.test(adminUsuariosT));
@@ -1748,7 +1748,7 @@ ok("V: openEdit de carga abre el modal en modo edición (sin early return)",
 ok("V: página renderiza CreateDependentModal con tutors (no dependientes)",
   /<CreateDependentModal[\s\S]*?tutors=\{users\.filter\(\(u\) => !u\._isDependent\)[\s\S]*?editingDependent=\{editingDependent\}/.test(adminUsuariosT));
 ok("V: create-dependent inserta en dependents con tutor_id y campos completos",
-  /\.from\("dependents"\)\s*\.insert\(\{[\s\S]*?tutor_id,[\s\S]*?full_name: full_name\.trim\(\),[\s\S]*?rut: rut\?\.trim\(\) \|\| null,[\s\S]*?birth_date,[\s\S]*?category,[\s\S]*?\}\s*\)[\s\S]*?\.select\("id, tutor_id, full_name, rut, birth_date, category, created_at"\)/.test(createDependentRouteT));
+  /\.from\("dependents"\)\s*\.insert\(\{[\s\S]*?tutor_id,[\s\S]*?full_name: full_name\.trim\(\),[\s\S]*?rut: rut\?\.trim\(\) \|\| null,[\s\S]*?birth_date,[\s\S]*?category,[\s\S]*?address: address\?\.trim\(\) \|\| null,[\s\S]*?weight: weight \?\? null,[\s\S]*?height: height \?\? null,[\s\S]*?dominant_hand: dominant_hand \|\| null,[\s\S]*?\}\s*\)[\s\S]*?\.select\("id, tutor_id, full_name, rut, birth_date, category, address, weight, height, dominant_hand, created_at"\)/.test(createDependentRouteT));
 ok("V: create-dependent asegura beneficiaries por dependent_id (idempotente)",
   /\.from\("beneficiaries"\)\s*\.select\("id"\)[\s\S]*?\.eq\("dependent_id", dependent\.id\)[\s\S]*?if \(!existingBeneficiary\)[\s\S]*?\.from\("beneficiaries"\)\.insert\(\{[\s\S]*?dependent_id: dependent\.id,[\s\S]*?profile_id: null,[\s\S]*?\}\)/.test(createDependentRouteT));
 ok("V: create-dependent valida admin y categoría, registra audit_logs",
@@ -1852,6 +1852,136 @@ ok("X: 017 resumen cubre nota en aprobaciones y feedback para ambos lados",
 ok("X: esquema documentado refleja el seed v1.2.0",
   /'v1\.2\.0'/.test(schemaSqlT) &&
   /'Nota del Administrador en Aprobaciones y Mejor Feedback'/.test(schemaSqlT));
+
+// Y. Dirección en perfil del tutor y en cargas (v1.2.1)
+const migration018 = readFileSync(join(ROOT, "contexto", "migrations", "018_address_dependents_profiles.sql"), "utf8");
+const migration018Changelog = readFileSync(join(ROOT, "contexto", "migrations", "018_changelog_v1_2_1.sql"), "utf8");
+ok("Y: 018 agrega address a profiles y dependents (idempotente)",
+  /ALTER TABLE public\.profiles ADD COLUMN IF NOT EXISTS address text;/.test(migration018) &&
+  /ALTER TABLE public\.dependents ADD COLUMN IF NOT EXISTS address text;/.test(migration018));
+ok("Y: espejo esquema documenta address en profiles y dependents",
+  /CREATE TABLE IF NOT EXISTS public\.profiles \([\s\S]*?address text,/.test(schemaSqlT) &&
+  /CREATE TABLE IF NOT EXISTS public\.dependents \([\s\S]*?address text,/.test(schemaSqlT));
+ok("Y: 018 changelog v1.2.1 'Dirección en Perfil y Cargas' (idempotente)",
+  /'v1\.2\.1'/.test(migration018Changelog) &&
+  /'Dirección en Perfil y Cargas'/.test(migration018Changelog) &&
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration018Changelog));
+ok("Y: espejo refleja el seed v1.2.1",
+  /'v1\.2\.1'/.test(schemaSqlT) &&
+  /'Dirección en Perfil y Cargas'/.test(schemaSqlT));
+ok("Y: dashboard.ts DependentData tipa address",
+  /interface DependentData \{[\s\S]*?address: string \| null;/.test(dashboardLibT));
+ok("Y: dashboard.ts getProfileForEdit y updateProfile soportan address",
+  /\.select\("full_name, phone, birth_date, rut, address"\)/.test(dashboardLibT.replace("full_name, phone, birth_date, rut, address, weight, height, dominant_hand", "full_name, phone, birth_date, rut, address")) &&
+  /updates: \{[\s\S]*?address\?: string;[\s\S]*?weight\?: number \| null;[\s\S]*?height\?: number \| null;[\s\S]*?dominant_hand\?: string \| null;[\s\S]*?\}/.test(dashboardLibT));
+ok("Y: dashboard.ts getUserMemberships incluye address en dependents",
+  /\.select\("id, full_name, birth_date, category, address, beneficiaries\(id\)"\)/.test(dashboardLibT));
+ok("Y: perfil carga, edita y guarda dirección",
+  /const \[address, setAddress\] = useState\(""\);[\s\S]*?setAddress\(data\.address \|\| ""\);[\s\S]*?address: address \|\| undefined,/.test(perfilT) &&
+  /placeholder="Calle, número, comuna"/.test(perfilT));
+ok("Y: AddDependentModal guarda address al insertar",
+  /\.from\("dependents"\)\.insert\(\{[\s\S]*?category,[\s\S]*?address: address\.trim\(\) \|\| null,[\s\S]*?\}\)/.test(addDependentModalT));
+ok("Y: AddDependentModal ofrece checkbox que autocompleta desde la dirección del tutor",
+  /Usar la misma dirección que el tutor/.test(addDependentModalT) &&
+  /setAddress\(e\.target\.checked \? tutorAddress : ""\)/.test(addDependentModalT) &&
+  /\.from\("profiles"\)[\s\S]*?\.select\("address"\)[\s\S]*?\.eq\("id", tutorId\)/.test(addDependentModalT));
+ok("Y: EditDependentModal edita address y tipa address en el dependiente",
+  /address: string \| null;[\s\S]*?tutor_id: string;[\s\S]*?\} \| null;/.test(editDependentModalT) &&
+  /setAddress\(dependent\.address \|\| ""\);/.test(editDependentModalT) &&
+  /address: address\.trim\(\) \|\| null,[\s\S]*?\.eq\("id", dependent\.id\)/.test(editDependentModalT) &&
+  /Usar la misma dirección que el tutor/.test(editDependentModalT));
+ok("Y: DependentCard muestra Dirección",
+  /dependent\.address &&[\s\S]*?Dirección[\s\S]*?\{dependent\.address\}/.test(dependentCardT));
+ok("Y: admin CreateDependentModal soporta address + checkbox del tutor",
+  /editingDependent\?: \{[\s\S]*?address: string \| null;[\s\S]*?\} \| null;/.test(createDependentModalT) &&
+  /address: address\.trim\(\) \|\| null,[\s\S]*?\}\)/.test(createDependentModalT) &&
+  /Usar la misma dirección que el tutor/.test(createDependentModalT));
+ok("Y: update-dependent actualiza address y lo registra en audit",
+  /address: address\?\.trim\(\) \|\| null,[\s\S]*?\.eq\("id", dependent_id\)/.test(updateDependentRouteT) &&
+  /metadata: \{ full_name: dependent\.full_name, category, address: dependent\.address, weight: dependent\.weight, height: dependent\.height, dominant_hand: dependent\.dominant_hand \}/.test(updateDependentRouteT));
+ok("Y: admin/usuarios pasa address al modal de dependientes (edición y tutores)",
+  /address: u\._address \|\| null,[\s\S]*?\}/.test(adminUsuariosT) &&
+  /tutors=\{users\.filter\(\(u\) => !u\._isDependent\)\.map\(\(u\) => \(\{ id: u\.id, full_name: u\.full_name, email: u\.email, address: u\.address \|\| null \}\)\)\}/.test(adminUsuariosT));
+
+// Z. Datos físicos (peso/altura/mano dominante) y Ver Ficha (v1.3.0)
+const migration019 = readFileSync(join(ROOT, "contexto", "migrations", "019_physical_info_profiles_dependents.sql"), "utf8");
+const migration019Changelog = readFileSync(join(ROOT, "contexto", "migrations", "019_changelog_v1_3_0.sql"), "utf8");
+const medidasT = readFileSync(join(ROOT, "src", "lib", "medidas.ts"), "utf8");
+const physicalInfoCardT = readFileSync(join(ROOT, "src", "components", "dashboard", "PhysicalInfoCard.tsx"), "utf8");
+const verFichaModalT = readFileSync(join(ROOT, "src", "components", "admin", "VerFichaModal.tsx"), "utf8");
+const medicoPageT = readFileSync(join(ROOT, "src", "app", "dashboard", "cargas", "[id]", "medico", "page.tsx"), "utf8");
+ok("Z: 019 agrega weight/height/dominant_hand a profiles y dependents (idempotente)",
+  /ALTER TABLE public\.profiles ADD COLUMN IF NOT EXISTS weight numeric;/.test(migration019) &&
+  /ALTER TABLE public\.profiles ADD COLUMN IF NOT EXISTS height numeric;/.test(migration019) &&
+  /ALTER TABLE public\.profiles ADD COLUMN IF NOT EXISTS dominant_hand text;/.test(migration019) &&
+  /ALTER TABLE public\.dependents ADD COLUMN IF NOT EXISTS weight numeric;/.test(migration019) &&
+  /ALTER TABLE public\.dependents ADD COLUMN IF NOT EXISTS height numeric;/.test(migration019) &&
+  /ALTER TABLE public\.dependents ADD COLUMN IF NOT EXISTS dominant_hand text;/.test(migration019));
+ok("Z: 019 define CHECK constraints via DO block (patrón 010)",
+  /DO \$\$[\s\S]*?pg_constraint WHERE conname = 'profiles_weight_check'/.test(migration019) &&
+  /CHECK \(weight > 0 AND weight <= 300\)/.test(migration019) &&
+  /CHECK \(height > 0 AND height <= 250\)/.test(migration019) &&
+  /CHECK \(dominant_hand IN \('diestro', 'zurdo'\)\)/.test(migration019) &&
+  /dependents_weight_check/.test(migration019));
+ok("Z: espejo esquema documenta columnas físicas + CHECK en profiles y dependents",
+  /CREATE TABLE IF NOT EXISTS public\.profiles \([\s\S]*?weight numeric,[\s\S]*?height numeric,[\s\S]*?dominant_hand text,[\s\S]*?CONSTRAINT profiles_weight_check CHECK \(weight > 0 AND weight <= 300\),[\s\S]*?CONSTRAINT profiles_height_check CHECK \(height > 0 AND height <= 250\),[\s\S]*?CONSTRAINT profiles_dominant_hand_check CHECK \(dominant_hand IN \('diestro', 'zurdo'\)\)/.test(schemaSqlT) &&
+  /CREATE TABLE IF NOT EXISTS public\.dependents \([\s\S]*?weight numeric,[\s\S]*?height numeric,[\s\S]*?dominant_hand text,[\s\S]*?CONSTRAINT dependents_weight_check CHECK \(weight > 0 AND weight <= 300\),[\s\S]*?CONSTRAINT dependents_height_check CHECK \(height > 0 AND height <= 250\),[\s\S]*?CONSTRAINT dependents_dominant_hand_check CHECK \(dominant_hand IN \('diestro', 'zurdo'\)\)/.test(schemaSqlT));
+ok("Z: 019 changelog v1.3.0 'Datos Físicos y Ver Ficha' (idempotente)",
+  /'v1\.3\.0'/.test(migration019Changelog) &&
+  /'Datos Físicos y Ver Ficha'/.test(migration019Changelog) &&
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration019Changelog));
+ok("Z: espejo refleja el seed v1.3.0",
+  /'v1\.3\.0'/.test(schemaSqlT) &&
+  /'Datos Físicos y Ver Ficha'/.test(schemaSqlT));
+ok("Z: medidas.ts normaliza y valida peso/altura/mano (isomórfico)",
+  /export function normalizeMedida\(value: string\): string/.test(medidasT) &&
+  /\.replace\(",", "\."\)/.test(medidasT) &&
+  /export function parseMedida\(value: string\): number \| null[\s\S]*?\/\^\\d\+\(\\\.\\d\+\)\?\$\//.test(medidasT) &&
+  /export function isValidPeso\(value: string\): boolean[\s\S]*?n !== null && n > 0 && n <= 300/.test(medidasT) &&
+  /export function isValidAltura\(value: string\): boolean[\s\S]*?n !== null && n > 0 && n <= 250/.test(medidasT) &&
+  /export function isValidDominantHand\(value: string\): boolean[\s\S]*?"diestro" \|\| value === "zurdo"/.test(medidasT));
+ok("Z: dashboard.ts DependentData tipa weight/height/dominant_hand",
+  /interface DependentData \{[\s\S]*?weight: number \| null;[\s\S]*?height: number \| null;[\s\S]*?dominant_hand: string \| null;/.test(dashboardLibT));
+ok("Z: perfil registra datos físicos con validación y select de mano",
+  /const \[weight, setWeight\] = useState\(""\);[\s\S]*?isValidPeso\(weight\)[\s\S]*?weight: weight\.trim\(\) \? parseMedida\(weight\) : null,/.test(perfilT) &&
+  /<option value="diestro">Diestro<\/option>[\s\S]*?<option value="zurdo">Zurdo<\/option>/.test(perfilT));
+ok("Z: AddDependentModal guarda medidas con validación",
+  /weight: weight\.trim\(\) \? parseMedida\(weight\) : null,[\s\S]*?height: height\.trim\(\) \? parseMedida\(height\) : null,[\s\S]*?dominant_hand: dominantHand \|\| null,[\s\S]*?\}\)/.test(addDependentModalT) &&
+  /if \(weight\.trim\(\) && !isValidPeso\(weight\)\)[\s\S]*?El peso debe ser mayor a 0 y hasta 300 kg/.test(addDependentModalT) &&
+  /if \(height\.trim\(\) && !isValidAltura\(height\)\)/.test(addDependentModalT));
+ok("Z: EditDependentModal carga y edita medidas",
+  /setWeight\(dependent\.weight != null \? String\(dependent\.weight\) : ""\);[\s\S]*?setHeight\(dependent\.height != null \? String\(dependent\.height\) : ""\);[\s\S]*?setDominantHand\(dependent\.dominant_hand \|\| ""\);/.test(editDependentModalT) &&
+  /weight: number \| null;[\s\S]*?height: number \| null;[\s\S]*?dominant_hand: string \| null;[\s\S]*?\} \| null;/.test(editDependentModalT) &&
+  /dominant_hand: dominantHand \|\| null,[\s\S]*?\.eq\("id", dependent\.id\)/.test(editDependentModalT));
+ok("Z: DependentCard muestra datos físicos (peso/altura/mano)",
+  /Datos físicos[\s\S]*?dependent\.weight != null \? `\$\{dependent\.weight\} kg` : null,[\s\S]*?dependent\.height != null \? `\$\{dependent\.height\} cm` : null,[\s\S]*?dependent\.dominant_hand === "zurdo" \? "Zurdo"/.test(dependentCardT));
+ok("Z: PhysicalInfoCard es card editable con validación de medidas",
+  /export default function PhysicalInfoCard[\s\S]*?isValidPeso\(peso\)[\s\S]*?isValidAltura\(altura\)[\s\S]*?parseMedida\(peso\)[\s\S]*?Datos Físicos/.test(physicalInfoCardT));
+ok("Z: medico page carga y guarda medidas de la carga (dependents.update por id)",
+  /\.select\("full_name, birth_date, category, weight, height, dominant_hand, beneficiaries\(id\)"\)/.test(medicoPageT) &&
+  /\.from\("dependents"\)\s*\.update\(data\)[\s\S]*?\.eq\("id", dependentId\)[\s\S]*?\.eq\("tutor_id", user\.id\)/.test(medicoPageT) &&
+  /<PhysicalInfoCard/.test(medicoPageT));
+ok("Z: admin CreateDependentModal valida y envía medidas",
+  /weight: weight\.trim\(\) \? parseMedida\(weight\) : null,[\s\S]*?height: height\.trim\(\) \? parseMedida\(height\) : null,[\s\S]*?dominant_hand: dominantHand \|\| null,[\s\S]*?\}\)/.test(createDependentModalT) &&
+  /if \(weight\.trim\(\) && !isValidPeso\(weight\)\)/.test(createDependentModalT) &&
+  /Datos físicos/.test(createDependentModalT));
+ok("Z: APIs create/update-dependent validan y persisten medidas + audit",
+  /El peso debe ser mayor a 0 y hasta 300 kg/.test(createDependentRouteT) &&
+  /La altura debe ser mayor a 0 y hasta 250 cm/.test(updateDependentRouteT) &&
+  /La mano dominante debe ser diestro o zurdo/.test(createDependentRouteT) &&
+  /weight: weight \?\? null,[\s\S]*?height: height \?\? null,[\s\S]*?dominant_hand: dominant_hand \|\| null,[\s\S]*?\.select\("id, tutor_id, full_name, rut, birth_date, category, address, weight, height, dominant_hand, created_at"\)/.test(updateDependentRouteT) &&
+  /weight: dependent\.weight, height: dependent\.height, dominant_hand: dependent\.dominant_hand \}/.test(createDependentRouteT));
+ok("Z: DataTable soporta onView + canView (botón ojo Ver Ficha)",
+  /onView\?: \(item: T\) => void;[\s\S]*?canView\?: \(item: T\) => boolean;/.test(dataTableT) &&
+  /onView && \(!canView \|\| canView\(item\)\)[\s\S]*?visibility/.test(dataTableT));
+ok("Z: VerFichaModal es solo lectura y muestra datos físicos",
+  /export default function VerFichaModal[\s\S]*?dependent\.weight != null \? `\$\{dependent\.weight\} kg` : "—"[\s\S]*?dependent\.height != null \? `\$\{dependent\.height\} cm` : "—"[\s\S]*?Mano dominante[\s\S]*?Cerrar/.test(verFichaModalT) &&
+  !/<input|<textarea|<select/.test(verFichaModalT));
+ok("Z: admin/usuarios abre VerFichaModal (onView/canView) y carga medidas",
+  /onView=\{openFicha\}[^]*canView=\{\(u\) => !!u\._isDependent\}/.test(adminUsuariosT) &&
+  /<VerFichaModal[\s\S]*?dependent=\{fichaRow\}/.test(adminUsuariosT) &&
+  /_weight: d\.weight \?\? null,[\s\S]*?_height: d\.height \?\? null,[\s\S]*?_dominantHand: d\.dominant_hand \|\| null,/.test(adminUsuariosT) &&
+  /weight: u\._weight \?\? null,[\s\S]*?height: u\._height \?\? null,[\s\S]*?dominant_hand: u\._dominantHand \|\| null,[\s\S]*?\}/.test(adminUsuariosT));
 
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

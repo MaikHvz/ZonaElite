@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isValidRut } from "@/lib/rut";
+import { parseMedida, isValidPeso, isValidAltura, isValidDominantHand } from "@/lib/medidas";
 
 interface EditDependentModalProps {
   open: boolean;
@@ -14,6 +15,11 @@ interface EditDependentModalProps {
     rut: string | null;
     birth_date: string;
     category: string;
+    address: string | null;
+    tutor_id: string;
+    weight: number | null;
+    height: number | null;
+    dominant_hand: string | null;
   } | null;
 }
 
@@ -28,6 +34,12 @@ export default function EditDependentModal({
   const [rut, setRut] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [category, setCategory] = useState<"nino" | "adulto">("nino");
+  const [address, setAddress] = useState("");
+  const [sameAddress, setSameAddress] = useState(false);
+  const [tutorAddress, setTutorAddress] = useState("");
+  const [weight, setWeight] = useState("");
+  const [height, setHeight] = useState("");
+  const [dominantHand, setDominantHand] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +49,20 @@ export default function EditDependentModal({
       setRut(dependent.rut || "");
       setBirthDate(dependent.birth_date);
       setCategory(dependent.category === "adulto" ? "adulto" : "nino");
+      setAddress(dependent.address || "");
+      setWeight(dependent.weight != null ? String(dependent.weight) : "");
+      setHeight(dependent.height != null ? String(dependent.height) : "");
+      setDominantHand(dependent.dominant_hand || "");
+      setSameAddress(false);
+      setTutorAddress("");
       setError(null);
+      const supabase = createClient();
+      supabase
+        .from("profiles")
+        .select("address")
+        .eq("id", dependent.tutor_id)
+        .maybeSingle()
+        .then(({ data }) => setTutorAddress((data?.address as string) || ""));
     }
   }, [open, dependent]);
 
@@ -75,6 +100,19 @@ export default function EditDependentModal({
       return;
     }
 
+    if (weight.trim() && !isValidPeso(weight)) {
+      setError("El peso debe ser mayor a 0 y hasta 300 kg.");
+      return;
+    }
+    if (height.trim() && !isValidAltura(height)) {
+      setError("La altura debe ser mayor a 0 y hasta 250 cm.");
+      return;
+    }
+    if (dominantHand && !isValidDominantHand(dominantHand)) {
+      setError("La mano dominante debe ser diestro o zurdo.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -86,6 +124,10 @@ export default function EditDependentModal({
         rut: rutTrimmed || null,
         birth_date: birthDate,
         category,
+        address: address.trim() || null,
+        weight: weight.trim() ? parseMedida(weight) : null,
+        height: height.trim() ? parseMedida(height) : null,
+        dominant_hand: dominantHand || null,
       })
       .eq("id", dependent.id);
 
@@ -180,6 +222,77 @@ export default function EditDependentModal({
                   }`}
                 >
                   {cat === "nino" ? "Niño" : "Adulto"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+              Dirección
+            </label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Calle, número, comuna"
+              className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 focus:outline-none focus:border-primary/50 transition-colors"
+            />
+            <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={sameAddress}
+                onChange={(e) => {
+                  setSameAddress(e.target.checked);
+                  setAddress(e.target.checked ? tutorAddress : "");
+                }}
+                className="accent-primary w-4 h-4"
+              />
+              <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
+                Usar la misma dirección que el tutor
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+              Datos físicos
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  placeholder="Peso (kg)"
+                  className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 focus:outline-none focus:border-primary/50 transition-colors"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={height}
+                  onChange={(e) => setHeight(e.target.value)}
+                  placeholder="Altura (cm)"
+                  className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 focus:outline-none focus:border-primary/50 transition-colors"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              {(["diestro", "zurdo"] as const).map((hand) => (
+                <button
+                  key={hand}
+                  type="button"
+                  onClick={() => setDominantHand(dominantHand === hand ? "" : hand)}
+                  className={`py-2.5 rounded-lg border font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider transition-colors cursor-pointer ${
+                    dominantHand === hand
+                      ? "bg-primary/15 border-primary/40 text-primary"
+                      : "bg-surface-container border-on-surface/10 text-on-surface-variant hover:border-on-surface/20"
+                  }`}
+                >
+                  {hand === "diestro" ? "Diestro" : "Zurdo"}
                 </button>
               ))}
             </div>

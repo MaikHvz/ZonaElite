@@ -52,6 +52,10 @@ export interface DependentData {
   rut: string | null;
   birth_date: string;
   category: string;
+  address: string | null;
+  weight: number | null;
+  height: number | null;
+  dominant_hand: string | null;
   beneficiaries: {
     id: string;
     memberships: {
@@ -121,7 +125,7 @@ export async function getUserMemberships(userId: string) {
         .maybeSingle(),
       supabase
         .from("dependents")
-        .select("id, full_name, birth_date, category, beneficiaries(id)")
+        .select("id, full_name, birth_date, category, address, beneficiaries(id)")
         .eq("tutor_id", userId),
     ]);
 
@@ -325,16 +329,34 @@ export async function getProfileForEdit(userId: string) {
     const supabase = createClient();
     const { data } = await supabase
       .from("profiles")
-      .select("full_name, phone, birth_date, rut")
+      .select("full_name, phone, birth_date, rut, address, weight, height, dominant_hand")
       .eq("id", userId)
       .single();
-    return data as { full_name: string; phone: string | null; birth_date: string | null; rut: string | null } | null;
+    return data as {
+      full_name: string;
+      phone: string | null;
+      birth_date: string | null;
+      rut: string | null;
+      address: string | null;
+      weight: number | null;
+      height: number | null;
+      dominant_hand: string | null;
+    } | null;
   });
 }
 
 export async function updateProfile(
   userId: string,
-  updates: { full_name?: string; phone?: string; birth_date?: string; rut?: string }
+  updates: {
+    full_name?: string;
+    phone?: string;
+    birth_date?: string;
+    rut?: string;
+    address?: string;
+    weight?: number | null;
+    height?: number | null;
+    dominant_hand?: string | null;
+  }
 ) {
   return safeQuery(async () => {
     const supabase = createClient();
