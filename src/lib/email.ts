@@ -254,3 +254,111 @@ export async function sendTransferReviewEmail(data: TransferReviewEmailData) {
     html,
   });
 }
+
+export interface StoreReceiptItem {
+  name: string;
+  quantity: number;
+  unit_price: number;
+}
+
+export interface ProductReceiptEmailData {
+  to: string;
+  buyerName?: string | null;
+  reference: string;
+  items: StoreReceiptItem[];
+  total: number;
+  storeUrl: string;
+}
+
+export async function sendProductReceiptEmail(data: ProductReceiptEmailData) {
+  const academyName = "ZONAELITE";
+  const { to, buyerName, reference, items, total, storeUrl } = data;
+
+  const formatCLP = (value: number) =>
+    new Intl.NumberFormat("es-CL", {
+      style: "currency",
+      currency: "CLP",
+      maximumFractionDigits: 0,
+    }).format(value || 0);
+
+  const itemsRows = items
+    .map(
+      (item) => `
+    <tr>
+      <td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);color:#ffffff;font-size:14px;">${item.name}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);font-size:14px;text-align:center;">${item.quantity}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.06);color:#ffffff;font-size:14px;text-align:right;">${formatCLP(item.unit_price * item.quantity)}</td>
+    </tr>`
+    )
+    .join("");
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin:0; padding:0; background:#131313; font-family:'Segoe UI',Arial,sans-serif; }
+    .container { max-width:560px; margin:0 auto; padding:32px 24px; }
+    .header { text-align:center; padding:32px 0 24px; }
+    .header h1 { color:#ffb4ac; font-size:28px; font-weight:900; letter-spacing:2px; margin:0; text-transform:uppercase; }
+    .card { background:#1e1e1e; border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:32px; margin:16px 0; }
+    .card h2 { color:#ffffff; font-size:20px; margin:0 0 16px; }
+    .card p { color:rgba(255,255,255,0.7); font-size:14px; line-height:1.6; margin:0 0 12px; }
+    .credentials { background:rgba(255,180,172,0.08); border:1px solid rgba(255,180,172,0.2); border-radius:12px; padding:20px; margin:20px 0; }
+    .credentials .label { color:rgba(255,255,255,0.5); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+    .credentials .value { color:#ffffff; font-size:16px; font-weight:600; margin-bottom:16px; word-break:break-all; }
+    .credentials .value:last-child { margin-bottom:0; }
+    .btn { display:inline-block; background:linear-gradient(135deg,#ff544c,#ffb4ac); color:#131313; font-weight:700; text-decoration:none; padding:14px 32px; border-radius:12px; font-size:14px; text-transform:uppercase; letter-spacing:1px; margin-top:8px; }
+    .footer { text-align:center; padding:24px 0; color:rgba(255,255,255,0.3); font-size:12px; }
+    table { width:100%; border-collapse:collapse; margin:16px 0; }
+    th { text-align:left; color:rgba(255,255,255,0.5); font-size:11px; text-transform:uppercase; letter-spacing:1px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.12); }
+    .total { text-align:right; color:#ffffff; font-size:16px; font-weight:700; padding:12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>${academyName}</h1>
+    </div>
+    <div class="card">
+      <h2>Recibo de compra</h2>
+      <p>${buyerName ? `Hola <strong>${buyerName}</strong>,` : "Hola,"}</p>
+      <p>Gracias por tu compra en la tienda de ${academyName}. Tu pago fue recibido correctamente.</p>
+      <div class="credentials">
+        <div class="label">N° de orden</div>
+        <div class="value">${reference}</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th style="text-align:center;">Cant.</th>
+            <th style="text-align:right;">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsRows}
+        </tbody>
+      </table>
+      <div class="total">Total: ${formatCLP(total)}</div>
+      <p style="color:rgba(255,255,255,0.5);font-size:12px;font-style:italic;">Recibirás un correo separado cuando tu pedido sea enviado.</p>
+      <div style="text-align:center;">
+        <a href="${storeUrl}" class="btn">Volver a la Tienda</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>${academyName} — Academia de Artes Marciales, La Serena, Chile</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  await transporter.sendMail({
+    from: FROM_EMAIL,
+    to,
+    subject: `${academyName} — Recibo de compra (${reference})`,
+    html,
+  });
+}

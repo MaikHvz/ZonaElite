@@ -12,6 +12,11 @@ import {
   notifyPaymentWithoutMembership,
   notifyUserPaymentStatus,
 } from "@/lib/flow-helpers";
+import {
+  isStorePayment,
+  handleStorePaymentApproved,
+  handleStorePaymentRejected,
+} from "@/lib/store";
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -70,7 +75,7 @@ async function processInBackground(token: string) {
   try {
     const result = await supabase
       .from("payments")
-      .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id, membership_id, include_enrollment, enrollment_plan_id")
+      .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id, membership_id, include_enrollment, enrollment_plan_id, order_id")
       .eq("flow_token", token)
       .maybeSingle();
     payment = result.data;
@@ -116,13 +121,20 @@ async function processInBackground(token: string) {
       }
     }
 
+    // Tienda: si Flow rechazó/anuló el pago, cancelar la orden y restaurar stock.
+    if (isStorePayment(payment)) {
+      await handleStorePaymentRejected(supabase, payment);
+    }
+
     // Notificar al usuario qué pasó con su pago (best-effort, nunca lanza)
-    if (mapped === "rechazado") {
-      await notifyUserPaymentStatus(supabase, payment, "rejected");
-    } else if (mapped === "cancelado") {
-      await notifyUserPaymentStatus(supabase, payment, "cancelled");
-    } else {
-      await notifyUserPaymentStatus(supabase, payment, "pending");
+    if (payment.user_id) {
+      if (mapped === "rechazado") {
+        await notifyUserPaymentStatus(supabase, payment, "rejected");
+      } else if (mapped === "cancelado") {
+        await notifyUserPaymentStatus(supabase, payment, "cancelled");
+      } else {
+        await notifyUserPaymentStatus(supabase, payment, "pending");
+      }
     }
     return;
   }
@@ -204,7 +216,19 @@ async function processInBackground(token: string) {
     }
   }
 
-  if (assignedSomething) {
+  // Tienda (módulo desacoplado): pago con order_id + concepto "Tienda: ...".
+  // Confirma la orden (product_orders → 'pagado') y envía el recibo al correo.
+  // No toca membresías/tokens ni envía notificación in-app de membresía.
+  if (isStorePayment(payment)) {
+    const storeResult = await handleStorePaymentApproved(supabase, payment);
+    if (storeResult.success) {
+      assignedSomething = true;
+    } else {
+      console.error(L, "Store order confirmation failed:", storeResult.error);
+    }
+  }
+
+  if (assignedSomething && payment.user_id) {
     await notifyUserPaymentStatus(supabase, payment, "approved");
   }
 }

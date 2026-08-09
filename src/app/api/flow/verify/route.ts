@@ -12,6 +12,11 @@ import {
   notifyPaymentWithoutMembership,
   notifyUserPaymentStatus,
 } from "@/lib/flow-helpers";
+import {
+  isStorePayment,
+  handleStorePaymentApproved,
+  handleStorePaymentRejected,
+} from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
@@ -151,6 +156,16 @@ export async function GET(request: Request) {
           }
         }
 
+        // Tienda (módulo desacoplado): pago con order_id + concepto "Tienda: ...".
+        if (isStorePayment(fullPayment)) {
+          const storeResult = await handleStorePaymentApproved(admin, fullPayment);
+          if (storeResult.success) {
+            assignedSomething = true;
+          } else {
+            console.error(VERIFY_LOG, "Store order confirmation failed:", storeResult.error);
+          }
+        }
+
         if (assignedSomething) {
           await notifyUserPaymentStatus(admin, fullPayment, "approved");
         }
@@ -166,6 +181,11 @@ export async function GET(request: Request) {
           .from("payments")
           .update({ status: mapped })
           .eq("id", fullPayment.id);
+      }
+
+      // Tienda: si Flow rechazó/anuló el pago, cancelar la orden y restaurar stock.
+      if (isStorePayment(fullPayment)) {
+        await handleStorePaymentRejected(admin, fullPayment);
       }
 
       // Notificar al usuario qué pasó con su pago (best-effort, nunca lanza)

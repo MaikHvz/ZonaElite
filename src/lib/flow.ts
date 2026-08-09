@@ -55,7 +55,11 @@ function buildConfirmUrl(): string {
   return `${getBaseUrl()}/api/flow/confirmation`;
 }
 
-function buildReturnUrl(): string {
+function buildReturnUrl(returnUrl?: string): string {
+  if (returnUrl) {
+    const base = getBaseUrl();
+    return returnUrl.startsWith("http") ? returnUrl : `${base}${returnUrl}`;
+  }
   return `${getBaseUrl()}/dashboard/pagos`;
 }
 
@@ -65,6 +69,7 @@ interface CreateOrderParams {
   amount: number;
   email: string;
   metadata?: Record<string, string>;
+  returnUrl?: string;
 }
 
 interface CreateOrderResult {
@@ -86,7 +91,7 @@ export async function createFlowOrder(
     amount: String(params.amount),
     email: params.email,
     urlConfirmation: buildConfirmUrl(),
-    urlReturn: buildReturnUrl(),
+    urlReturn: buildReturnUrl(params.returnUrl),
   };
 
   if (params.metadata) {

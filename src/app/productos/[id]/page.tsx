@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { useCart } from "@/context/CartContext";
 
 interface ProductImage {
   id: string;
@@ -28,6 +29,25 @@ export default function ProductoDetailPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const { addItem } = useCart();
+  const router = useRouter();
+
+  const addToCart = () => {
+    if (!product) return;
+    const img = product.product_images[0];
+    addItem({
+      productId: product.id,
+      name: product.name,
+      price: Number(product.price),
+      quantity: 1,
+      image: img?.url || null,
+    });
+  };
+
+  const buyNow = () => {
+    addToCart();
+    router.push("/carrito");
+  };
 
   useEffect(() => {
     const supabase = createClient();
@@ -191,13 +211,22 @@ export default function ProductoDetailPage() {
                 Volver a la tienda
               </Link>
               {product.stock > 0 && (
-                <Link
-                  href="/auth"
-                  className="flex items-center justify-center gap-2 px-6 py-3 rounded-lg btn-primary-gradient text-white text-[14px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider hover:opacity-90 transition-opacity"
-                >
-                  <span className="material-symbols-outlined text-[18px]">shopping_cart</span>
-                  Comprar
-                </Link>
+                <>
+                  <button
+                    onClick={addToCart}
+                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-lg border border-on-surface/15 text-on-surface text-[14px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider hover:bg-on-surface/5 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">add_shopping_cart</span>
+                    Agregar al carrito
+                  </button>
+                  <button
+                    onClick={buyNow}
+                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-lg btn-primary-gradient text-white text-[14px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider hover:opacity-90 transition-opacity cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">shopping_cart</span>
+                    Comprar ahora
+                  </button>
+                </>
               )}
             </div>
           </div>

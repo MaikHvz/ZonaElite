@@ -7,6 +7,7 @@ import ContactModal from "@/components/ContactModal";
 import Navbar from "@/components/Navbar";
 import FadeUpObserver from "@/components/FadeUpObserver";
 import SessionProvider from "@/providers/SessionProvider";
+import { CartProvider } from "@/context/CartContext";
 
 const anton = Anton({
   weight: "400",
@@ -73,12 +74,14 @@ export default function RootLayout({
         className={`${anton.variable} ${hankenGrotesk.variable} ${jetbrainsMono.variable}`}
       >
         <SessionProvider>
-          <ContactModalProvider>
-            <Navbar />
-            <FadeUpObserver />
-            {children}
-            <ContactModal />
-          </ContactModalProvider>
+          <CartProvider>
+            <ContactModalProvider>
+              <Navbar />
+              <FadeUpObserver />
+              {children}
+              <ContactModal />
+            </ContactModalProvider>
+          </CartProvider>
         </SessionProvider>
       </body>
     </html>

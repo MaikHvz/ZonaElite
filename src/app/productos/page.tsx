@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import PageCTA from "@/components/PageCTA";
+import { useCart } from "@/context/CartContext";
 
 interface Product {
   id: string;
@@ -21,6 +23,24 @@ export default function ProductosPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [filter, setFilter] = useState("Todos");
   const [loading, setLoading] = useState(true);
+  const { addItem } = useCart();
+  const router = useRouter();
+
+  const addToCart = (product: Product) => {
+    const img = product.product_images?.sort((a, b) => a.position - b.position)[0];
+    addItem({
+      productId: product.id,
+      name: product.name,
+      price: Number(product.price),
+      quantity: 1,
+      image: img?.url || null,
+    });
+  };
+
+  const buyNow = (product: Product) => {
+    addToCart(product);
+    router.push("/carrito");
+  };
 
   useEffect(() => {
     const supabase = createClient();
@@ -83,12 +103,14 @@ export default function ProductosPage() {
             {filtered.map((product) => {
               const img = product.product_images?.sort((a, b) => a.position - b.position)[0];
               return (
-                <Link
+                <div
                   key={product.id}
-                  href={`/productos/${product.id}`}
-                  className="block rounded-2xl border border-on-surface/5 bg-surface-container-lowest overflow-hidden hover:border-primary/30 transition-colors group"
+                  className="flex flex-col rounded-2xl border border-on-surface/5 bg-surface-container-lowest overflow-hidden hover:border-primary/30 transition-colors group"
                 >
-                  <div className="h-[200px] bg-surface-container flex items-center justify-center overflow-hidden">
+                  <Link
+                    href={`/productos/${product.id}`}
+                    className="block h-[200px] bg-surface-container flex items-center justify-center overflow-hidden"
+                  >
                     {img ? (
                       <img
                         src={img.url}
@@ -100,16 +122,18 @@ export default function ProductosPage() {
                         package_2
                       </span>
                     )}
-                  </div>
-                  <div className="p-5">
-                    {product.category && (
-                      <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary mb-1 block">
-                        {product.category}
-                      </span>
-                    )}
-                    <h3 className="font-[family-name:var(--font-headline-md)] text-[18px] text-on-surface uppercase mb-2">
-                      {product.name}
-                    </h3>
+                  </Link>
+                  <div className="p-5 flex flex-col flex-1">
+                    <Link href={`/productos/${product.id}`}>
+                      {product.category && (
+                        <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary mb-1 block">
+                          {product.category}
+                        </span>
+                      )}
+                      <h3 className="font-[family-name:var(--font-headline-md)] text-[18px] text-on-surface uppercase mb-2">
+                        {product.name}
+                      </h3>
+                    </Link>
                     {product.description && (
                       <p className="font-[family-name:var(--font-body-md)] text-[13px] leading-[20px] text-on-surface-variant mb-3">
                         {product.description.length > 80
@@ -117,9 +141,9 @@ export default function ProductosPage() {
                           : product.description}
                       </p>
                     )}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-4">
                       <span className="font-[family-name:var(--font-headline-lg)] text-[24px] text-primary">
-                        ${product.price.toLocaleString("es-CL")}
+                        ${Number(product.price).toLocaleString("es-CL")}
                       </span>
                       {product.stock > 0 ? (
                         <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-green-400">
@@ -131,8 +155,30 @@ export default function ProductosPage() {
                         </span>
                       )}
                     </div>
+                    {product.stock > 0 ? (
+                      <div className="grid grid-cols-2 gap-2 mt-auto">
+                        <button
+                          onClick={() => addToCart(product)}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg border border-on-surface/15 text-on-surface text-[12px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider hover:bg-on-surface/5 transition-colors cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">add_shopping_cart</span>
+                          Agregar
+                        </button>
+                        <button
+                          onClick={() => buyNow(product)}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg btn-primary-gradient text-white text-[12px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider hover:opacity-90 transition-opacity cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">shopping_cart</span>
+                          Comprar
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-center font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant/50 mt-auto pt-1">
+                        Sin stock
+                      </p>
+                    )}
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>

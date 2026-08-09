@@ -300,9 +300,13 @@ CREATE TABLE IF NOT EXISTS public.product_images (
 
 CREATE TABLE IF NOT EXISTS public.product_orders (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
-  user_id uuid NOT NULL,
+  user_id uuid,
   status text DEFAULT 'borrador' NOT NULL,
   total numeric DEFAULT 0 NOT NULL,
+  guest_email text,
+  guest_phone text,
+  guest_name text,
+  reference text,
   created_at timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT product_orders_pkey PRIMARY KEY (id)
 );
@@ -313,12 +317,13 @@ CREATE TABLE IF NOT EXISTS public.order_items (
   product_id uuid NOT NULL,
   quantity integer NOT NULL,
   unit_price numeric NOT NULL,
-  CONSTRAINT order_items_pkey PRIMARY KEY (id)
+  CONSTRAINT order_items_pkey PRIMARY KEY (id),
+  CONSTRAINT order_items_quantity_check CHECK (quantity > 0)
 );
 
 CREATE TABLE IF NOT EXISTS public.payments (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
-  user_id uuid NOT NULL,
+  user_id uuid,
   membership_id uuid,
   order_id uuid,
   concept text NOT NULL,
@@ -535,6 +540,8 @@ CREATE INDEX IF NOT EXISTS idx_payments_reviewed_by ON public.payments(reviewed_
 CREATE INDEX IF NOT EXISTS idx_payments_membership_plan ON public.payments(membership_plan_id);
 CREATE INDEX IF NOT EXISTS idx_payments_personalized_plan ON public.payments(personalized_plan_id);
 CREATE INDEX IF NOT EXISTS idx_product_orders_user_id ON public.product_orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_product_orders_reference ON public.product_orders(reference);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_product_orders_reference_unique ON public.product_orders(reference) WHERE reference IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON public.order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_schedules_discipline_id ON public.schedules(discipline_id);
 CREATE INDEX IF NOT EXISTS idx_schedules_day_of_week ON public.schedules(day_of_week);
@@ -1601,6 +1608,85 @@ COMMENT ON FUNCTION public.cancel_class_enrollment(UUID, UUID) IS
 'Desinscribe a un beneficiario de una sesión (solo admin). En modalidad normal borra class_enrollments (por sesión u horario recurrente) y la deuda pendiente de la sesión, devolviendo el token automáticamente vía get_remaining_tokens; en modalidad personalizada restaura 1 clase al pack. Limpia attendance y notifica al titular.';
 
 -- ============================================================
+-- RPC DE STOCK (checkout de tienda v1.4.0, migración 020)
+-- La reserva baja stock con guarda `stock >= p_qty` (evita
+-- sobreventa); si no hay stock suficiente no toca la fila y la
+-- función devuelve false. La restauración sube stock (nunca
+-- negativo). SECURITY DEFINER: corre con permisos del owner;
+-- solo se invoca server-side (service role / RPC del checkout).
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.decrement_product_stock(
+  p_product_id uuid,
+  p_qty integer
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_updated boolean := false;
+BEGIN
+  IF p_qty <= 0 THEN
+    RETURN false;
+  END IF;
+
+  UPDATE public.products
+  SET stock = stock - p_qty,
+      updated_at = now()
+  WHERE id = p_product_id
+    AND active = true
+    AND stock >= p_qty;
+
+  IF FOUND THEN
+    v_updated := true;
+  END IF;
+
+  RETURN v_updated;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.increment_product_stock(
+  p_product_id uuid,
+  p_qty integer
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_updated boolean := false;
+BEGIN
+  IF p_qty <= 0 THEN
+    RETURN false;
+  END IF;
+
+  UPDATE public.products
+  SET stock = stock + p_qty,
+      updated_at = now()
+  WHERE id = p_product_id;
+
+  IF FOUND THEN
+    v_updated := true;
+  END IF;
+
+  RETURN v_updated;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.decrement_product_stock(uuid, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.increment_product_stock(uuid, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.decrement_product_stock(uuid, integer) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.increment_product_stock(uuid, integer) TO authenticated;
+
+COMMENT ON FUNCTION public.decrement_product_stock(uuid, integer) IS
+'Reserva stock de un producto (UPDATE atómico con guarda stock >= qty). Devuelve false si no hay stock suficiente o el producto está inactivo.';
+COMMENT ON FUNCTION public.increment_product_stock(uuid, integer) IS
+'Restaura stock de un producto (UPDATE atómico de suma). Se usa al cancelar/rechazar pagos de tienda.';
+
+-- ============================================================
 -- CHANGELOG DE DESARROLLADORES (migración 012, espejo 1:1)
 -- changelog: tabla de solo lectura para el admin (RLS SELECT
 -- con is_admin()). Los desarrolladores agregan versiones vía
@@ -1686,5 +1772,14 @@ VALUES (
   'v1.3.0',
   'Datos Físicos y Ver Ficha',
   E'• El perfil del tutor ahora incluye datos físicos: peso (kg), altura (cm) y mano dominante (diestro o zurdo), validados con rangos permitidos (peso hasta 300 kg y altura hasta 250 cm).\n• Las cargas (niño/adulto) también tienen datos físicos: se pueden registrar al crear o editar la carga, y cada tarjeta los muestra si existen.\n• La ficha médica del dashboard incluye una card editable "Datos Físicos" donde el tutor actualiza peso, altura y mano dominante de la carga.\n• En la sección Usuarios del panel de administración, cada carga tiene un botón "Ver Ficha" que abre una ficha de solo lectura con los datos físicos y personales.'
+)
+ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.4.0 — Tienda de productos (migración 020)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.4.0',
+  'Tienda de Productos',
+  E'• Nueva tienda de productos: cada producto tiene su detalle con botones "Agregar al carrito" y "Comprar ahora", y el carrito se guarda en el navegador.\n• Checkout con pago en línea Flow: al comprar se reserva el stock del producto automáticamente y se devuelve si el pago es rechazado o cancelado.\n• Se puede comprar con la cuenta del usuario o como invitado (solo email y teléfono obligatorios); el recibo de la compra llega al correo.\n• El usuario ve sus compras en la nueva sección "Mis Compras de Tienda" de su panel y en su historial de pagos.\n• El administrador revisa las ventas en la sección Ventas, con filtro por tipo, y puede marcar cada orden como enviada, entregada o cancelarla (la cancelación devuelve el stock).'
 )
 ON CONFLICT (version) DO NOTHING;

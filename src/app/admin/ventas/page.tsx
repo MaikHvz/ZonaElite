@@ -64,10 +64,11 @@ export default function AdminVentasPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [methodFilter, setMethodFilter] = useState<string>("todos");
+  const [typeFilter, setTypeFilter] = useState<string>("todos");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [exportTimeframe, setExportTimeframe] = useState<"mes" | "ano" | "historico">("mes");
 
-  const [activeTab, setActiveTab] = useState<"pagos" | "solicitudes">(() =>
+  const [activeTab, setActiveTab] = useState<"pagos" | "solicitudes" | "tienda">(() =>
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "solicitudes"
       ? "solicitudes"
       : "pagos"
@@ -251,13 +252,22 @@ export default function AdminVentasPage() {
     }
   };
 
+  const getPaymentType = (p: Payment): string => {
+    if (p.order_id && p.concept?.startsWith("Tienda:")) return "tienda";
+    if (p.personalized_plan_id) return "personalizadas";
+    if (p.include_enrollment) return "inscripciones";
+    if (p.membership_plan_id) return "membresias";
+    return "otros";
+  };
+
   const filtered = useMemo(() => {
     return payments.filter((p) => {
       if (statusFilter !== "todos" && p.status !== statusFilter) return false;
       if (methodFilter !== "todos" && p.method !== methodFilter) return false;
+      if (typeFilter !== "todos" && getPaymentType(p) !== typeFilter) return false;
       return true;
     });
-  }, [payments, statusFilter, methodFilter]);
+  }, [payments, statusFilter, methodFilter, typeFilter]);
 
   const stats = useMemo(() => {
     const pagados = payments.filter((p) => p.status === "pagado");
@@ -367,6 +377,16 @@ export default function AdminVentasPage() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setActiveTab("tienda")}
+          className={`font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+            activeTab === "tienda"
+              ? "btn-primary-gradient text-white"
+              : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+          }`}
+        >
+          Órdenes de Tienda
+        </button>
       </div>
 
       {activeTab === "solicitudes" ? (
@@ -384,6 +404,8 @@ export default function AdminVentasPage() {
           getBeneficiaryName={getBeneficiaryName}
           getUserEmail={getUserEmail}
         />
+      ) : activeTab === "tienda" ? (
+        <TiendaSection />
       ) : (
         <>
 
@@ -562,6 +584,33 @@ export default function AdminVentasPage() {
             ))}
           </div>
         </div>
+
+        <div className="flex items-center gap-2">
+          <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">
+            Tipo:
+          </span>
+          <div className="flex gap-1">
+            {[
+              ["todos", "Todos"],
+              ["membresias", "Membresías"],
+              ["inscripciones", "Inscripciones"],
+              ["personalizadas", "Personalizadas"],
+              ["tienda", "Tienda"],
+            ].map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setTypeFilter(v)}
+                className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                  typeFilter === v
+                    ? "btn-primary-gradient text-white"
+                    : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Results count */}
@@ -570,6 +619,7 @@ export default function AdminVentasPage() {
           {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
           {statusFilter !== "todos" && ` · Estado: ${statusFilter}`}
           {methodFilter !== "todos" && ` · Método: ${METHOD_LABELS[methodFilter] || methodFilter}`}
+          {typeFilter !== "todos" && ` · Tipo: ${typeFilter}`}
         </p>
       </div>
 
@@ -734,7 +784,7 @@ export default function AdminVentasPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant">ID usuario</span>
-                    <span className="font-[family-name:var(--font-body-sm)] text-[10px] text-on-surface font-mono">{p.user_id.slice(0, 8)}</span>
+                    <span className="font-[family-name:var(--font-body-sm)] text-[10px] text-on-surface font-mono">{p.user_id ? p.user_id.slice(0, 8) : "—"}</span>
                   </div>
                 </div>
               </div>
@@ -1081,6 +1131,249 @@ function SolicitudesSection({
               </div>
             );
           })}
+        </div>
+      )}
+    </>
+  );
+}
+
+interface TiendaOrderItem {
+  product_id: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+}
+
+interface TiendaOrder {
+  id: string;
+  user_id: string | null;
+  status: string;
+  total: number;
+  reference: string;
+  guest_email: string | null;
+  guest_phone: string | null;
+  guest_name: string | null;
+  created_at: string;
+  profiles?: { full_name: string | null; email: string | null } | null;
+  items?: TiendaOrderItem[];
+}
+
+function TiendaSection() {
+  const supabase = createClient();
+  const [orders, setOrders] = useState<TiendaOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>("todos");
+  const [actingId, setActingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadOrders = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/store/admin/orders", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Error al cargar las órdenes");
+        setOrders([]);
+      } else {
+        setOrders(data.orders || []);
+        setError(null);
+      }
+    } catch {
+      setError("Error de conexión. Intenta de nuevo.");
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (statusFilter === "todos") return orders;
+    return orders.filter((o) => o.status === statusFilter);
+  }, [orders, statusFilter]);
+
+  const getCustomerLabel = (o: TiendaOrder): string => {
+    if (o.profiles?.full_name) return o.profiles.full_name;
+    if (o.guest_name) return o.guest_name;
+    if (o.profiles?.email) return o.profiles.email;
+    if (o.guest_email) return o.guest_email;
+    return "—";
+  };
+
+  const getCustomerSub = (o: TiendaOrder): string => {
+    if (o.profiles?.email) return o.profiles.email;
+    if (o.guest_email) return o.guest_email;
+    return "Invitado";
+  };
+
+  const doAction = async (orderId: string, action: "enviado" | "entregado" | "cancelar") => {
+    setActingId(orderId);
+    setError(null);
+    try {
+      const res = await fetch("/api/store/admin/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "No se pudo actualizar la orden");
+      } else {
+        await loadOrders();
+      }
+    } catch {
+      setError("Error de conexión. Intenta de nuevo.");
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const statusButtonClass = (active: boolean) =>
+    `font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+      active ? "btn-primary-gradient text-white" : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+    }`;
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-3 mb-6">
+        <div className="flex items-center gap-2">
+          <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">
+            Estado:
+          </span>
+          <div className="flex gap-1">
+            {[
+              ["todos", "Todas"],
+              ["pagado", "Pagadas"],
+              ["enviado", "Enviadas"],
+              ["entregado", "Entregadas"],
+              ["pendiente", "Pendientes"],
+              ["cancelado", "Canceladas"],
+            ].map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setStatusFilter(v)}
+                className={statusButtonClass(statusFilter === v)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <p className="font-[family-name:var(--font-body-md)] text-[13px] text-red-400 mb-4">
+          {error}
+        </p>
+      )}
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 rounded-xl bg-surface-container animate-pulse" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-surface-container border border-on-surface/5 rounded-2xl py-12 text-center">
+          <span className="material-symbols-outlined text-on-surface/20 text-[48px] mb-4 block">
+            storefront
+          </span>
+          <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant">
+            No hay órdenes de tienda con este filtro
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((o) => (
+            <div key={o.id} className="bg-surface-container border border-on-surface/5 rounded-2xl p-4 md:p-5">
+              <div className="flex flex-wrap items-center gap-3 md:gap-4">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-primary text-[20px]">shopping_bag</span>
+                </div>
+
+                <div className="flex-1 min-w-[200px]">
+                  <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface flex items-center gap-2">
+                    {o.reference}
+                    <span className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant/60 font-mono">
+                      {o.id.slice(0, 8)}
+                    </span>
+                  </p>
+                  <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant">
+                    {getCustomerLabel(o)} {o.guest_phone && `· ${o.guest_phone}`}
+                  </p>
+                  <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant/70">
+                    {getCustomerSub(o)} · {new Date(o.created_at).toLocaleDateString("es-CL")}{" "}
+                    {new Date(o.created_at).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <p className="font-[family-name:var(--font-headline-md)] text-[18px] text-on-surface">
+                    ${(o.total || 0).toLocaleString("es-CL")}
+                  </p>
+                  <StatusBadge status={o.status} />
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {o.status === "pagado" && (
+                    <button
+                      onClick={() => doAction(o.id, "enviado")}
+                      disabled={actingId === o.id}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">local_shipping</span>
+                      Enviar
+                    </button>
+                  )}
+                  {(o.status === "pagado" || o.status === "enviado") && (
+                    <button
+                      onClick={() => doAction(o.id, "entregado")}
+                      disabled={actingId === o.id}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-green-600/10 text-green-500 border border-green-500/20 hover:bg-green-600/20 font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">inventory_2</span>
+                      Entregar
+                    </button>
+                  )}
+                  {o.status !== "cancelado" && (
+                    <button
+                      onClick={() => doAction(o.id, "cancelar")}
+                      disabled={actingId === o.id}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-50"
+                      title="Cancela la orden y devuelve el stock"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">block</span>
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {o.items && o.items.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-on-surface/5">
+                  <p className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-2">
+                    Detalle
+                  </p>
+                  <div className="space-y-1.5">
+                    {o.items.map((item) => (
+                      <div key={item.product_id} className="flex items-center justify-between">
+                        <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                          {item.name} <span className="text-on-surface-variant/60">× {item.quantity}</span>
+                        </span>
+                        <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                          ${item.subtotal.toLocaleString("es-CL")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </>

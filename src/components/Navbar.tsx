@@ -7,6 +7,7 @@ import { useSession } from "@/providers/SessionProvider";
 import { signOut } from "@/lib/supabase/auth";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useCart } from "@/context/CartContext";
 
 const navLinks = [
   { href: "/", label: "Inicio" },
@@ -23,6 +24,7 @@ const logoUrl = "/logo.png";
 
 export default function Navbar() {
   const { user, loading, isAdmin } = useSession();
+  const { totalItems } = useCart();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -97,7 +99,21 @@ export default function Navbar() {
             ))}
           </div>
 
-          {!loading && (
+          <div className="flex items-center gap-3">
+            <Link
+              href="/carrito"
+              className="relative text-on-surface-variant hover:text-primary transition-colors"
+              title="Carrito"
+            >
+              <span className="material-symbols-outlined text-[22px]">shopping_cart</span>
+              {totalItems > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-primary text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {totalItems > 9 ? "9+" : totalItems}
+                </span>
+              )}
+            </Link>
+
+            {!loading && (
             user ? (
               <div className="flex items-center gap-3">
                 <Link
@@ -143,6 +159,7 @@ export default function Navbar() {
               </Link>
             )
           )}
+          </div>
         </div>
 
         {/* Mobile */}
@@ -187,6 +204,20 @@ export default function Navbar() {
             {link.label}
           </a>
         ))}
+
+        <Link
+          href="/carrito"
+          onClick={() => setMobileOpen(false)}
+          className="flex items-center gap-2 text-on-surface hover:text-primary font-[family-name:var(--font-headline-md)] text-2xl uppercase"
+        >
+          <span className="material-symbols-outlined text-[26px]">shopping_cart</span>
+          Carrito
+          {totalItems > 0 && (
+            <span className="bg-primary text-white text-[12px] font-bold w-6 h-6 rounded-full flex items-center justify-center">
+              {totalItems > 9 ? "9+" : totalItems}
+            </span>
+          )}
+        </Link>
 
         {!loading && (
           user ? (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { FLOW_LOG_PREFIX } from "@/lib/flow";
 import { confirmAndCreateMembership, confirmPersonalizedPack, extendEnrollment, markPaymentAsPaid, notifyPaymentWithoutMembership, notifyUserPaymentStatus } from "@/lib/flow-helpers";
+import { isStorePayment, handleStorePaymentApproved } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
@@ -73,6 +74,16 @@ export async function POST(request: Request) {
       } else {
         console.error(`${FORCE_LOG} personalized pack creation failed:`, packResult.error);
         await notifyPaymentWithoutMembership(admin, payment, packResult.error || "Error al crear pack personalizado");
+      }
+    }
+
+    // Tienda (módulo desacoplado): pago con order_id + concepto "Tienda: ...".
+    if (isStorePayment(payment)) {
+      const storeResult = await handleStorePaymentApproved(admin, payment);
+      if (storeResult.success) {
+        assignedSomething = true;
+      } else {
+        console.error(`${FORCE_LOG} store order confirmation failed:`, storeResult.error);
       }
     }
 

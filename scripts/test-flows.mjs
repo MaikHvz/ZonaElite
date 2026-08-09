@@ -1016,8 +1016,8 @@ ok("O: confirmation notifica rechazado/anulado/pendiente en status !== 2",
   /notifyUserPaymentStatus\(supabase, payment, "rejected"\)/.test(confirmRouteO) &&
   /notifyUserPaymentStatus\(supabase, payment, "cancelled"\)/.test(confirmRouteO) &&
   /notifyUserPaymentStatus\(supabase, payment, "pending"\)/.test(confirmRouteO));
-ok("O: confirmation notifica aprobado solo si se asignó algo",
-  /let assignedSomething = false;[\s\S]*?if \(assignedSomething\) \{[\s\S]*?notifyUserPaymentStatus\(supabase, payment, "approved"\)/.test(confirmRouteO));
+ok("O: confirmation notifica aprobado solo si se asignó algo (y hay usuario)",
+  /let assignedSomething = false;[\s\S]*?if \(assignedSomething && payment\.user_id\) \{[\s\S]*?notifyUserPaymentStatus\(supabase, payment, "approved"\)/.test(confirmRouteO));
 ok("O: verify notifica rechazado/anulado/pendiente y aprobado",
   /notifyUserPaymentStatus\(admin, fullPayment, "rejected"\)/.test(verifyRouteO) &&
   /notifyUserPaymentStatus\(admin, fullPayment, "cancelled"\)/.test(verifyRouteO) &&
@@ -1660,7 +1660,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 7);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 8);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -1982,6 +1982,156 @@ ok("Z: admin/usuarios abre VerFichaModal (onView/canView) y carga medidas",
   /<VerFichaModal[\s\S]*?dependent=\{fichaRow\}/.test(adminUsuariosT) &&
   /_weight: d\.weight \?\? null,[\s\S]*?_height: d\.height \?\? null,[\s\S]*?_dominantHand: d\.dominant_hand \|\| null,/.test(adminUsuariosT) &&
   /weight: u\._weight \?\? null,[\s\S]*?height: u\._height \?\? null,[\s\S]*?dominant_hand: u\._dominantHand \|\| null,[\s\S]*?\}/.test(adminUsuariosT));
+
+
+// AA. Tienda con carrito y checkout Flow (v1.4.0, requisito tienda-carrito-ventas)
+const migration020 = readFileSync(join(ROOT, "contexto", "migrations", "020_store_checkout.sql"), "utf8");
+const migration020Changelog = readFileSync(join(ROOT, "contexto", "migrations", "020_changelog_v1_4_0.sql"), "utf8");
+const storeLibT = readFileSync(join(ROOT, "src", "lib", "store.ts"), "utf8");
+const storeCheckoutRouteT = readFileSync(join(ROOT, "src", "app", "api", "store", "checkout", "route.ts"), "utf8");
+const storeOrderStatusRouteT = readFileSync(join(ROOT, "src", "app", "api", "store", "order-status", "route.ts"), "utf8");
+const storeAdminOrdersRouteT = readFileSync(join(ROOT, "src", "app", "api", "store", "admin", "orders", "route.ts"), "utf8");
+const confirmationRouteT = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
+const verifyRouteT = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
+const forceConfirmRouteT = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
+const flowLibT = readFileSync(join(ROOT, "src", "lib", "flow.ts"), "utf8");
+const cartContextT = readFileSync(join(ROOT, "src", "context", "CartContext.tsx"), "utf8");
+const rootLayoutT = readFileSync(join(ROOT, "src", "app", "layout.tsx"), "utf8");
+const navbarT = readFileSync(join(ROOT, "src", "components", "Navbar.tsx"), "utf8");
+const carritoPageT = readFileSync(join(ROOT, "src", "app", "carrito", "page.tsx"), "utf8");
+const confirmacionPageT = readFileSync(join(ROOT, "src", "app", "tienda", "confirmacion", "page.tsx"), "utf8");
+const productosPageT = readFileSync(join(ROOT, "src", "app", "productos", "page.tsx"), "utf8");
+const productoDetailPageT = readFileSync(join(ROOT, "src", "app", "productos", "[id]", "page.tsx"), "utf8");
+const dashboardTiendaPageT = readFileSync(join(ROOT, "src", "app", "dashboard", "tienda", "page.tsx"), "utf8");
+
+ok("AA: migración 020 hace user_id nullable en product_orders y payments",
+  /ALTER TABLE public\.product_orders ALTER COLUMN user_id DROP NOT NULL;/.test(migration020) &&
+  /ALTER TABLE public\.payments ALTER COLUMN user_id DROP NOT NULL;/.test(migration020));
+ok("AA: 020 agrega columnas de invitado y referencia a product_orders",
+  /ADD COLUMN IF NOT EXISTS guest_email text;/.test(migration020) &&
+  /ADD COLUMN IF NOT EXISTS guest_phone text;/.test(migration020) &&
+  /ADD COLUMN IF NOT EXISTS guest_name text;/.test(migration020) &&
+  /ADD COLUMN IF NOT EXISTS reference text;/.test(migration020));
+ok("AA: 020 index único parcial de referencia",
+  /CREATE UNIQUE INDEX IF NOT EXISTS idx_product_orders_reference_unique[\s\S]*?WHERE reference IS NOT NULL;/.test(migration020));
+ok("AA: 020 agrega CHECK quantity > 0 a order_items",
+  /IF NOT EXISTS \(SELECT 1 FROM pg_constraint WHERE conname = 'order_items_quantity_check'\)[\s\S]*?CHECK \(quantity > 0\)/.test(migration020));
+ok("AA: 020 crea RPC de stock SECURITY DEFINER con guarda antiuso",
+  /CREATE OR REPLACE FUNCTION public\.decrement_product_stock\([\s\S]*?SECURITY DEFINER[\s\S]*?AND stock >= p_qty;/.test(migration020) &&
+  /CREATE OR REPLACE FUNCTION public\.increment_product_stock\([\s\S]*?SET stock = stock \+ p_qty,/.test(migration020));
+ok("AA: 020 grantea los RPC solo a authenticated",
+  /GRANT EXECUTE ON FUNCTION public\.decrement_product_stock\(uuid, integer\) TO authenticated;/.test(migration020) &&
+  /GRANT EXECUTE ON FUNCTION public\.increment_product_stock\(uuid, integer\) TO authenticated;/.test(migration020));
+ok("AA: 020 changelog v1.4.0 'Tienda de Productos' (idempotente)",
+  /'v1\.4\.0'/.test(migration020Changelog) &&
+  /'Tienda de Productos'/.test(migration020Changelog) &&
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration020Changelog));
+ok("AA: espejo refleja columnas nullable + guest + reference en product_orders",
+  /CREATE TABLE IF NOT EXISTS public\.product_orders \([\s\S]*?user_id uuid,[\s\S]*?guest_email text,[\s\S]*?guest_phone text,[\s\S]*?guest_name text,[\s\S]*?reference text,/.test(schemaSqlT));
+ok("AA: espejo refleja payments.user_id nullable + order_id",
+  /CREATE TABLE IF NOT EXISTS public\.payments \([\s\S]*?user_id uuid,[\s\S]*?order_id uuid,/.test(schemaSqlT));
+ok("AA: espejo refleja CHECK quantity en order_items",
+  /CONSTRAINT order_items_quantity_check CHECK \(quantity > 0\)/.test(schemaSqlT));
+ok("AA: espejo refleja RPC de stock y seed v1.4.0",
+  /CREATE OR REPLACE FUNCTION public\.decrement_product_stock\(/.test(schemaSqlT) &&
+  /CREATE OR REPLACE FUNCTION public\.increment_product_stock\(/.test(schemaSqlT) &&
+  /'v1\.4\.0'/.test(schemaSqlT) &&
+  /'Tienda de Productos'/.test(schemaSqlT));
+ok("AA: store.ts define prefijo de concepto y guard isStorePayment",
+  /export const STORE_CONCEPT_PREFIX = "Tienda:";/.test(storeLibT) &&
+  /export function isStorePayment\([\s\S]*?Boolean\(payment\.order_id\)[\s\S]*?startsWith\(STORE_CONCEPT_PREFIX\)/.test(storeLibT));
+ok("AA: store.ts construye referencia REF-ZE-prod con crypto",
+  /export function buildStoreReference\(\): string {[\s\S]*?REF-ZE-prod-\$\{ts\}\$\{rand\}/.test(storeLibT) &&
+  /crypto\.randomUUID\(\)\.slice\(0, 8\)/.test(storeLibT));
+ok("AA: store.ts reserva/restaura stock vía RPC atómico",
+  /export async function reserveStock\([\s\S]*?supabase\.rpc\("decrement_product_stock"/.test(storeLibT) &&
+  /export async function restoreStock\([\s\S]*?supabase\.rpc\("increment_product_stock"/.test(storeLibT));
+ok("AA: store.ts confirma orden idempotente y cancela restaurando stock",
+  /export async function confirmProductOrder\([\s\S]*?\.update\(\{ status: "pagado" \}\)/.test(storeLibT) &&
+  /export async function cancelStoreOrder\([\s\S]*?\.update\(\{ status: "cancelado" \}\)[\s\S]*?restoreStock\(/.test(storeLibT) &&
+  /order\.status === "cancelado"[\s\S]*?return \{ success: true \};/.test(storeLibT));
+ok("AA: store.ts resuelve email de contacto (cuenta o invitado)",
+  /export async function getOrderContactEmail\([\s\S]*?\.from\("profiles"\)[\s\S]*?\.eq\("id", order\.user_id\)[\s\S]*?return order\.guest_email \|\| null;/.test(storeLibT));
+ok("AA: store.ts envía recibo de compra best-effort",
+  /export async function sendStoreOrderReceipt\([\s\S]*?sendProductReceiptEmail\(\{[\s\S]*?storeUrl/.test(storeLibT));
+ok("AA: store.ts handlers unificados aprobado/rechazado",
+  /export async function handleStorePaymentApproved\([\s\S]*?confirmProductOrder\([\s\S]*?sendStoreOrderReceipt\(/.test(storeLibT) &&
+  /export async function handleStorePaymentRejected\([\s\S]*?cancelStoreOrder\(/.test(storeLibT));
+ok("AA: email.ts define recibo de tienda (interfaces + función)",
+  /export interface StoreReceiptItem \{[\s\S]*?name: string;[\s\S]*?quantity: number;[\s\S]*?unit_price: number;/.test(emailT) &&
+  /export async function sendProductReceiptEmail\(data: ProductReceiptEmailData\)/.test(emailT));
+ok("AA: flow.ts returnUrl opcional en createFlowOrder",
+  /interface CreateOrderParams \{[\s\S]*?returnUrl\?: string;/.test(flowLibT) &&
+  /function buildReturnUrl\(returnUrl\?: string\): string {[\s\S]*?if \(returnUrl\)/.test(flowLibT));
+ok("AA: checkout valida invitado (email + teléfono) y toma precio del servidor",
+  /const EMAIL_REGEX = \/\^\[\^\\s@\]\+@\[\^\\s@\]\+\\\.\[\^\\s@\]\+\$\/;/.test(storeCheckoutRouteT) &&
+  /const PHONE_REGEX = \/\^\\\+\?\[0-9 \(\)-\]\{8,20\}\$\/;/.test(storeCheckoutRouteT) &&
+  /Ingresa un email válido para el recibo/.test(storeCheckoutRouteT) &&
+  /Ingresa un teléfono válido/.test(storeCheckoutRouteT) &&
+  /product\.stock < item\.quantity/.test(storeCheckoutRouteT));
+ok("AA: checkout reserva stock, crea orden/payment y crea Flow con returnUrl tienda",
+  /reserveStock\(admin, items\)/.test(storeCheckoutRouteT) &&
+  /\.from\("product_orders"\)[\s\S]*?\.insert\(orderPayload\)/.test(storeCheckoutRouteT) &&
+  /order_id: order\.id,/.test(storeCheckoutRouteT) &&
+  /createFlowOrder\(\{[\s\S]*?returnUrl: "\/tienda\/confirmacion"/.test(storeCheckoutRouteT));
+ok("AA: checkout restaura stock si el flujo falla post-reserva",
+  /restoreStock\(admin, reservedItems\)/.test(storeCheckoutRouteT));
+ok("AA: order-status resuelve orden por flow_token y es pública",
+  /\.eq\("flow_token", token\)/.test(storeOrderStatusRouteT) &&
+  /status: "not_found"/.test(storeOrderStatusRouteT) &&
+  /getAdminClient\(\)/.test(storeOrderStatusRouteT));
+ok("AA: admin orders lista órdenes con items y actualiza con máquina de estados",
+  /\.from\("product_orders"\)[\s\S]*?\.select\("id, user_id, status, total, reference, guest_email, guest_phone, guest_name, created_at, profiles\(full_name, email\)"\)/.test(storeAdminOrdersRouteT) &&
+  /targetStatus === "enviado" \? \["pagado"\] : \["pagado", "enviado"\]/.test(storeAdminOrdersRouteT) &&
+  /cancelStoreOrder\(admin, orderId\)/.test(storeAdminOrdersRouteT));
+ok("AA: confirmation incluye order_id en select y maneja tienda",
+  /\.select\("[^"]*order_id[^"]*"\)/.test(confirmationRouteT) &&
+  /isStorePayment\(payment\)/.test(confirmationRouteT) &&
+  /handleStorePaymentRejected\(supabase, payment\)/.test(confirmationRouteT) &&
+  /handleStorePaymentApproved\(supabase, payment\)/.test(confirmationRouteT));
+ok("AA: verify y force-confirm también manejan tienda",
+  /\.select\("[^"]*order_id[^"]*"\)/.test(verifyRouteT) &&
+  /isStorePayment\(fullPayment\)/.test(verifyRouteT) &&
+  /isStorePayment\(payment\)/.test(forceConfirmRouteT) &&
+  /handleStorePaymentApproved\(admin, payment\)/.test(forceConfirmRouteT));
+ok("AA: CartContext persiste en localStorage con add/remove/quantity/clear",
+  /const STORAGE_KEY = "ze_cart";/.test(cartContextT) &&
+  /window\.localStorage\.getItem\(STORAGE_KEY\)/.test(cartContextT) &&
+  /window\.localStorage\.setItem\(STORAGE_KEY, JSON\.stringify\(items\)\)/.test(cartContextT) &&
+  /clearCart: \(\) => void;/.test(cartContextT));
+ok("AA: layout envuelve la app en CartProvider",
+  /import \{ CartProvider \} from "@\/context\/CartContext";/.test(rootLayoutT) &&
+  /<CartProvider>[\s\S]*?<\/CartProvider>/.test(rootLayoutT));
+ok("AA: Navbar muestra badge de carrito con totalItems",
+  /const \{ totalItems \} = useCart\(\);/.test(navbarT) &&
+  /totalItems > 9 \? "9\+" : totalItems/.test(navbarT) &&
+  /href="\/carrito"/.test(navbarT));
+ok("AA: página /carrito valida invitado y redirige al checkout Flow",
+  /fetch\("\/api\/store\/checkout",/.test(carritoPageT) &&
+  /guestEmail\.trim\(\) \|\| !\/\^\[\^\\s@\]\+@\[\^\\s@\]\+\\\.\[\^\\s@\]\+\$\/\.test\(guestEmail\.trim\(\)\)/.test(carritoPageT) &&
+  /clearCart\(\);[\s\S]*?router\.push\(data\.url\)/.test(carritoPageT));
+ok("AA: /tienda/confirmacion consulta estado de la orden y muestra devolución de stock",
+  /\/api\/store\/order-status\?token=/.test(confirmacionPageT) &&
+  /setInterval\(/.test(confirmacionPageT) &&
+  /stock reservado fue devuelto/.test(confirmacionPageT));
+ok("AA: productos lista y detalle agregan al carrito / comprar ahora",
+  /import \{ useCart \} from "@\/context\/CartContext";/.test(productosPageT) &&
+  /addItem\(\{/.test(productosPageT) &&
+  /Agregar al carrito/.test(productoDetailPageT) &&
+  /Comprar ahora/.test(productoDetailPageT) &&
+  /router\.push\("\/carrito"\)/.test(productoDetailPageT));
+ok("AA: dashboard/tienda muestra Mis Compras de Tienda con estados",
+  /Mis Compras de <span className="text-primary">Tienda<\/span>/.test(dashboardTiendaPageT) &&
+  /\.from\("product_orders"\)[\s\S]*?order_items\(id, product_id, quantity, unit_price, products\(id, name\)\)/.test(dashboardTiendaPageT) &&
+  /STATUS_LABELS\[order\.status\]/.test(dashboardTiendaPageT));
+ok("AA: DashboardNav tiene tab Mi Tienda",
+  /label: "Mi Tienda", href: "\/dashboard\/tienda"/.test(dashboardNavT));
+ok("AA: admin ventas filtra por tipo y tiene tab Órdenes de Tienda",
+  /const getPaymentType = \(p: Payment\): string => \{[\s\S]*?concept\?\.startsWith\("Tienda:"\)/.test(adminVentasTabT) &&
+  /Órdenes de Tienda/.test(adminVentasTabT) &&
+  /typeFilter !== "todos" && getPaymentType\(p\) !== typeFilter/.test(adminVentasTabT));
+ok("AA: PaymentRow muestra el concepto Tienda para compras de tienda",
+  /payment\.membership\?\.plan\?\.name \|\| payment\.concept \|\| "Pago"/.test(paymentRowT));
 
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);

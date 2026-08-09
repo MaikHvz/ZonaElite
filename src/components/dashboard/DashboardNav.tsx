@@ -8,6 +8,7 @@ const tabs = [
   { label: "Resumen", href: "/dashboard", icon: "dashboard" },
   { label: "Membresías", href: "/dashboard/membresias", icon: "card_membership" },
   { label: "Pagos", href: "/dashboard/pagos", icon: "payments" },
+  { label: "Mi Tienda", href: "/dashboard/tienda", icon: "storefront" },
   { label: "Cargas", href: "/dashboard/cargas", icon: "group" },
   { label: "Asistencia", href: "/dashboard/asistencia", icon: "fact_check" },
   { label: "Alertas", href: "/dashboard/notificaciones", icon: "notifications" },
