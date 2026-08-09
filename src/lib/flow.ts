@@ -105,6 +105,10 @@ export async function createFlowOrder(
     commerceOrder: params.commerceOrder,
     subject: params.subject,
     amount: params.amount,
+    email: params.email,
+    urlConfirmation: signParams.urlConfirmation,
+    urlReturn: signParams.urlReturn,
+    apiUrl,
   });
 
   const response = await fetch(`${apiUrl}/payment/create`, {
