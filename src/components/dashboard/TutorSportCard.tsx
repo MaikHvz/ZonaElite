@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "@/providers/SessionProvider";
 import { getUserSportProfile } from "@/lib/supabase/dashboard";
 import {
-  sportProfileFrom,
+  sportProfilesFrom,
   sportPodiumsFrom,
   type UserSportProfileData,
 } from "@/lib/supabase/dashboard";
@@ -35,9 +35,9 @@ export default function TutorSportCard() {
     };
   }, [user]);
 
-  const sportProfile = sportProfileFrom(sportData);
+  const sportProfiles = sportProfilesFrom(sportData);
   const sportPodiums = sportPodiumsFrom(sportData);
-  const beltColor = sportProfile?.belt_grades?.color;
+  const beltColor = sportProfiles[0]?.belt_grades?.color;
 
   const name = profile?.full_name || user?.email?.split("@")[0] || "Mi perfil";
 
@@ -74,7 +74,7 @@ export default function TutorSportCard() {
           {loading ? (
             <div className="h-10 animate-pulse bg-on-surface/5 rounded-xl" />
           ) : (
-            <SportProfileInfo profile={sportProfile} podiums={sportPodiums} />
+            <SportProfileInfo profiles={sportProfiles} podiums={sportPodiums} />
           )}
         </div>
       </div>

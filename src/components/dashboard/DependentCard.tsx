@@ -1,5 +1,5 @@
 import type { DependentData } from "@/lib/supabase/dashboard";
-import { sportProfileFrom, sportPodiumsFrom } from "@/lib/supabase/dashboard";
+import { sportProfilesFrom, sportPodiumsFrom } from "@/lib/supabase/dashboard";
 import Link from "next/link";
 import { getChileToday } from "@/lib/dates";
 import BeltBanner from "./BeltBanner";
@@ -43,9 +43,9 @@ export default function DependentCard({
     .flatMap((b) => b.academy_enrollments || [])
     .find((e) => e.status === "activa" && e.end_date >= getChileToday());
 
-  const sportProfile = sportProfileFrom(beneficiaryList[0]);
+  const sportProfiles = sportProfilesFrom(beneficiaryList[0]);
   const sportPodiums = sportPodiumsFrom(beneficiaryList[0]);
-  const beltColor = sportProfile?.belt_grades?.color;
+  const beltColor = sportProfiles[0]?.belt_grades?.color;
 
   return (
     <div className="bg-surface-container border border-on-surface/5 rounded-2xl p-5 hover:border-primary/30 transition-colors relative overflow-hidden">
@@ -132,7 +132,7 @@ export default function DependentCard({
           )}
         </div>
 
-        <SportProfileInfo profile={sportProfile} podiums={sportPodiums} />
+        <SportProfileInfo profiles={sportProfiles} podiums={sportPodiums} />
       </div>
 
       <Link

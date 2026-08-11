@@ -73,7 +73,7 @@ export interface DependentData {
       end_date: string;
       enrollment_plans: { name: string } | null;
     }[];
-    sport_profiles: SportProfileData | SportProfileData[] | null;
+    sport_profiles: SportProfileData[] | null;
     sports_podiums: SportPodiumData[] | null;
   }[];
 }
@@ -82,16 +82,30 @@ export interface UserSportProfileData {
   id: string;
   profile_id: string | null;
   dependent_id: string | null;
-  sport_profiles: SportProfileData | SportProfileData[] | null;
+  sport_profiles: SportProfileData[] | null;
   sports_podiums: SportPodiumData[] | null;
 }
 
+/**
+ * Lista de perfiles deportivos del beneficiario (uno por disciplina).
+ * Normaliza el embed de Supabase: un array siempre.
+ */
+export function sportProfilesFrom<T extends { sport_profiles?: unknown }>(
+  record: T | null | undefined
+): SportProfileData[] {
+  const raw = record?.sport_profiles;
+  if (!raw) return [];
+  return Array.isArray(raw) ? (raw as SportProfileData[]) : [raw as SportProfileData];
+}
+
+/**
+ * Perfil "principal" (el primero) para colores/banner de las cards.
+ * Se conserva por compatibilidad; para listar usá `sportProfilesFrom`.
+ */
 export function sportProfileFrom<T extends { sport_profiles?: unknown }>(
   record: T | null | undefined
 ): SportProfileData | null {
-  const raw = record?.sport_profiles;
-  if (!raw) return null;
-  return Array.isArray(raw) ? (raw[0] ?? null) : (raw as SportProfileData);
+  return sportProfilesFrom(record)[0] ?? null;
 }
 
 export function sportPodiumsFrom<T extends { sports_podiums?: unknown }>(

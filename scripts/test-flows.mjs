@@ -2167,10 +2167,11 @@ const {
 ok("AB: migración 024 existe", /024_sport_profiles/.test(join("contexto", "migrations", "024_sport_profiles.sql")));
 ok("AB: migración 024 define belt_grades",
   /CREATE TABLE IF NOT EXISTS public\.belt_grades/.test(migration024));
-ok("AB: migración 024 define sport_profiles (1:1 beneficiary)",
+ok("AB: migración 024 define sport_profiles (uno por disciplina)",
   /CREATE TABLE IF NOT EXISTS public\.sport_profiles/.test(migration024) &&
   /beneficiary_id uuid NOT NULL/.test(migration024) &&
-  /sport_profiles_beneficiary_id_key UNIQUE \(beneficiary_id\)/.test(migration024));
+  /sport_profiles_beneficiary_discipline_key UNIQUE \(beneficiary_id, discipline_id\)/.test(migration024) &&
+  /discipline_id uuid NOT NULL/.test(migration024));
 ok("AB: migración 024 define sports_podiums con position CHECK",
   /CREATE TABLE IF NOT EXISTS public\.sports_podiums/.test(migration024) &&
   /CHECK \(position IN \('1', '2', '3', 'participacion'\)\)/.test(migration024));
@@ -2237,13 +2238,23 @@ ok("AB: dependents query embebe sport_profiles + sports_podiums",
   /sports_podiums\([\s\S]*?tournament,[\s\S]*?event_date/.test(readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8")));
 ok("AB: getUserSportProfile consulta el perfil del titular",
   /getUserSportProfile[\s\S]*?from\("beneficiaries"\)[\s\S]*?\.eq\("profile_id", userId\)/.test(readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8")));
+ok("AB: sportProfilesFrom normaliza a lista (multi-disciplina)",
+  /export function sportProfilesFrom/.test(readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8")) &&
+  /sport_profiles: SportProfileData\[\] \| null/.test(readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8")));
+ok("AB: SportProfileInfo lista todas las disciplinas con su cinturón",
+  /profiles: SportProfileData\[\]/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "SportProfileInfo.tsx"), "utf8")) &&
+  /profiles\.map/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "SportProfileInfo.tsx"), "utf8")));
+ok("AB: DependentCard y TutorSportCard usan la lista de perfiles",
+  /sportProfilesFrom/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "DependentCard.tsx"), "utf8")) &&
+  /sportProfilesFrom/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "TutorSportCard.tsx"), "utf8")));
 ok("AB: DataTable tiene botón de perfil deportivo",
   /onSport/.test(readFileSync(join(ROOT, "src", "components", "admin", "DataTable.tsx"), "utf8")));
 ok("AB: admin/usuarios integra SportProfileModal (sin autoconcesión)",
   /SportProfileModal/.test(readFileSync(join(ROOT, "src", "app", "admin", "usuarios", "page.tsx"), "utf8")) &&
   /openSportProfile[\s\S]*?from\("beneficiaries"\)/.test(readFileSync(join(ROOT, "src", "app", "admin", "usuarios", "page.tsx"), "utf8")));
-ok("AB: SportProfileModal gestiona disciplina/grado + podios CRUD",
-  /from\("sport_profiles"\)[\s\S]*?\.upsert/.test(readFileSync(join(ROOT, "src", "components", "admin", "SportProfileModal.tsx"), "utf8")) &&
+ok("AB: SportProfileModal gestiona disciplinas (add/edit/remove) + podios CRUD",
+  /from\("sport_profiles"\)[\s\S]*?\.upsert\(payload, \{ onConflict: "beneficiary_id,discipline_id" \}\)/.test(readFileSync(join(ROOT, "src", "components", "admin", "SportProfileModal.tsx"), "utf8")) &&
+  /from\("sport_profiles"\)[\s\S]*?\.delete\(\)/.test(readFileSync(join(ROOT, "src", "components", "admin", "SportProfileModal.tsx"), "utf8")) &&
   /from\("sports_podiums"\)[\s\S]*?\.insert/.test(readFileSync(join(ROOT, "src", "components", "admin", "PodiumFormModal.tsx"), "utf8")));
 ok("AB: DependentCard muestra perfil deportivo de la carga",
   /SportProfileInfo/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "DependentCard.tsx"), "utf8")) &&

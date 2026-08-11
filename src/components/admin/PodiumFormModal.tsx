@@ -143,12 +143,12 @@ export default function PodiumFormModal({
   return (
     <div
       ref={overlayRef}
-      className="modal-overlay"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={(e) => {
         if (e.target === overlayRef.current && !saving) onClose();
       }}
     >
-      <div className="modal-panel modal-panel-md">
+      <div className="bg-surface-container-lowest border border-on-surface/10 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5 md:p-6">
         <div className="flex items-center justify-between gap-4 mb-6">
           <h2 className="text-xl font-[family-name:var(--font-headline-md)] uppercase tracking-wide text-on-surface">
             {form.id ? "Editar podio" : "Nuevo podio"}

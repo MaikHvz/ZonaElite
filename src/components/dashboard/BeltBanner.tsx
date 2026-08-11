@@ -22,30 +22,42 @@ export default function BeltBanner({
     <div
       id={id}
       aria-hidden="true"
-      className={`pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden ${className}`}
+      className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}
     >
-      <div
-        className="w-[130%] rounded-full relative"
+      <span
+        className="material-symbols-outlined absolute -right-8 -top-8 select-none leading-none"
         style={{
-          height,
-          backgroundColor: color,
-          opacity,
-          boxShadow: `0 0 40px 12px ${color}33`,
+          color,
+          fontSize: "clamp(100px, 36%, 210px)",
+          opacity: Math.min(opacity + 0.18, 0.5),
         }}
       >
+        sports_martial_arts
+      </span>
+      <div className="absolute inset-0 flex items-center justify-center">
         <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-          style={{ opacity: 1 }}
+          className="w-[130%] rounded-full relative"
+          style={{
+            height,
+            backgroundColor: color,
+            opacity,
+            boxShadow: `0 0 40px 12px ${color}33`,
+          }}
         >
-          <div className="relative flex items-center justify-center" style={{ height, width: height }}>
-            <div
-              className="absolute w-1/3 h-full rounded-full"
-              style={{ backgroundColor: color, transform: "rotate(18deg)" }}
-            />
-            <div
-              className="absolute w-1/3 h-full rounded-full"
-              style={{ backgroundColor: color, transform: "rotate(-18deg)" }}
-            />
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+            style={{ opacity: 1 }}
+          >
+            <div className="relative flex items-center justify-center" style={{ height, width: height }}>
+              <div
+                className="absolute w-1/3 h-full rounded-full"
+                style={{ backgroundColor: color, transform: "rotate(18deg)" }}
+              />
+              <div
+                className="absolute w-1/3 h-full rounded-full"
+                style={{ backgroundColor: color, transform: "rotate(-18deg)" }}
+              />
+            </div>
           </div>
         </div>
       </div>

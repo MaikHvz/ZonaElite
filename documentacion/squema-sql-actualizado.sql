@@ -321,16 +321,16 @@ ON CONFLICT (discipline_id, position) DO NOTHING;
 CREATE TABLE IF NOT EXISTS public.sport_profiles (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   beneficiary_id uuid NOT NULL,
-  discipline_id uuid,
+  discipline_id uuid NOT NULL,
   grade_id uuid,
   created_at timestamptz DEFAULT now() NOT NULL,
   updated_at timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT sport_profiles_pkey PRIMARY KEY (id),
-  CONSTRAINT sport_profiles_beneficiary_id_key UNIQUE (beneficiary_id),
+  CONSTRAINT sport_profiles_beneficiary_discipline_key UNIQUE (beneficiary_id, discipline_id),
   CONSTRAINT sport_profiles_beneficiary_id_fkey
     FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id) ON DELETE CASCADE,
   CONSTRAINT sport_profiles_discipline_id_fkey
-    FOREIGN KEY (discipline_id) REFERENCES public.disciplines(id) ON DELETE SET NULL,
+    FOREIGN KEY (discipline_id) REFERENCES public.disciplines(id) ON DELETE CASCADE,
   CONSTRAINT sport_profiles_grade_id_fkey
     FOREIGN KEY (grade_id) REFERENCES public.belt_grades(id) ON DELETE SET NULL
 );

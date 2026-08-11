@@ -74,24 +74,50 @@ WHERE d.active = true
 ON CONFLICT (discipline_id, position) DO NOTHING;
 
 -- ------------------------------------------------------------
--- 2. Perfil deportivo 1:1 con el beneficiario
+-- 2. Perfil deportivo: UN registro por (beneficiario, disciplina)
+--    Un alumno puede entrenar varias disciplinas; cada una con su
+--    propio grado/cinturón.
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.sport_profiles (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   beneficiary_id uuid NOT NULL,
-  discipline_id uuid,
+  discipline_id uuid NOT NULL,
   grade_id uuid,
   created_at timestamptz DEFAULT now() NOT NULL,
   updated_at timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT sport_profiles_pkey PRIMARY KEY (id),
-  CONSTRAINT sport_profiles_beneficiary_id_key UNIQUE (beneficiary_id),
+  CONSTRAINT sport_profiles_beneficiary_discipline_key UNIQUE (beneficiary_id, discipline_id),
   CONSTRAINT sport_profiles_beneficiary_id_fkey
     FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id) ON DELETE CASCADE,
   CONSTRAINT sport_profiles_discipline_id_fkey
-    FOREIGN KEY (discipline_id) REFERENCES public.disciplines(id) ON DELETE SET NULL,
+    FOREIGN KEY (discipline_id) REFERENCES public.disciplines(id) ON DELETE CASCADE,
   CONSTRAINT sport_profiles_grade_id_fkey
     FOREIGN KEY (grade_id) REFERENCES public.belt_grades(id) ON DELETE SET NULL
 );
+
+-- Ajuste idempotente por si la tabla ya se aplicó con el esquema
+-- anterior (UNIQUE beneficiary_id → 1 perfil por beneficiario):
+-- migra a UNIQUE (beneficiary_id, discipline_id) y deja discipline_id
+-- NOT NULL. Los datos existentes (un perfil por beneficiario) siguen
+-- cumpliendo el nuevo constraint.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'sport_profiles_beneficiary_id_key'
+  ) THEN
+    ALTER TABLE public.sport_profiles DROP CONSTRAINT sport_profiles_beneficiary_id_key;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'sport_profiles_beneficiary_discipline_key'
+  ) THEN
+    ALTER TABLE public.sport_profiles
+      ADD CONSTRAINT sport_profiles_beneficiary_discipline_key
+      UNIQUE (beneficiary_id, discipline_id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.sport_profiles WHERE discipline_id IS NULL) THEN
+    ALTER TABLE public.sport_profiles ALTER COLUMN discipline_id SET NOT NULL;
+  END IF;
+END $$;
 
 -- Integridad posicional: el grado debe pertenecer a la disciplina
 -- elegida (un cinturón de Karate no puede asignarse a un alumno de
