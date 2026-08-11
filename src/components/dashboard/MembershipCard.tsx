@@ -143,7 +143,7 @@ export default function MembershipCard({
             )}
           </div>
         </div>
-        <StatusBadge status={membership.status} />
+        <StatusBadge status={effectiveStatus} />
       </div>
 
       {/* Clases personalizadas — chip informativo (módulo desacoplado) */}

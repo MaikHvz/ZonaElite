@@ -107,7 +107,7 @@ export default function EventoDetailPage() {
         {/* Back button */}
         <Link
           href="/eventos"
-          className="absolute top-6 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-sm text-white/80 hover:text-white px-4 py-2 rounded-full text-[13px] font-[family-name:var(--font-body-md)] transition-colors"
+          className="absolute top-6 left-6 flex items-center gap-2 bg-black/70 text-white/80 hover:text-white px-4 py-2 rounded-full text-[13px] font-[family-name:var(--font-body-md)] transition-colors"
         >
           <span className="material-symbols-outlined text-[18px]">arrow_back</span>
           Eventos

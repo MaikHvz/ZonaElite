@@ -1665,7 +1665,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 8);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 9);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -2148,6 +2148,108 @@ ok("AA: admin ventas filtra por tipo y tiene tab Órdenes de Tienda",
 ok("AA: PaymentRow muestra el concepto Tienda para compras de tienda",
   /payment\.membership\?\.plan\?\.name \|\| payment\.concept \|\| "Pago"/.test(paymentRowT));
 
+// ============================================================
+// AB. PERFIL DEPORTIVO DE ALUMNOS (migración 024)
+// ============================================================
+section("AB. Perfil deportivo de alumnos");
+
+const migration024 = readFileSync(join(ROOT, "contexto", "migrations", "024_sport_profiles.sql"), "utf8");
+const schemaSport = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const {
+  PODIUM_POSITIONS,
+  SUGGESTED_CATEGORIES,
+  computePodiumStats,
+  podiumPositionMeta,
+  formatPodiumDate,
+  sortPodiumsByDateDesc,
+} = await import("../src/lib/sport-profile.ts");
+
+ok("AB: migración 024 existe", /024_sport_profiles/.test(join("contexto", "migrations", "024_sport_profiles.sql")));
+ok("AB: migración 024 define belt_grades",
+  /CREATE TABLE IF NOT EXISTS public\.belt_grades/.test(migration024));
+ok("AB: migración 024 define sport_profiles (1:1 beneficiary)",
+  /CREATE TABLE IF NOT EXISTS public\.sport_profiles/.test(migration024) &&
+  /beneficiary_id uuid NOT NULL/.test(migration024) &&
+  /sport_profiles_beneficiary_id_key UNIQUE \(beneficiary_id\)/.test(migration024));
+ok("AB: migración 024 define sports_podiums con position CHECK",
+  /CREATE TABLE IF NOT EXISTS public\.sports_podiums/.test(migration024) &&
+  /CHECK \(position IN \('1', '2', '3', 'participacion'\)\)/.test(migration024));
+ok("AB: migración 024 valida que el grado pertenezca a la disciplina",
+  /sport_profile_validate_grade/.test(migration024) &&
+  /bg\.id = NEW\.grade_id[\s\S]*?bg\.discipline_id = NEW\.discipline_id/.test(migration024));
+ok("AB: migración 024 siembra 8 grados por disciplina activa (blanco→negro)",
+  (migration024.match(/^\s*\('[A-Za-zÁÉÍÓÚáéíóúÑñ]+',\s*'#[0-9A-F]{6}',\s*\d+\)/gm) || []).length >= 8 &&
+  /CROSS JOIN/.test(migration024) && /ON CONFLICT \(discipline_id, position\) DO NOTHING/.test(migration024));
+ok("AB: migración 024 RLS — escritura de sport_profiles/podiums SOLO admin",
+  /"sport_profiles_admin_write"[\s\S]*?FOR ALL USING \(public\.is_admin\(\)\)/.test(migration024) &&
+  /"sports_podiums_admin_write"[\s\S]*?FOR ALL USING \(public\.is_admin\(\)\)/.test(migration024));
+ok("AB: migración 024 RLS — lectura dueño/admin vía owns_beneficiary",
+  /"sport_profiles_select_own_or_admin"[\s\S]*?owns_beneficiary\(beneficiary_id\)/.test(migration024) &&
+  /"sports_podiums_select_own_or_admin"[\s\S]*?owns_beneficiary\(beneficiary_id\)/.test(migration024));
+ok("AB: espejo refleja 1:1 las 3 tablas (024)",
+  /CREATE TABLE IF NOT EXISTS public\.belt_grades/.test(schemaSport) &&
+  /CREATE TABLE IF NOT EXISTS public\.sport_profiles/.test(schemaSport) &&
+  /CREATE TABLE IF NOT EXISTS public\.sports_podiums/.test(schemaSport));
+ok("AB: espejo refleja 1:1 trigger sport_profile_validate_grade",
+  /sport_profile_validate_grade/.test(schemaSport));
+ok("AB: espejo refleja 1:1 policies de perfil deportivo",
+  /"belt_grades_select_auth"/.test(schemaSport) &&
+  /"belt_grades_admin_write"/.test(schemaSport) &&
+  /"sport_profiles_select_own_or_admin"/.test(schemaSport) &&
+  /"sport_profiles_admin_write"/.test(schemaSport) &&
+  /"sports_podiums_select_own_or_admin"/.test(schemaSport) &&
+  /"sports_podiums_admin_write"/.test(schemaSport));
+ok("AB: PODIUM_POSITIONS cubre exactamente el CHECK de la BD",
+  JSON.stringify(PODIUM_POSITIONS.map((p) => p.value).sort()) === JSON.stringify(["1", "2", "3", "participacion"].sort()));
+ok("AB: computePodiumStats cuenta medallas y participaciones",
+  computePodiumStats([
+    { position: "1" }, { position: "1" }, { position: "2" },
+    { position: "3" }, { position: "participacion" },
+  ]).total === 5 &&
+  computePodiumStats([
+    { position: "1" }, { position: "1" }, { position: "2" },
+    { position: "3" }, { position: "participacion" },
+  ]).first === 2 &&
+  computePodiumStats([
+    { position: "1" }, { position: "1" }, { position: "2" },
+    { position: "3" }, { position: "participacion" },
+  ]).second === 1 &&
+  computePodiumStats([
+    { position: "1" }, { position: "1" }, { position: "2" },
+    { position: "3" }, { position: "participacion" },
+  ]).third === 1 &&
+  computePodiumStats([
+    { position: "1" }, { position: "1" }, { position: "2" },
+    { position: "3" }, { position: "participacion" },
+  ]).participations === 1);
+ok("AB: podiumPositionMeta resuelve emoji/label",
+  podiumPositionMeta("1").emoji === "🥇" && podiumPositionMeta("participacion").label === "Participación");
+ok("AB: sortPodiumsByDateDesc ordena más reciente primero",
+  JSON.stringify(sortPodiumsByDateDesc([
+    { event_date: "2025-01-10" }, { event_date: "2026-03-01" },
+  ]).map((p) => p.event_date)) === JSON.stringify(["2026-03-01", "2025-01-10"]));
+ok("AB: formatPodiumDate respeta fecha chilena",
+  formatPodiumDate("2026-03-05") === new Date("2026-03-05T12:00:00").toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" }));
+ok("AB: SUGGESTED_CATEGORIES no está vacío y son textos de categoría",
+  Array.isArray(SUGGESTED_CATEGORIES) && SUGGESTED_CATEGORIES.length > 0);
+ok("AB: dependents query embebe sport_profiles + sports_podiums",
+  /sport_profiles\([\s\S]*?belt_grades\(id, name, color, position\)/.test(readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8")) &&
+  /sports_podiums\([\s\S]*?tournament,[\s\S]*?event_date/.test(readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8")));
+ok("AB: getUserSportProfile consulta el perfil del titular",
+  /getUserSportProfile[\s\S]*?from\("beneficiaries"\)[\s\S]*?\.eq\("profile_id", userId\)/.test(readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8")));
+ok("AB: DataTable tiene botón de perfil deportivo",
+  /onSport/.test(readFileSync(join(ROOT, "src", "components", "admin", "DataTable.tsx"), "utf8")));
+ok("AB: admin/usuarios integra SportProfileModal (sin autoconcesión)",
+  /SportProfileModal/.test(readFileSync(join(ROOT, "src", "app", "admin", "usuarios", "page.tsx"), "utf8")) &&
+  /openSportProfile[\s\S]*?from\("beneficiaries"\)/.test(readFileSync(join(ROOT, "src", "app", "admin", "usuarios", "page.tsx"), "utf8")));
+ok("AB: SportProfileModal gestiona disciplina/grado + podios CRUD",
+  /from\("sport_profiles"\)[\s\S]*?\.upsert/.test(readFileSync(join(ROOT, "src", "components", "admin", "SportProfileModal.tsx"), "utf8")) &&
+  /from\("sports_podiums"\)[\s\S]*?\.insert/.test(readFileSync(join(ROOT, "src", "components", "admin", "PodiumFormModal.tsx"), "utf8")));
+ok("AB: DependentCard muestra perfil deportivo de la carga",
+  /SportProfileInfo/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "DependentCard.tsx"), "utf8")) &&
+  /BeltBanner/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "DependentCard.tsx"), "utf8")));
+ok("AB: /dashboard/cargas muestra la card del titular",
+  /TutorSportCard/.test(readFileSync(join(ROOT, "src", "app", "dashboard", "cargas", "page.tsx"), "utf8")));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

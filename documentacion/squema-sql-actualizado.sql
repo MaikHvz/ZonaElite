@@ -81,6 +81,49 @@ AS $$
   SELECT (timezone('America/Santiago', now()))::date;
 $$;
 
+-- Migración 022: vencimiento automático de beneficios (membresías,
+-- inscripciones a la academia y packs de clases personalizadas).
+-- Pasa a 'vencida' todo beneficio 'activa' con end_date anterior a hoy
+-- (fecha chilena). Idempotente y transaccional; SECURITY DEFINER.
+-- Ejecutado best-effort por la app al cargar el dashboard.
+CREATE OR REPLACE FUNCTION public.expire_benefits()
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+VOLATILE
+AS $$
+DECLARE
+  v_total integer := 0;
+  v_updated integer;
+BEGIN
+  UPDATE public.memberships
+     SET status = 'vencida'
+   WHERE status = 'activa'
+     AND end_date < public.chile_today();
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  v_total := v_total + v_updated;
+
+  UPDATE public.academy_enrollments
+     SET status = 'vencida'
+   WHERE status = 'activa'
+     AND end_date < public.chile_today();
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  v_total := v_total + v_updated;
+
+  UPDATE public.personalized_packs
+     SET status = 'vencida'
+   WHERE status = 'activa'
+     AND end_date < public.chile_today();
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  v_total := v_total + v_updated;
+
+  RETURN v_total;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.expire_benefits() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.expire_benefits() TO authenticated;
+
 -- Trigger function: auto-create profile on user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
@@ -242,6 +285,101 @@ CREATE TABLE IF NOT EXISTS public.beneficiaries (
   created_at timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT beneficiaries_pkey PRIMARY KEY (id)
 );
+
+CREATE TABLE IF NOT EXISTS public.belt_grades (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  discipline_id uuid NOT NULL,
+  name text NOT NULL,
+  color text NOT NULL,
+  position integer NOT NULL,
+  active boolean DEFAULT true NOT NULL,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT belt_grades_pkey PRIMARY KEY (id),
+  CONSTRAINT belt_grades_discipline_id_fkey
+    FOREIGN KEY (discipline_id) REFERENCES public.disciplines(id) ON DELETE CASCADE,
+  CONSTRAINT belt_grades_discipline_position_key UNIQUE (discipline_id, position),
+  CONSTRAINT belt_grades_position_check CHECK (position > 0)
+);
+
+INSERT INTO public.belt_grades (discipline_id, name, color, position)
+SELECT d.id, g.name, g.color, g.position
+FROM public.disciplines d
+CROSS JOIN (
+  VALUES
+    ('Blanco',   '#F5F5F5', 1),
+    ('Amarillo', '#FBC02D', 2),
+    ('Naranja',  '#F57C00', 3),
+    ('Verde',    '#388E3C', 4),
+    ('Azul',     '#1976D2', 5),
+    ('Morado',   '#7B1FA2', 6),
+    ('Marrón',   '#5D4037', 7),
+    ('Negro',    '#212121', 8)
+) AS g(name, color, position)
+WHERE d.active = true
+ON CONFLICT (discipline_id, position) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS public.sport_profiles (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  beneficiary_id uuid NOT NULL,
+  discipline_id uuid,
+  grade_id uuid,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  updated_at timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT sport_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT sport_profiles_beneficiary_id_key UNIQUE (beneficiary_id),
+  CONSTRAINT sport_profiles_beneficiary_id_fkey
+    FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id) ON DELETE CASCADE,
+  CONSTRAINT sport_profiles_discipline_id_fkey
+    FOREIGN KEY (discipline_id) REFERENCES public.disciplines(id) ON DELETE SET NULL,
+  CONSTRAINT sport_profiles_grade_id_fkey
+    FOREIGN KEY (grade_id) REFERENCES public.belt_grades(id) ON DELETE SET NULL
+);
+
+CREATE OR REPLACE FUNCTION public.sport_profile_validate_grade()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.discipline_id IS NULL THEN
+    NEW.grade_id := NULL;
+  ELSIF NEW.grade_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.belt_grades bg
+    WHERE bg.id = NEW.grade_id
+      AND bg.discipline_id = NEW.discipline_id
+  ) THEN
+    RAISE EXCEPTION 'El grado no pertenece a la disciplina seleccionada';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_sport_profile_validate_grade
+  BEFORE INSERT OR UPDATE ON public.sport_profiles
+  FOR EACH ROW EXECUTE FUNCTION public.sport_profile_validate_grade();
+
+CREATE TABLE IF NOT EXISTS public.sports_podiums (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  beneficiary_id uuid NOT NULL,
+  tournament text NOT NULL,
+  event_date date NOT NULL,
+  discipline_id uuid NOT NULL,
+  category text,
+  position text NOT NULL,
+  description text,
+  image_url text,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  updated_at timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT sports_podiums_pkey PRIMARY KEY (id),
+  CONSTRAINT sports_podiums_beneficiary_id_fkey
+    FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id) ON DELETE CASCADE,
+  CONSTRAINT sports_podiums_discipline_id_fkey
+    FOREIGN KEY (discipline_id) REFERENCES public.disciplines(id) ON DELETE RESTRICT,
+  CONSTRAINT sports_podiums_position_check
+    CHECK (position IN ('1', '2', '3', 'participacion'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sports_podiums_beneficiary_date
+  ON public.sports_podiums (beneficiary_id, event_date DESC);
 
 CREATE TABLE IF NOT EXISTS public.attendance (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -705,6 +843,15 @@ ALTER TABLE public.medical_records ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "medical_records_select_own_or_admin" ON public.medical_records FOR SELECT USING (public.owns_beneficiary(beneficiary_id) OR public.is_admin());
 CREATE POLICY "medical_records_insert_admin" ON public.medical_records FOR INSERT WITH CHECK (public.is_admin());
 CREATE POLICY "medical_records_update_admin" ON public.medical_records FOR UPDATE USING (public.is_admin());
+ALTER TABLE public.belt_grades ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "belt_grades_select_auth" ON public.belt_grades FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "belt_grades_admin_write" ON public.belt_grades FOR ALL USING (public.is_admin());
+ALTER TABLE public.sport_profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "sport_profiles_select_own_or_admin" ON public.sport_profiles FOR SELECT USING (public.owns_beneficiary(beneficiary_id) OR public.is_admin());
+CREATE POLICY "sport_profiles_admin_write" ON public.sport_profiles FOR ALL USING (public.is_admin());
+ALTER TABLE public.sports_podiums ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "sports_podiums_select_own_or_admin" ON public.sports_podiums FOR SELECT USING (public.owns_beneficiary(beneficiary_id) OR public.is_admin());
+CREATE POLICY "sports_podiums_admin_write" ON public.sports_podiums FOR ALL USING (public.is_admin());
 
 -- =====================================================
 -- TABLAS NUEVAS: enrollment_plans + academy_enrollments
@@ -1783,5 +1930,14 @@ VALUES (
   'v1.4.0',
   'Tienda de Productos',
   E'• Nueva tienda de productos: cada producto tiene su detalle con botones "Agregar al carrito" y "Comprar ahora", y el carrito se guarda en el navegador.\n• Checkout con pago en línea Flow: al comprar se reserva el stock del producto automáticamente y se devuelve si el pago es rechazado o cancelado.\n• Se puede comprar con la cuenta del usuario o como invitado (solo email y teléfono obligatorios); el recibo de la compra llega al correo.\n• El usuario ve sus compras en la nueva sección "Mis Compras de Tienda" de su panel y en su historial de pagos.\n• El administrador revisa las ventas en la sección Ventas, con filtro por tipo, y puede marcar cada orden como enviada, entregada o cancelarla (la cancelación devuelve el stock).'
+)
+ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.5.0 — Perfil deportivo de alumnos (migración 024)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.5.0',
+  'Perfil deportivo de alumnos',
+  E'• Cada alumno (titular o carga) ahora tiene un perfil deportivo con su disciplina y grado/cinturón, mostrado como tarjeta en "Mis Cargas".\n• El administrador asigna disciplina y grado desde la sección Usuarios con un botón dedicado por alumno.\n• Registro de podios: torneo, fecha, disciplina, categoría y lugar obtenido (1°, 2°, 3° o participación), con foto opcional.\n• Las tarjetas muestran la disciplina, el cinturón y el resumen de logros del alumno.'
 )
 ON CONFLICT (version) DO NOTHING;

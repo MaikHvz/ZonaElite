@@ -6,6 +6,7 @@ import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import CreateDependentModal from "@/components/admin/CreateDependentModal";
 import VerFichaModal from "@/components/admin/VerFichaModal";
+import SportProfileModal from "@/components/admin/SportProfileModal";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
@@ -83,6 +84,10 @@ export default function AdminUsuariosPage() {
     height?: number | null;
     dominant_hand?: string | null;
   } | null>(null);
+
+  const [sportOpen, setSportOpen] = useState(false);
+  const [sportBeneficiaryId, setSportBeneficiaryId] = useState<string | null>(null);
+  const [sportStudentName, setSportStudentName] = useState("");
 
   const handleExportExcel = async () => {
     setExporting(true);
@@ -419,6 +424,21 @@ export default function AdminUsuariosPage() {
     setFichaOpen(true);
   };
 
+  const openSportProfile = async (u: UserRow) => {
+    const supabase = createClient();
+    const query = u._isDependent
+      ? supabase.from("beneficiaries").select("id").eq("dependent_id", u.id).maybeSingle()
+      : supabase.from("beneficiaries").select("id").eq("profile_id", u.id).maybeSingle();
+    const { data } = await query;
+    if (!data) {
+      setToast({ msg: "Este alumno no tiene un beneficiario registrado", type: "error" });
+      return;
+    }
+    setSportStudentName(u.full_name);
+    setSportBeneficiaryId(data.id);
+    setSportOpen(true);
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -499,7 +519,9 @@ export default function AdminUsuariosPage() {
         searchPlaceholder="Buscar por nombre, email o RUT..."
         onEdit={openEdit}
         onView={openFicha}
+        onSport={openSportProfile}
         canView={(u) => !!u._isDependent}
+        canSport={(u) => !!u._isDependent || u.role_id === 4}
         emptyMessage="No hay usuarios registrados"
       />
 
@@ -632,6 +654,14 @@ export default function AdminUsuariosPage() {
         open={fichaOpen}
         onClose={() => setFichaOpen(false)}
         dependent={fichaRow}
+      />
+
+      <SportProfileModal
+        open={sportOpen}
+        onClose={() => setSportOpen(false)}
+        onSaved={load}
+        beneficiaryId={sportBeneficiaryId}
+        studentName={sportStudentName}
       />
 
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}

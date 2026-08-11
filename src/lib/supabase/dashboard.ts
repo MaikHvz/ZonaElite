@@ -1,6 +1,11 @@
 import { createClient } from "./client";
 import { getChileToday, addDaysChile, chileDateToUtc, chileMonthStartDate } from "../dates";
 import { effectiveMembershipStatus } from "../membership-status";
+import type {
+  SportProfileData,
+  SportPodiumData,
+} from "../sport-profile";
+export type { SportProfileData, SportPodiumData };
 
 type SupabaseResult<T> = { data: T | null; error: string | null };
 
@@ -68,7 +73,33 @@ export interface DependentData {
       end_date: string;
       enrollment_plans: { name: string } | null;
     }[];
+    sport_profiles: SportProfileData | SportProfileData[] | null;
+    sports_podiums: SportPodiumData[] | null;
   }[];
+}
+
+export interface UserSportProfileData {
+  id: string;
+  profile_id: string | null;
+  dependent_id: string | null;
+  sport_profiles: SportProfileData | SportProfileData[] | null;
+  sports_podiums: SportPodiumData[] | null;
+}
+
+export function sportProfileFrom<T extends { sport_profiles?: unknown }>(
+  record: T | null | undefined
+): SportProfileData | null {
+  const raw = record?.sport_profiles;
+  if (!raw) return null;
+  return Array.isArray(raw) ? (raw[0] ?? null) : (raw as SportProfileData);
+}
+
+export function sportPodiumsFrom<T extends { sports_podiums?: unknown }>(
+  record: T | null | undefined
+): SportPodiumData[] {
+  const raw = record?.sports_podiums;
+  if (!raw) return [];
+  return Array.isArray(raw) ? (raw as SportPodiumData[]) : [raw as SportPodiumData];
 }
 
 export interface PaymentData {
@@ -243,6 +274,25 @@ export async function getUserDependents(userId: string) {
             status,
             end_date,
             enrollment_plans(name)
+          ),
+          sport_profiles(
+            id,
+            beneficiary_id,
+            discipline_id,
+            grade_id,
+            disciplines(id, name, color_hex),
+            belt_grades(id, name, color, position)
+          ),
+          sports_podiums(
+            id,
+            beneficiary_id,
+            tournament,
+            event_date,
+            discipline_id,
+            category,
+            position,
+            description,
+            image_url
           )
         )
       `
@@ -251,6 +301,84 @@ export async function getUserDependents(userId: string) {
       .order("full_name");
 
     return (data || []) as DependentData[];
+  });
+}
+
+export async function getUserSportProfile(userId: string) {
+  return safeQuery(async () => {
+    const supabase = createClient();
+
+    const { data } = await supabase
+      .from("beneficiaries")
+      .select(
+        `
+        id,
+        profile_id,
+        dependent_id,
+        sport_profiles(
+          id,
+          beneficiary_id,
+          discipline_id,
+          grade_id,
+          disciplines(id, name, color_hex),
+          belt_grades(id, name, color, position)
+        ),
+        sports_podiums(
+          id,
+          beneficiary_id,
+          tournament,
+          event_date,
+          discipline_id,
+          category,
+          position,
+          description,
+          image_url
+        )
+      `
+      )
+      .eq("profile_id", userId)
+      .maybeSingle();
+
+    return (data || null) as UserSportProfileData | null;
+  });
+}
+
+export async function getDependentSportProfile(dependentId: string) {
+  return safeQuery(async () => {
+    const supabase = createClient();
+
+    const { data } = await supabase
+      .from("beneficiaries")
+      .select(
+        `
+        id,
+        profile_id,
+        dependent_id,
+        sport_profiles(
+          id,
+          beneficiary_id,
+          discipline_id,
+          grade_id,
+          disciplines(id, name, color_hex),
+          belt_grades(id, name, color, position)
+        ),
+        sports_podiums(
+          id,
+          beneficiary_id,
+          tournament,
+          event_date,
+          discipline_id,
+          category,
+          position,
+          description,
+          image_url
+        )
+      `
+      )
+      .eq("dependent_id", dependentId)
+      .maybeSingle();
+
+    return (data || null) as UserSportProfileData | null;
   });
 }
 
@@ -276,6 +404,17 @@ export async function getUserNotifications(page = 0, pageSize = 20) {
 export async function getDashboardSummary(userId: string) {
   return safeQuery(async () => {
     const supabase = createClient();
+
+    // Vencimiento automático: pasa a 'vencida' membresías/inscripciones/packs
+    // con end_date vencido (idempotente, best-effort). Hace que el estado
+    // persistido coincida con la fecha real de Chile.
+    void (async () => {
+      try {
+        await supabase.rpc("expire_benefits");
+      } catch {
+        // best-effort: si falla, la UI deriva el estado en runtime.
+      }
+    })();
 
     const firstOfMonth = chileDateToUtc(chileMonthStartDate());
 

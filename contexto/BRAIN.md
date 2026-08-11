@@ -326,7 +326,7 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 
 ## 6. Base de datos
 
-### 29 Tablas
+### 32 Tablas
 
 | Tabla | Descripción | FKs principales |
 |-------|-------------|----------------|
@@ -361,6 +361,9 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 | `consent_forms` | Formularios consentimiento | — |
 | `body_metrics` | Métricas corporales | FK → beneficiaries |
 | `medical_records` | Registros médicos | FK → beneficiaries |
+| `belt_grades` | **NUEVO** Grados/cinturones por disciplina (name + color hex) | FK → disciplines |
+| `sport_profiles` | **NUEVO** Perfil deportivo 1:1 por beneficiario (disciplina + grado) | FK → beneficiaries, disciplines, belt_grades |
+| `sports_podiums` | **NUEVO** Historial de podios/torneos del alumno | FK → beneficiaries, disciplines |
 
 ### Modelo de usuarios y beneficiarios
 
@@ -404,6 +407,7 @@ get_enrollment_debt()  -- B-011: inscripciones que exceden los tokens
 notify_token_return()  -- notificación in-app "Token devuelto" (justificación)
 enroll_personalized_class() -- personalizadas: consume pack atómicamente
 cancel_class_enrollment()   -- migración 011: admin desinscribe + devuelve token/clase
+sport_profile_validate_grade() -- trigger (migración 024): valida belt_grades.discipline_id = discipline_id
 ```
 
 ### 60 RLS Policies
@@ -417,7 +421,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 ### Storage
 
 - Bucket: `"public"` (lectura pública)
-- Carpetas: `products/`, `events/`, `gallery/`, `memberships/`, `receipts/`
+- Carpetas: `products/`, `events/`, `gallery/`, `memberships/`, `receipts/`, `vouchers/`, `podiums/`
 - Helper: `src/lib/supabase/storage.ts` → `uploadImage(file, folder)`, `deleteImage(url)`, `getImagePath(url)`
 - Validación: max 5MB, formatos JPG/PNG/WebP/GIF
 
@@ -480,7 +484,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 14. **`beneficiaries`** no tiene columna `category` — el category viene del `dependent` o se asume `'adulto'`.
 15. **Spanish** en todo el contenido visible.
 16. **Zonas Horarias**: NUNCA usar `new Date().toISOString().split("T")[0]` para calcular "hoy", ya que usa UTC y genera un desfase después de las 20:00 hora Chile. SIEMPRE importar y usar `getChileToday()` y `addDaysChile()` desde `src/lib/dates.ts`. Para límites de mes/trimestre usar los helpers Chile-aware de `dates.ts` (`chileMonthStartDate()`, `chileMonthEndDate()`, `chileQuarterStartDate()`, `chileQuarterEndDate()`, etc.) y convertir a instantes UTC con `chileDateToUtc()` cuando se comparen columnas TIMESTAMPTZ. El scan estático de `scripts/test-flows.mjs` falla (exit 1) si reaparecen los patrones `toISOString().split("T")[0]` o `new Date(y, m, 1).toISOString()`.
-17. **Suite de pruebas**: `scripts/test-flows.mjs` (Node 24+, sin deps) cubre zona horaria Chile, firma HMAC de Flow, contratos de esquema/RLS, ciclo de vida de inscripción y los módulos de clases personalizadas, desinscripción en asistencia, pago manual por transferencia, crear/asignar carga desde admin, edición de cargas con validación de RUT, dirección en perfil y cargas y datos físicos (peso/altura/mano) + modal "Ver Ficha" (secciones P/Q/R/S/T/U/V/W/X/Y/Z, 502 tests). Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`.
+17. **Suite de pruebas**: `scripts/test-flows.mjs` (Node 24+, sin deps) cubre zona horaria Chile, firma HMAC de Flow, contratos de esquema/RLS, ciclo de vida de inscripción y los módulos de clases personalizadas, desinscripción en asistencia, pago manual por transferencia, crear/asignar carga desde admin, edición de cargas con validación de RUT, dirección en perfil y cargas, datos físicos (peso/altura/mano) + modal "Ver Ficha" y el perfil deportivo (disciplina/grado/podios) (secciones P/Q/R/S/T/U/V/W/X/Y/Z/AB, 567 tests). Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`.
 17. **Guía de trabajo obligatoria**: Antes de implementar CUALQUIER nueva funcionalidad, leer y ejecutar el workflow definido en `documentacion/guia-de-trabajo.md`. Las 4 fases son obligatorias: planificación → análisis de impacto → implementación → documentación post-implementación (incluye actualizar `squema-sql-actualizado.sql`).
 18. **Modalidad personalizada en horarios**: `schedules.mode` ('normal'|'personalizado') se fija al crear y es inmutable al editar. Las clases personalizadas NO usan QR/check-in (`/api/checkin` devuelve 403); se inscriben vía RPC `enroll_personalized_class` (consume pack) y su asistencia se registra manualmente reusando `attendance`. En admin/público/dashboard filtrar por `mode` y ramificar `EnrollModal`/`PersonalizedEnrollModal`.
 19. **Desinscripción en asistencia (migración 011)**: para eliminar un beneficiario de una sesión desde `/admin/asistencia` usar SIEMPRE el RPC `cancel_class_enrollment` (validación admin dentro). En normal borra `class_enrollments` (por `session_id` u horario recurrente con `session_id IS NULL`) y la deuda `pendiente` de la sesión → el token vuelve solo por `get_remaining_tokens`; en personalizada restaura 1 clase al pack. Limpia `attendance` y notifica al titular. No crear policies DELETE nuevas (`class_enrollments_delete_admin` ya existe).
@@ -495,6 +499,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 - **Feedback admin**: `PendingTransferProvider` (poll de `payments` transferencia+pendiente cada 30s + focus) alimenta un badge con el contador en el link "Ventas" de `AdminSidebar` y un banner grande `PendingTransferBanner` en `admin/layout` con CTA a `/admin/ventas?tab=solicitudes` (la página abre la tab "Solicitudes" vía `URLSearchParams`). Solo visible para admin (layout bajo `AdminGuard`; RLS `payments_select_own_or_admin`).
 - **Feedback usuario**: espejo en el dashboard — `UserPendingTransferProvider` cuenta las transferencias pendientes **propias** (`user_id` + `method='transferencia'` + `status='pendiente'`) y alimenta un badge en la tab "Pagos" de `DashboardNav` (desktop y mobile) + banner `UserPendingTransferBanner` en `/dashboard/pagos`. El panel `TransferRequestsPanel` muestra las solicitudes con su estado ("En revisión"/"Aprobada"/"Rechazada"), la referencia `REF-ZE`, el monto, el comprobante y la **nota del admin** (`admin_note`): caja verde "Nota del administrador" en aprobaciones con nota y caja roja "Motivo del rechazo" en rechazos. La fila de pago `PaymentRow` en `/dashboard/pagos` también muestra la nota (roja en rechazados, verde "Nota:" en aprobados). Datos vía `getUserTransferRequests` en `dashboard.ts`.
 - **Feedback admin en revisión**: `/admin/ventas` muestra la nota en **aprobadas y rechazadas** (verde/rojo) dentro de `SolicitudesSection`, y tras revisar muestra un **toast de confirmación** ("Solicitud aprobada y pago registrado…" / "Solicitud rechazada…") usando el componente `Toast`. El label del modal aclara que la nota es "visible para el usuario" (aplica tanto a aprobación como a rechazo).
+- **Perfil deportivo de alumnos (migración 024, v1.5.0)**: tablas `belt_grades` (grados por disciplina con color, UNIQUE `(discipline_id, position)`, seed Blanco→Negro por disciplina activa), `sport_profiles` (1 perfil por beneficiario, UNIQUE `beneficiary_id`, trigger `sport_profile_validate_grade()` que impide guardar un cinturón de otra disciplina) y `sports_podiums` (historial, `position CHECK IN ('1','2','3','participacion')`). RLS: **escritura SOLO admin** (`belt_grades_admin_write`, `sport_profiles_admin_write`, `sports_podiums_admin_write`); lectura `owns_beneficiary(beneficiary_id) OR is_admin()`. Se anclan a `beneficiaries.id` (NO columnas nuevas en `profiles`/`dependents`) para que el tutor no se autoconceda grados vía `dependents_update_own_or_admin`. El color del cinturón viene de la BD (`belt_grades.color`), nunca hardcodeado. Helpers en `src/lib/sport-profile.ts` (tipos, `PODIUM_POSITIONS`, `computePodiumStats`, `formatPodiumDate`, `sortPodiumsByDateAsc/Desc`); embeds `sport_profiles`+`sports_podiums` en `DependentData` con `getUserSportProfile`/`getDependentSportProfile`. UI: `TutorSportCard` en `/dashboard/cargas`, `BeltBanner`+`SportProfileInfo` en `DependentCard`, gestión admin vía `SportProfileModal`+`PodiumFormModal` en `/admin/usuarios` (botón `sports_martial_arts` en `DataTable`, resuelve beneficiario por `profile_id` o `dependent_id`). Detalle en `contexto/requisitos/perfil-deportivo-alumnos.md`.
 
 ---
 
@@ -517,6 +522,9 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 | `contexto/migrations/012_changelog.sql` | Migración 012: tabla changelog (solo lectura admin, seed v1.0.0) (pendiente aplicar) |
 | `contexto/migrations/013_manual_payment_mode.sql` | Migración 013: modo de pago manual (payment_settings, payments + plan_id/review, profiles.rut) (pendiente aplicar) |
 | `contexto/migrations/014_changelog_v1_1_0.sql` | Migración 014: entrada de changelog v1.1.0 (Pago por Transferencia) (pendiente aplicar) |
+| `contexto/requisitos/perfil-deportivo-alumnos.md` | Requisito + análisis de impacto (perfil deportivo: disciplina, grado/cinturón, podios) |
+| `contexto/migrations/024_sport_profiles.sql` | Migración 024: belt_grades + sport_profiles + sports_podiums + trigger + seeds + policies RLS (pendiente aplicar) |
+| `contexto/migrations/025_changelog_v1_5_0.sql` | Migración 025: entrada de changelog v1.5.0 (Perfil Deportivo de Alumnos) (pendiente aplicar) |
 | `contexto/schema-complete.sql` | SQL completo: 26 tablas, 190 cols, 32 FKs, 59 RLS, 33 indexes |
 | `project-context/brain.md` | Contexto legacy (parcialmente obsoleto) |
 | `project-context/changelog.md` | Historial de cambios detallado |

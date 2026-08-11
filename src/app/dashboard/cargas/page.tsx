@@ -7,6 +7,7 @@ import {
   type DependentData,
 } from "@/lib/supabase/dashboard";
 import DependentCard from "@/components/dashboard/DependentCard";
+import TutorSportCard from "@/components/dashboard/TutorSportCard";
 import AddDependentModal from "@/components/dashboard/AddDependentModal";
 import EditDependentModal from "@/components/dashboard/EditDependentModal";
 import { MembershipCardSkeleton } from "@/components/dashboard/DashboardSkeleton";
@@ -54,34 +55,39 @@ export default function CargasPage() {
           <MembershipCardSkeleton />
           <MembershipCardSkeleton />
         </div>
-      ) : dependents.length === 0 ? (
-        <div className="glass-panel rounded-xl p-8 text-center">
-          <span className="material-symbols-outlined text-on-surface/20 text-[48px] mb-4 block">
-            group
-          </span>
-          <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant mb-2">
-            No tienes dependientes registrados
-          </p>
-          <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant/60 mb-4">
-            Agrega una carga para inscribir a un familiar o dependiente
-          </p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary border border-primary/30 px-6 py-2 rounded-lg hover:bg-primary/10 transition-colors cursor-pointer"
-          >
-            Agregar primera carga
-          </button>
-        </div>
       ) : (
-        <div className="space-y-4">
-          {dependents.map((d) => (
-            <DependentCard
-              key={d.id}
-              dependent={d}
-              onEdit={() => setEditingDependent(d)}
-            />
-          ))}
-        </div>
+        <>
+          <TutorSportCard />
+          {dependents.length === 0 ? (
+            <div className="glass-panel rounded-xl p-8 text-center">
+              <span className="material-symbols-outlined text-on-surface/20 text-[48px] mb-4 block">
+                group
+              </span>
+              <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant mb-2">
+                No tienes dependientes registrados
+              </p>
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant/60 mb-4">
+                Agrega una carga para inscribir a un familiar o dependiente
+              </p>
+              <button
+                onClick={() => setShowModal(true)}
+                className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary border border-primary/30 px-6 py-2 rounded-lg hover:bg-primary/10 transition-colors cursor-pointer"
+              >
+                Agregar primera carga
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {dependents.map((d) => (
+                <DependentCard
+                  key={d.id}
+                  dependent={d}
+                  onEdit={() => setEditingDependent(d)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {user && (

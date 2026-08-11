@@ -34,14 +34,14 @@ export default function Hero() {
 
           <div className="flex flex-col sm:flex-row gap-4 mb-16">
             <Link
-              href="/auth"
+              href="/horarios"
               className="btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-lg px-8 py-4 rounded-[0.25rem] text-center hover:scale-105 transition-transform duration-300 uppercase tracking-wide shadow-[0_10px_40px_rgba(229,57,53,0.4)]"
             >
               Reservar Clase
             </Link>
             <a
               href="/horarios"
-              className="border-2 border-on-surface/20 hover:border-on-surface/50 text-on-surface font-[family-name:var(--font-headline-md)] text-lg px-8 py-4 rounded-[0.25rem] text-center transition-all duration-300 uppercase tracking-wide backdrop-blur-sm bg-surface/10"
+              className="border-2 border-on-surface/20 hover:border-on-surface/50 text-on-surface font-[family-name:var(--font-headline-md)] text-lg px-8 py-4 rounded-[0.25rem] text-center transition-all duration-300 uppercase tracking-wide bg-surface-container-high"
             >
               Ver Horarios
             </a>

@@ -1,6 +1,9 @@
 import type { DependentData } from "@/lib/supabase/dashboard";
+import { sportProfileFrom, sportPodiumsFrom } from "@/lib/supabase/dashboard";
 import Link from "next/link";
 import { getChileToday } from "@/lib/dates";
+import BeltBanner from "./BeltBanner";
+import SportProfileInfo from "./SportProfileInfo";
 
 function calcAge(birthDate: string) {
   const today = new Date();
@@ -40,8 +43,14 @@ export default function DependentCard({
     .flatMap((b) => b.academy_enrollments || [])
     .find((e) => e.status === "activa" && e.end_date >= getChileToday());
 
+  const sportProfile = sportProfileFrom(beneficiaryList[0]);
+  const sportPodiums = sportPodiumsFrom(beneficiaryList[0]);
+  const beltColor = sportProfile?.belt_grades?.color;
+
   return (
-    <div className="bg-surface-container border border-on-surface/5 rounded-2xl p-5 hover:border-primary/30 transition-colors">
+    <div className="bg-surface-container border border-on-surface/5 rounded-2xl p-5 hover:border-primary/30 transition-colors relative overflow-hidden">
+      {beltColor && <BeltBanner color={beltColor} />}
+      <div className="relative z-10">
       <div className="flex items-center gap-4 mb-4">
         <div className="w-12 h-12 rounded-full btn-primary-gradient flex items-center justify-center shrink-0">
           <span className="material-symbols-outlined text-white text-[20px]">
@@ -122,6 +131,8 @@ export default function DependentCard({
             <span className="text-yellow-400">Sin membresía activa</span>
           )}
         </div>
+
+        <SportProfileInfo profile={sportProfile} podiums={sportPodiums} />
       </div>
 
       <Link
@@ -141,6 +152,7 @@ export default function DependentCard({
           Editar datos
         </button>
       )}
+      </div>
     </div>
   );
 }

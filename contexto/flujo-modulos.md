@@ -72,6 +72,8 @@ Por cada beneficiario, en orden:
 | `006` | Tabla `debts` + RLS restringidas (B-013) + drop constraint legacy (B-014) |
 | `007` | Columna `events.location_url` (B-016) |
 | `008` | Tabla `reglamento_interno` + RLS (admin edita, usuarios leen) |
+| `024` | Perfil deportivo: `belt_grades` + `sport_profiles` + `sports_podiums` (trigger + seeds + policies RLS) |
+| `025` | Seed changelog v1.5.0 "Perfil Deportivo de Alumnos" |
 
 ## 7. Eventos (`/admin/eventos`, `/eventos`)
 
@@ -92,3 +94,19 @@ Por cada beneficiario, en orden:
 - **Header admin**: ☰ (móvil, abre el drawer), "Panel de Administración", "Ver sitio" (→ `/`), perfil (→ `/perfil`) y botón **Cerrar sesión** (`signOut()` → `/auth`).
 - **Drawer CRUD** (`AdminSidebar`): en móvil se desliza con overlay/backdrop y cierra al navegar; en desktop es estático con colapso a iconos. Incluye los 15 módulos (Dashboard, Productos, Eventos, Horarios, Tipos de Clase, Asistencia, Usuarios, Membresías, Inscripciones, Deudas, Ventas, Blog, Notificaciones, Reglamento, Configuración).
 - `/dashboard` conserva el navbar público con offset `pt-24 md:pt-28` (sin cambios).
+
+## 10. Perfil deportivo de alumnos (disciplina, grado/cinturón y podios)
+
+**Modelo:** tres tablas ancladas a `beneficiaries.id` (migración `024`):
+
+1. `belt_grades` — catálogo de grados por disciplina: `(discipline_id FK, position, name, color)` con UNIQUE `(discipline_id, position)`. Seed por disciplina activa: Blanco→Negro (8 grados) con `ON CONFLICT (discipline_id, position) DO NOTHING`.
+2. `sport_profiles` — perfil 1:1 por beneficiario: `(beneficiary_id UNIQUE, discipline_id, grade_id)`. El trigger `sport_profile_validate_grade()` impide guardar un cinturón cuya disciplina no coincide con la del perfil.
+3. `sports_podiums` — historial: `(beneficiary_id, tournament, event_date, discipline_id, category, position, description, image_url)` con `position CHECK IN ('1','2','3','participacion')` e índice por `(beneficiary_id, event_date)`.
+
+**RLS (escritura solo admin):** INSERT/UPDATE/DELETE únicamente `is_admin()`; SELECT `owns_beneficiary(beneficiary_id) OR is_admin()` (y lectura de `belt_grades` para cualquier autenticado). Anclar a `beneficiaries` —y no a columnas de `profiles`/`dependents`— evita que el tutor se autoconceda grados a través de `dependents_update_own_or_admin`.
+
+**Lectura (dashboard):** `getUserMemberships`/`getUserDependents` embeben `sport_profiles` (1:1, con `disciplines` + `belt_grades`) y `sports_podiums` en cada beneficiario. Helpers `sportProfileFrom`/`sportPodiumsFrom` normalizan 1:1 vs array. `getUserSportProfile(userId)` consulta el perfil del titular por `profile_id`; `getDependentSportProfile(dependentId)` por `dependent_id`. Todo el color del cinturón proviene de `belt_grades.color` (BD).
+
+**UI usuario:** `TutorSportCard` en `/dashboard/cargas` (perfil del titular: franja de cinturón + disciplina/grado + contadores de podios). `DependentCard` muestra `BeltBanner` (fondo con el color del grado) + `SportProfileInfo` (disciplina, grado, línea de podios 🥇🥈🥉🎖️). Los podios se ordenan por fecha descendente (`sortPodiumsByDateDesc`).
+
+**Gestión admin (`/admin/usuarios`):** botón `sports_martial_arts` en `DataTable` (`onSport`/`canSport`) → `SportProfileModal`, que resuelve el beneficiario por `profile_id` (titular) o `dependent_id` (carga), guarda disciplina/grado (upsert en `sport_profiles`; si no hay beneficiario → toast de aviso) y administra los podios con `PodiumFormModal` (torneo, fecha, disciplina, resultado `PODIUM_POSITIONS`, categoría con `SUGGESTED_CATEGORIES`, descripción e imagen a `public/podiums`). Las estadísticas (`computePodiumStats`) se calculan en runtime, nunca se persisten.

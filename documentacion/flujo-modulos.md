@@ -203,3 +203,20 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
   - `perfil`: campo RUT (state, load, save).
 - **Refactor**: `confirmAndCreateMembership` ahora delega a `createMembershipForPayment(supabase, paymentId, userId, planId?)` (override opcional de plan); `confirmPersonalizedPack` igual. Flujo Flow intacto (el wrapper llama sin override). Vigencia de membres�a aprobada por transferencia corre desde la fecha de aprobaci�n (`start_date = getChileToday()`).
 - **Verificaci�n**: suite secci�n T (contratos migraci�n 013 + espejo 1:1 del esquema, librer�a, rutas transfer/review, guarda create-order, refactor helpers, email, UI, regresiones RLS) + `tsc` + `build`.
+
+## 12. Perfil Deportivo de Alumnos (IMPLEMENTADO - v1)
+
+> Estado: **implementado (2026-08-11)**, suite secciones A-AB en verde (567 tests), `npx tsc --noEmit` limpio. Migraciones `024_sport_profiles.sql` y `025_changelog_v1_5_0.sql` creadas y espejadas 1:1 en `documentacion/squema-sql-actualizado.sql`; **pendientes aplicar en Supabase (SQL Editor)**. Requisito en `contexto/requisitos/perfil-deportivo-alumnos.md`.
+
+**Prop�sito**: Registrar el perfil deportivo de cada alumno (titular y cargas): disciplina principal, grado/cintur�n (con color oficial) e historial de podios. El tutor lo ve en su dashboard; el admin lo gestiona en `/admin/usuarios`. El alumno **no** puede auto-asignarse el grado: la escritura es solo admin.
+
+- **Esquema (migraci�n 024, idempotente; 1:1 en el espejo)**:
+  - `belt_grades`: `(discipline_id FK, position int CHECK > 0, name text, color char(7))`, UNIQUE `(discipline_id, position)`. Seed por disciplina activa (Blanco `#F5F5F5`, Amarillo `#FBC02D`, Naranja `#F57C00`, Verde `#388E3C`, Azul `#1976D2`, Morado `#7B1FA2`, Marr�n `#5D4037`, Negro `#212121`) con `ON CONFLICT (discipline_id, position) DO NOTHING`. RLS: SELECT autenticado, escritura admin.
+  - `sport_profiles`: `(beneficiary_id uuid NOT NULL UNIQUE, discipline_id FK, grade_id FK)`. Trigger `sport_profile_validate_grade()` valida que `belt_grades.discipline_id = discipline_id` (imposible un cintur�n de otra disciplina). RLS: SELECT `owns_beneficiary(beneficiary_id) OR is_admin()`, escritura solo admin.
+  - `sports_podiums`: `(beneficiary_id FK, tournament, event_date date, discipline_id FK nullable, category text nullable, position CHECK IN ('1','2','3','participacion'), description, image_url)` + �ndice `idx_sports_podiums_beneficiary_date`. RLS: SELECT `owns_beneficiary OR is_admin()`, escritura solo admin.
+  - Sin columnas nuevas en `profiles`/`dependents` (evita que el tutor se autoconceda grados v�a `dependents_update_own_or_admin`).
+- **Librer�a isom�rfica `src/lib/sport-profile.ts`**: tipos `SportProfileData`/`SportPodiumData`/`DisciplineRef`/`BeltGradeRef`, `PODIUM_POSITIONS` (1/2/3/participacion, alineado con el CHECK SQL), `SUGGESTED_CATEGORIES`, `podiumPositionMeta`, `computePodiumStats` (calculadas en runtime, nunca persistidas), `formatPodiumDate` (es-CL), `sortPodiumsByDateAsc/Desc`.
+- **Dashboard**: `src/lib/supabase/dashboard.ts` embebe `sport_profiles` (1:1 con `disciplines` + `belt_grades`) y `sports_podiums` en `DependentData`; helpers `sportProfileFrom`/`sportPodiumsFrom`; `getUserSportProfile(userId)` y `getDependentSportProfile(dependentId)`.
+- **UI usuario**: `TutorSportCard` en `/dashboard/cargas`; `DependentCard` con `BeltBanner` (franja de fondo con el color del grado desde la BD) + `SportProfileInfo` + `PodiumStatsLine` (🥇🥈🥉🎖️).
+- **Admin**: `DataTable` con `onSport`/`canSport` (bot�n `sports_martial_arts`); `SportProfileModal` (disciplina/grado con preview de cintur�n + CRUD de podios) y `PodiumFormModal` (torneo, fecha, disciplina, resultado, categor�a, descripci�n, `ImageUpload` a `public/podiums`). `admin/usuarios`: `openSportProfile` resuelve el beneficiario por `profile_id` o `dependent_id` y toast si no existe.
+- **Verificaci�n**: suite secci�n AB (contratos migraci�n 024 + espejo 1:1, cat�logos vs CHECK SQL, helpers, wiring de UI dashboard/admin) + `tsc`.

@@ -164,7 +164,7 @@ export default function Disciplines() {
               {/* Hover hint */}
               {!isActive && (
                 <div className="absolute inset-x-0 top-3 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                  <div className="flex items-center gap-1.5 bg-background/75 backdrop-blur-sm rounded-full px-3 py-1.5 border border-on-surface/10">
+                  <div className="flex items-center gap-1.5 bg-background/90 rounded-full px-3 py-1.5 border border-on-surface/10">
                     <span className="material-symbols-outlined text-primary text-[15px]">touch_app</span>
                     <span className="font-[family-name:var(--font-label-md)] text-[10px] text-on-surface-variant uppercase tracking-widest">
                       Clic para más

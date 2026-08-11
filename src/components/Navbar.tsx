@@ -70,8 +70,8 @@ export default function Navbar() {
       <nav
         className={`fixed top-0 w-full z-50 transition-all duration-300 border-b border-on-surface/10 shadow-md shadow-primary/10 ${
           scrolled
-            ? "bg-surface/80 backdrop-blur-xl"
-            : "bg-transparent backdrop-blur-xl bg-surface/5"
+            ? "bg-surface/95"
+            : "bg-surface/90"
         }`}
       >
         {/* Desktop */}
@@ -190,7 +190,7 @@ export default function Navbar() {
 
       {/* Mobile Menu Overlay */}
       <div
-        className={`fixed inset-0 bg-surface-container-lowest/95 backdrop-blur-xl z-40 ${
+        className={`fixed inset-0 bg-surface-container-lowest/95 z-40 ${
           mobileOpen ? "flex" : "hidden"
         } flex-col items-center justify-center gap-8 pt-20`}
       >

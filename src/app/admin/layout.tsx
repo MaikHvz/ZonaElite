@@ -28,7 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="flex min-h-screen bg-background">
           <AdminSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
           <div className="flex-1 flex flex-col">
-            <header className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-on-surface/5 bg-surface/80 backdrop-blur-xl">
+            <header className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-on-surface/5 bg-surface/95">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setSidebarOpen(true)}

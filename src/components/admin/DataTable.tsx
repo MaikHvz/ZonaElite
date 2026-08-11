@@ -17,7 +17,9 @@ interface DataTableProps<T> {
   onEdit?: (item: T) => void;
   onDelete?: (item: T) => void;
   onView?: (item: T) => void;
+  onSport?: (item: T) => void;
   canView?: (item: T) => boolean;
+  canSport?: (item: T) => boolean;
   emptyMessage?: string;
 }
 
@@ -30,7 +32,9 @@ export default function DataTable<T extends { id: string }>({
   onEdit,
   onDelete,
   onView,
+  onSport,
   canView,
+  canSport,
   emptyMessage = "No se encontraron registros",
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
@@ -93,7 +97,7 @@ export default function DataTable<T extends { id: string }>({
                   {col.label}
                 </th>
               ))}
-              {(onEdit || onDelete || onView) && (
+              {(onEdit || onDelete || onView || onSport) && (
                 <th className="text-right px-4 py-3 font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">
                   Acciones
                 </th>
@@ -104,7 +108,7 @@ export default function DataTable<T extends { id: string }>({
             {paged.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length + (onEdit || onDelete || onView ? 1 : 0)}
+                  colSpan={columns.length + (onEdit || onDelete || onView || onSport ? 1 : 0)}
                   className="text-center py-12 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface-variant"
                 >
                   {emptyMessage}
@@ -126,7 +130,7 @@ export default function DataTable<T extends { id: string }>({
                         : String((item as Record<string, unknown>)[col.key] ?? "")}
                     </td>
                   ))}
-                  {(onEdit || onDelete || onView) && (
+                  {(onEdit || onDelete || onView || onSport) && (
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {onView && (!canView || canView(item)) && (
@@ -136,6 +140,15 @@ export default function DataTable<T extends { id: string }>({
                             title="Ver Ficha"
                           >
                             <span className="material-symbols-outlined text-[18px]">visibility</span>
+                          </button>
+                        )}
+                        {onSport && (!canSport || canSport(item)) && (
+                          <button
+                            onClick={() => onSport(item)}
+                            className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                            title="Perfil deportivo"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">sports_martial_arts</span>
                           </button>
                         )}
                         {onEdit && (
