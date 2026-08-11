@@ -59,8 +59,9 @@ CREATE POLICY "personalized_enrollments_admin_write" ON public.personalized_enro
 -- ============================================================
 -- RPC enroll_personalized_class: inscripción con consumo atómico
 -- de pack (equivalente desacoplado de enroll_class). Volatility
--- VOLATILE porque escribe (a diferencia de enroll_class que es
--- STABLE en el repo; aquí se usa el valor semánticamente correcto).
+-- VOLATILE porque escribe (igual que enroll_class tras la
+-- corrección de su volatilidad en la migración 004: también es
+-- VOLATILE por su SELECT ... FOR UPDATE + INSERT).
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.enroll_personalized_class(

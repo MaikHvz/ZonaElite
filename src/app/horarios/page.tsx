@@ -60,6 +60,24 @@ function getWeekDates(): { dayName: string; date: string; full: string }[] {
   });
 }
 
+function getLuminance(hex: string): number {
+  const c = hex.replace("#", "");
+  const full = c.length === 3 ? c.split("").map((x) => x + x).join("") : c;
+  const toLin = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return (
+    0.2126 * toLin(parseInt(full.slice(0, 2), 16)) +
+    0.7152 * toLin(parseInt(full.slice(2, 4), 16)) +
+    0.0722 * toLin(parseInt(full.slice(4, 6), 16))
+  );
+}
+
+function getContrastText(hex: string): string {
+  return getLuminance(hex) > 0.5 ? "#141414" : "#ffffff";
+}
+
 let toastId = 0;
 
 export default function HorariosPage() {
@@ -168,9 +186,9 @@ export default function HorariosPage() {
   };
 
   const legendItems = [
-    { color: "bg-primary", label: "Disponible" },
+    { color: "bg-white", label: "Disponible" },
     { color: "bg-amber-500", label: "Últimos cupos" },
-    { color: "bg-on-surface-variant/30", label: "Llena" },
+    { color: "bg-white/30", label: "Llena" },
   ];
 
   const disciplineFilters = Object.values(grid)
@@ -222,15 +240,15 @@ export default function HorariosPage() {
         {/* Header */}
         <section className="pt-24 pb-8 px-5 md:px-6">
           <div className="max-w-[1280px] mx-auto">
-            <p className="font-[family-name:var(--font-label-sm)] text-primary uppercase tracking-[0.15em] mb-3 text-[12px] leading-[16px]">
+            <p className="font-[family-name:var(--font-label-sm)] text-white uppercase tracking-[0.15em] mb-3 text-[14px] leading-[18px]">
               Calendario de Entrenamientos
             </p>
-            <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] leading-[36px] md:text-[48px] md:leading-[52px] md:tracking-[0.02em] text-on-surface uppercase tracking-tighter mb-4">
+            <h1 className="font-[family-name:var(--font-headline-lg)] text-[36px] leading-[40px] md:text-[56px] md:leading-[60px] md:tracking-[0.02em] text-white uppercase tracking-tighter mb-4">
               Horarios
             </h1>
             <div className="flex items-center gap-3">
-              <span className="font-[family-name:var(--font-headline-md)] text-[20px] leading-[24px] text-on-surface uppercase">Clases disponibles</span>
-              <div className="h-px flex-1 bg-on-surface/10" />
+              <span className="font-[family-name:var(--font-headline-md)] text-[22px] leading-[26px] md:text-[26px] text-white uppercase">Clases disponibles</span>
+              <div className="h-px flex-1 bg-white/20" />
             </div>
           </div>
         </section>
@@ -241,13 +259,13 @@ export default function HorariosPage() {
             <div className="inline-flex items-center gap-1 p-1 rounded-full bg-surface-container border border-on-surface/10">
               <button
                 onClick={() => handleModeChange("normal")}
-                className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-5 py-2 rounded-full transition-colors cursor-pointer ${modeFilter === "normal" ? "btn-primary-gradient text-white" : "text-on-surface-variant hover:text-on-surface"}`}
+                className={`font-[family-name:var(--font-label-sm)] text-[13px] uppercase tracking-wider px-6 py-2.5 rounded-full transition-colors cursor-pointer ${modeFilter === "normal" ? "btn-primary-gradient text-white" : "text-white hover:bg-white/10"}`}
               >
                 Membresías
               </button>
               <button
                 onClick={() => handleModeChange("personalizado")}
-                className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-5 py-2 rounded-full transition-colors cursor-pointer ${modeFilter === "personalizado" ? "bg-purple-500 text-white" : "text-on-surface-variant hover:text-on-surface"}`}
+                className={`font-[family-name:var(--font-label-sm)] text-[13px] uppercase tracking-wider px-6 py-2.5 rounded-full transition-colors cursor-pointer ${modeFilter === "personalizado" ? "bg-purple-500 text-white" : "text-white hover:bg-white/10"}`}
               >
                 Personalizadas
               </button>
@@ -258,12 +276,12 @@ export default function HorariosPage() {
         {/* Filters */}
         <section className="pb-4 px-5 md:px-6">
           <div className="max-w-[1280px] mx-auto flex flex-wrap gap-2">
-            <button onClick={() => setActiveFilter("all")} className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-4 py-1.5 rounded-full border transition-colors cursor-pointer ${activeFilter === "all" ? "btn-primary-gradient text-white border-transparent" : "border-on-surface/20 text-on-surface-variant hover:border-primary/50"}`}>
+            <button onClick={() => setActiveFilter("all")} className={`font-[family-name:var(--font-label-sm)] text-[13px] uppercase tracking-wider px-5 py-2 rounded-full border transition-colors cursor-pointer ${activeFilter === "all" ? "btn-primary-gradient text-white border-transparent" : "border-white/30 text-white hover:border-white"}`}>
               Todos
             </button>
             {uniqueDisciplines.map((d) => (
-              <button key={d!.name} onClick={() => setActiveFilter(d!.name)} className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-4 py-1.5 rounded-full border transition-colors cursor-pointer flex items-center gap-1.5 ${activeFilter === d!.name ? "text-white border-transparent" : "border-on-surface/20 text-on-surface-variant hover:border-primary/50"}`} style={activeFilter === d!.name ? { backgroundColor: d!.color_hex } : {}}>
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d!.color_hex }} />
+              <button key={d!.name} onClick={() => setActiveFilter(d!.name)} className={`font-[family-name:var(--font-label-sm)] text-[13px] uppercase tracking-wider px-5 py-2 rounded-full border transition-colors cursor-pointer flex items-center gap-1.5 ${activeFilter === d!.name ? "border-transparent font-bold" : "border-white/30 text-white hover:border-white"}`} style={activeFilter === d!.name ? { backgroundColor: d!.color_hex, color: getContrastText(d!.color_hex) } : {}}>
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d!.color_hex }} />
                 {d!.name}
               </button>
             ))}
@@ -279,38 +297,38 @@ export default function HorariosPage() {
               </div>
             ) : times.length === 0 ? (
               <div className="text-center py-20">
-                <span className="material-symbols-outlined text-on-surface/20 text-7xl mb-4 block">calendar_month</span>
-                <p className="font-[family-name:var(--font-body-lg)] text-on-surface-variant">No hay clases programadas</p>
-                <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface-variant/60 mt-2">Próximamente publicaremos nuevos horarios</p>
+                <span className="material-symbols-outlined text-white/30 text-7xl mb-4 block">calendar_month</span>
+                <p className="font-[family-name:var(--font-body-lg)] text-white text-[20px]">No hay clases programadas</p>
+                <p className="font-[family-name:var(--font-body-md)] text-[16px] text-white/80 mt-2">Próximamente publicaremos nuevos horarios</p>
               </div>
             ) : (
               <>
                 {/* Day Headers */}
-                <div className="grid grid-cols-[60px_repeat(6,1fr)] md:grid-cols-[80px_repeat(6,1fr)] gap-1.5 md:gap-2 mb-3">
+                <div className="grid grid-cols-[70px_repeat(6,1fr)] md:grid-cols-[100px_repeat(6,1fr)] gap-1.5 md:gap-2 mb-3">
                   <div />
                   {weekDates.map((wd, i) => (
                     <div key={i} className="text-center">
-                      <p className="font-[family-name:var(--font-label-sm)] text-on-surface uppercase tracking-wider text-[10px] leading-[14px] md:text-[12px] md:leading-[16px]">{wd.dayName}</p>
-                      <p className="font-[family-name:var(--font-label-sm)] text-primary/70 text-[9px] leading-[12px] md:text-[10px] md:leading-[14px] capitalize">{wd.date}</p>
+                      <p className="font-[family-name:var(--font-label-sm)] text-white uppercase tracking-wider text-[11px] leading-[15px] md:text-[14px] md:leading-[18px] font-bold">{wd.dayName}</p>
+                      <p className="font-[family-name:var(--font-label-sm)] text-white/90 text-[10px] leading-[14px] md:text-[12px] md:leading-[16px] capitalize">{wd.date}</p>
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-[60px_repeat(6,1fr)] md:grid-cols-[80px_repeat(6,1fr)] gap-1.5 md:gap-2 mb-3">
+                <div className="grid grid-cols-[70px_repeat(6,1fr)] md:grid-cols-[100px_repeat(6,1fr)] gap-1.5 md:gap-2 mb-3">
                   <div />
-                  {weekDates.map((_, i) => (<div key={i} className="h-0.5 rounded-full bg-primary/40" />))}
+                  {weekDates.map((_, i) => (<div key={i} className="h-0.5 rounded-full bg-white/40" />))}
                 </div>
 
                 {/* Time Rows */}
                 <div className="space-y-2 md:space-y-3">
                   {times.map((time) => (
-                    <div key={time} className="grid grid-cols-[60px_repeat(6,1fr)] md:grid-cols-[80px_repeat(6,1fr)] gap-1.5 md:gap-2 items-start">
+                    <div key={time} className="grid grid-cols-[70px_repeat(6,1fr)] md:grid-cols-[100px_repeat(6,1fr)] gap-1.5 md:gap-2 items-start">
                       <div className="pt-2 md:pt-3">
-                        <span className="font-[family-name:var(--font-label-sm)] text-primary text-[12px] leading-[16px] md:text-[14px] md:leading-[18px] font-bold">{time}</span>
+                        <span className="font-[family-name:var(--font-label-sm)] text-white text-[13px] leading-[18px] md:text-[16px] md:leading-[20px] font-bold">{time}</span>
                       </div>
                       {Array.from({ length: 6 }, (_, dayIdx) => {
                         const day = dayIdx + 1;
                         const cell = grid[time]?.[String(day)];
-                        if (!cell) return <div key={day} className="min-h-[60px] md:min-h-[72px]" />;
+                        if (!cell) return <div key={day} className="min-h-[88px] md:min-h-[120px]" />;
 
                         const s = cell.schedule;
                         const nextDate = cell.nextSessionDate;
@@ -318,6 +336,7 @@ export default function HorariosPage() {
                         const isFull = remaining <= 0;
                         const isLow = remaining > 0 && remaining <= 3;
                         const color = s.disciplines?.color_hex || "#666";
+                        const textOnColor = getContrastText(color);
                         const matchesFilter = activeFilter === "all" || s.disciplines?.name === activeFilter;
 
                         const nextDateLabel = nextDate
@@ -325,31 +344,36 @@ export default function HorariosPage() {
                           : null;
 
                         return (
-                          <div key={day} className={`min-h-[60px] md:min-h-[72px] transition-opacity ${matchesFilter ? "opacity-100" : "opacity-20"}`}>
-                            <div className={`rounded-xl p-3 border transition-all duration-300 ${isFull ? "bg-surface-container-high/50 border-on-surface/5 opacity-60" : isLow ? "border-amber-500/30 hover:border-amber-500/60" : "border-on-surface/5 hover:border-primary/30"}`} style={!isFull ? { backgroundColor: `${color}08` } : {}}>
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                                <p className="font-[family-name:var(--font-label-sm)] text-[10px] leading-[14px] md:text-[11px] md:leading-[15px] text-on-surface uppercase tracking-wider line-clamp-1">{s.disciplines?.name}</p>
+                          <div key={day} className={`min-h-[88px] md:min-h-[120px] transition-opacity ${matchesFilter ? "opacity-100" : "opacity-20"}`}>
+                            <div
+                              className={`rounded-xl p-3 md:p-4 border-2 transition-all duration-300 ${isFull ? "opacity-50" : ""} ${isLow ? "shadow-[0_0_0_2px_rgba(245,158,11,0.45)]" : ""}`}
+                              style={isFull
+                                ? { borderColor: `${color}40`, backgroundColor: `${color}0A` }
+                                : { borderColor: color, background: `linear-gradient(180deg, ${color}2E 0%, ${color}0F 100%)` }}
+                            >
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                                <span className="font-[family-name:var(--font-label-sm)] text-[10px] leading-[14px] md:text-[12px] md:leading-[16px] font-bold text-white uppercase tracking-wider line-clamp-1 rounded px-1.5 py-0.5" style={{ backgroundColor: `${color}33` }}>{s.disciplines?.name}</span>
                               </div>
                               {s.profiles && (
-                                <p className="font-[family-name:var(--font-label-sm)] text-[9px] leading-[12px] md:text-[10px] md:leading-[14px] text-on-surface-variant/70 uppercase tracking-wider mb-1">{s.profiles.full_name}</p>
+                                <p className="font-[family-name:var(--font-label-sm)] text-[10px] leading-[14px] md:text-[12px] md:leading-[16px] text-white/90 uppercase tracking-wider mb-1">{s.profiles.full_name}</p>
                               )}
                               {nextDateLabel && (
-                                <p className="font-[family-name:var(--font-label-sm)] text-primary/70 text-[9px] leading-[12px] md:text-[10px] md:leading-[14px] capitalize mb-1">Próx: {nextDateLabel}</p>
+                                <p className="font-[family-name:var(--font-label-sm)] text-white/90 text-[10px] leading-[14px] md:text-[12px] md:leading-[16px] capitalize mb-1">Próx: {nextDateLabel}</p>
                               )}
                               <div className="flex items-center gap-1 mt-1.5">
-                                <div className="flex-1 h-1 rounded-full bg-surface-container-highest overflow-hidden">
-                                  <div className="h-full rounded-full transition-all" style={{ width: `${s.capacity > 0 ? (cell.enrolled / s.capacity) * 100 : 0}%`, backgroundColor: isFull ? "var(--color-on-surface-variant)" : color }} />
+                                <div className="flex-1 h-1.5 rounded-full bg-white/15 overflow-hidden">
+                                  <div className="h-full rounded-full transition-all" style={{ width: `${s.capacity > 0 ? (cell.enrolled / s.capacity) * 100 : 0}%`, backgroundColor: isFull ? "rgba(255,255,255,0.35)" : color }} />
                                 </div>
-                                <span className={`font-[family-name:var(--font-label-sm)] text-[9px] leading-[12px] md:text-[10px] ${isFull ? "text-on-surface-variant/40" : "text-on-surface-variant"}`}>{remaining > 0 ? remaining : 0}/{s.capacity}</span>
+                                <span className={`font-[family-name:var(--font-label-sm)] text-[10px] leading-[14px] md:text-[12px] md:leading-[16px] font-bold ${isFull ? "text-white/50" : "text-white"}`}>{remaining > 0 ? remaining : 0}/{s.capacity}</span>
                               </div>
                               {!isFull && (
                                 <button
                                   onClick={() => handleAgendar(s)}
-                                  className="mt-2 w-full text-center py-1 rounded-lg text-[10px] md:text-[11px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider transition-colors cursor-pointer"
-                                  style={{ color: color, border: `1px solid ${color}30` }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = `${color}15`)}
-                                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                                  className="mt-2.5 w-full text-center py-1.5 rounded-lg text-[11px] md:text-[13px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider transition-colors cursor-pointer font-bold"
+                                  style={{ backgroundColor: `${color}2B`, color: "#fff", border: `1.5px solid ${color}` }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = color; e.currentTarget.style.color = textOnColor; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = `${color}2B`; e.currentTarget.style.color = "#fff"; }}
                                 >
                                   {cell.userEnrolled ? "Inscrito ✓" : "Agendar"}
                                 </button>
@@ -366,14 +390,14 @@ export default function HorariosPage() {
                 <div className="mt-10 flex flex-wrap gap-6 items-center">
                   {legendItems.map((item) => (
                     <div key={item.label} className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${item.color}`} />
-                      <span className="font-[family-name:var(--font-label-sm)] text-on-surface-variant text-[10px] leading-[14px] md:text-[11px] uppercase tracking-wider">{item.label}</span>
+                      <div className={`w-4 h-4 rounded-full ${item.color}`} />
+                      <span className="font-[family-name:var(--font-label-sm)] text-white text-[12px] leading-[16px] md:text-[13px] uppercase tracking-wider">{item.label}</span>
                     </div>
                   ))}
                   {uniqueDisciplines.map((d) => (
                     <div key={d!.name} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d!.color_hex }} />
-                      <span className="font-[family-name:var(--font-label-sm)] text-on-surface-variant text-[10px] leading-[14px] md:text-[11px] uppercase tracking-wider">{d!.name}</span>
+                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: d!.color_hex }} />
+                      <span className="font-[family-name:var(--font-label-sm)] text-white text-[12px] leading-[16px] md:text-[13px] uppercase tracking-wider">{d!.name}</span>
                     </div>
                   ))}
                 </div>

@@ -86,6 +86,7 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
+STABLE
 AS $$
 BEGIN
   INSERT INTO public.profiles (id, full_name, email, role_id)
@@ -1141,7 +1142,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-STABLE
+VOLATILE
 AS $$
 DECLARE
   v_capacity integer;

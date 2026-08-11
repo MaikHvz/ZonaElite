@@ -22,6 +22,11 @@
 --
 -- El cliente (EnrollModal) reemplaza el insert directo por esta
 -- RPC y muestra los errores por beneficiario (CLASS_FULL, etc.).
+--
+-- Volatility: VOLATILE (NO STABLE) porque la función hace
+-- SELECT ... FOR UPDATE (lock de la sesión) e INSERT. PostgreSQL
+-- lanza "SELECT FOR UPDATE is not allowed in a non-volatile
+-- function" si se declara STABLE/IMMUTABLE.
 -- =============================================================
 
 CREATE OR REPLACE FUNCTION public.enroll_class(
@@ -36,7 +41,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-STABLE
+VOLATILE
 AS $$
 DECLARE
   v_capacity integer;

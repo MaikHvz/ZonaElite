@@ -193,7 +193,7 @@ La doc oficial de Flow **no** envía `s` ni `d` en el callback de confirmación:
 4. Tests: mock de la RPC rechazando por capacidad.
 
 ### 7.2 Estado: ✅ COMPLETADA (2026-08-02)
-- ✅ Paso 1: migración `contexto/migrations/004_enroll_class_rpc.sql` creada (SECURITY DEFINER, STABLE, `SELECT ... FOR UPDATE`; valida acceso, membresía, inscripción, cupo e idempotencia; códigos `UNAUTHORIZED`, `NO_MEMBERSHIP`, `NO_ENROLLMENT`, `CLASS_FULL`; `REVOKE FROM PUBLIC` + `GRANT TO authenticated`).
+- ✅ Paso 1: migración `contexto/migrations/004_enroll_class_rpc.sql` creada (SECURITY DEFINER, VOLATILE, `SELECT ... FOR UPDATE`; valida acceso, membresía, inscripción, cupo e idempotencia; códigos `UNAUTHORIZED`, `NO_MEMBERSHIP`, `NO_ENROLLMENT`, `CLASS_FULL`; `REVOKE FROM PUBLIC` + `GRANT TO authenticated`).
 - ✅ Paso 2: `EnrollModal.tsx` usa `supabase.rpc("enroll_class", …)` y muestra el error de la BD; estado `submitError` reseteado al recargar.
 - ✅ Paso 3: el check cliente se mantiene como UX.
 - ✅ Paso 4: tests B-006 en `scripts/test-flows.mjs` (sección D): RPC en migración 004, `FOR UPDATE`, validación de capacidad con `chile_today()`, códigos de error, sesión pasada sin exigir `status='activa'`, grant a authenticated, EnrollModal usa RPC, y espejo 1:1 migración↔esquema.

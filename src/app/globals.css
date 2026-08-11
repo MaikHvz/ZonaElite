@@ -12,11 +12,11 @@
   --color-surface-dim: #131313;
   --color-on-tertiary: #313030;
   --color-error: #ffb4ab;
-  --color-on-surface-variant: #e4beb9;
+  --color-on-surface-variant: #ffffff;
   --color-on-secondary: #2f3131;
   --color-secondary-fixed: #e2e2e2;
   --color-on-error: #690005;
-  --color-on-background: #e5e2e1;
+  --color-on-background: #ffffff;
   --color-tertiary: #c8c6c5;
   --color-tertiary-fixed-dim: #c8c6c5;
   --color-tertiary-fixed: #e5e2e1;
@@ -27,7 +27,7 @@
   --color-tertiary-container: #929090;
   --color-primary-fixed-dim: #ffb4ac;
   --color-on-secondary-container: #b4b5b5;
-  --color-on-surface: #e5e2e1;
+  --color-on-surface: #ffffff;
   --color-on-primary-fixed: #410002;
   --color-primary-container: #ff544c;
   --color-on-primary-fixed-variant: #93000d;
@@ -65,6 +65,7 @@ body {
   background-color: var(--color-background);
   color: var(--color-on-surface);
   font-family: var(--font-body-md);
+  font-size: 17px;
   overflow-x: hidden;
 }
 
