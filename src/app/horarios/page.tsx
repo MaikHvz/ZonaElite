@@ -185,12 +185,6 @@ export default function HorariosPage() {
     addToast("Inscripción exitosa", "success");
   };
 
-  const legendItems = [
-    { color: "bg-white", label: "Disponible" },
-    { color: "bg-amber-500", label: "Últimos cupos" },
-    { color: "bg-white/30", label: "Llena" },
-  ];
-
   const disciplineFilters = Object.values(grid)
     .flatMap((day) => Object.values(day))
     .map((c) => c.schedule.disciplines)
@@ -289,124 +283,145 @@ export default function HorariosPage() {
         </section>
 
         {/* Schedule Grid */}
-        <section className="pb-16 px-5 md:px-6">
-          <div className="max-w-[1280px] mx-auto">
+        <section className="pb-16 px-2 md:px-4 lg:px-6 w-full">
+          <div className="w-full mx-auto bg-white rounded-2xl md:rounded-[32px] p-4 md:p-6 lg:p-10 shadow-[0_8px_40px_rgba(0,0,0,0.12)] border border-slate-200/60">
             {loading ? (
               <div className="flex justify-center py-20">
                 <div className="animate-spin w-10 h-10 border-2 border-primary border-t-transparent rounded-full" />
               </div>
             ) : times.length === 0 ? (
-              <div className="text-center py-20">
-                <span className="material-symbols-outlined text-white/30 text-7xl mb-4 block">calendar_month</span>
-                <p className="font-[family-name:var(--font-body-lg)] text-white text-[20px]">No hay clases programadas</p>
-                <p className="font-[family-name:var(--font-body-md)] text-[16px] text-white/80 mt-2">Próximamente publicaremos nuevos horarios</p>
+              <div className="text-center py-24">
+                <span className="material-symbols-outlined text-slate-200 text-8xl mb-6 block">calendar_month</span>
+                <p className="font-[family-name:var(--font-body-lg)] text-slate-800 text-[24px] font-bold">No hay clases programadas</p>
+                <p className="font-[family-name:var(--font-body-md)] text-[16px] text-slate-500 mt-2">Próximamente publicaremos nuevos horarios</p>
               </div>
             ) : (
-              <>
-                {/* Day Headers */}
-                <div className="grid grid-cols-[70px_repeat(6,1fr)] md:grid-cols-[100px_repeat(6,1fr)] gap-1.5 md:gap-2 mb-3">
-                  <div />
-                  {weekDates.map((wd, i) => (
-                    <div key={i} className="text-center">
-                      <p className="font-[family-name:var(--font-label-sm)] text-white uppercase tracking-wider text-[11px] leading-[15px] md:text-[14px] md:leading-[18px] font-bold">{wd.dayName}</p>
-                      <p className="font-[family-name:var(--font-label-sm)] text-white/90 text-[10px] leading-[14px] md:text-[12px] md:leading-[16px] capitalize">{wd.date}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-[70px_repeat(6,1fr)] md:grid-cols-[100px_repeat(6,1fr)] gap-1.5 md:gap-2 mb-3">
-                  <div />
-                  {weekDates.map((_, i) => (<div key={i} className="h-0.5 rounded-full bg-white/40" />))}
-                </div>
-
-                {/* Time Rows */}
-                <div className="space-y-2 md:space-y-3">
-                  {times.map((time) => (
-                    <div key={time} className="grid grid-cols-[70px_repeat(6,1fr)] md:grid-cols-[100px_repeat(6,1fr)] gap-1.5 md:gap-2 items-start">
-                      <div className="pt-2 md:pt-3">
-                        <span className="font-[family-name:var(--font-label-sm)] text-white text-[13px] leading-[18px] md:text-[16px] md:leading-[20px] font-bold">{time}</span>
+              <div className="overflow-x-auto pb-4 custom-scrollbar">
+                <div className="min-w-[900px] xl:min-w-0">
+                  {/* Day Headers */}
+                  <div className="grid grid-cols-[80px_repeat(6,1fr)] lg:grid-cols-[100px_repeat(6,1fr)] gap-3 lg:gap-4 mb-6">
+                    <div />
+                    {weekDates.map((wd, i) => (
+                      <div key={i} className="text-center bg-slate-50/80 rounded-2xl py-4 border border-slate-100 shadow-sm">
+                        <p className="font-[family-name:var(--font-label-sm)] text-slate-800 uppercase tracking-wider text-[13px] lg:text-[15px] font-bold">{wd.dayName}</p>
+                        <p className="font-[family-name:var(--font-label-sm)] text-slate-500 text-[11px] lg:text-[12px] capitalize mt-1 font-medium">{wd.date}</p>
                       </div>
-                      {Array.from({ length: 6 }, (_, dayIdx) => {
-                        const day = dayIdx + 1;
-                        const cell = grid[time]?.[String(day)];
-                        if (!cell) return <div key={day} className="min-h-[88px] md:min-h-[120px]" />;
+                    ))}
+                  </div>
 
-                        const s = cell.schedule;
-                        const nextDate = cell.nextSessionDate;
-                        const remaining = s.capacity - cell.enrolled;
-                        const isFull = remaining <= 0;
-                        const isLow = remaining > 0 && remaining <= 3;
-                        const color = s.disciplines?.color_hex || "#666";
-                        const textOnColor = getContrastText(color);
-                        const matchesFilter = activeFilter === "all" || s.disciplines?.name === activeFilter;
+                  {/* Time Rows */}
+                  <div className="space-y-4 lg:space-y-5">
+                    {times.map((time) => (
+                      <div key={time} className="grid grid-cols-[80px_repeat(6,1fr)] lg:grid-cols-[100px_repeat(6,1fr)] gap-3 lg:gap-4 items-stretch group">
+                        {/* Time Label */}
+                        <div className="flex items-start pt-5 justify-center">
+                          <span className="font-[family-name:var(--font-label-sm)] text-slate-700 text-[14px] lg:text-[16px] font-black bg-slate-100 px-4 py-2 rounded-xl shadow-sm border border-slate-200/50">{time}</span>
+                        </div>
+                        
+                        {Array.from({ length: 6 }, (_, dayIdx) => {
+                          const day = dayIdx + 1;
+                          const cell = grid[time]?.[String(day)];
+                          if (!cell) return <div key={day} className="min-h-[120px] lg:min-h-[150px] rounded-2xl border-2 border-dashed border-slate-200/70 bg-slate-50/30 transition-colors hover:bg-slate-50/80" />;
 
-                        const nextDateLabel = nextDate
-                          ? new Date(nextDate + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" })
-                          : null;
+                          const s = cell.schedule;
+                          const nextDate = cell.nextSessionDate;
+                          const remaining = s.capacity - cell.enrolled;
+                          const isFull = remaining <= 0;
+                          const isLow = remaining > 0 && remaining <= 3;
+                          const color = s.disciplines?.color_hex || "#666";
+                          
+                          const hexToRgb = (hex: string) => {
+                            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                            return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : null;
+                          };
+                          const rgb = hexToRgb(color);
 
-                        return (
-                          <div key={day} className={`min-h-[88px] md:min-h-[120px] transition-opacity ${matchesFilter ? "opacity-100" : "opacity-20"}`}>
-                            <div
-                              className={`rounded-xl p-3 md:p-4 border-2 transition-all duration-300 ${isFull ? "opacity-50" : ""} ${isLow ? "shadow-[0_0_0_2px_rgba(245,158,11,0.45)]" : ""}`}
-                              style={isFull
-                                ? { borderColor: `${color}40`, backgroundColor: `${color}0A` }
-                                : { borderColor: color, background: `linear-gradient(180deg, ${color}2E 0%, ${color}0F 100%)` }}
-                            >
-                              <div className="flex items-center gap-1.5 mb-1.5">
-                                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                                <span className="font-[family-name:var(--font-label-sm)] text-[10px] leading-[14px] md:text-[12px] md:leading-[16px] font-bold text-white uppercase tracking-wider line-clamp-1 rounded px-1.5 py-0.5" style={{ backgroundColor: `${color}33` }}>{s.disciplines?.name}</span>
-                              </div>
-                              {s.profiles && (
-                                <p className="font-[family-name:var(--font-label-sm)] text-[10px] leading-[14px] md:text-[12px] md:leading-[16px] text-white/90 uppercase tracking-wider mb-1">{s.profiles.full_name}</p>
-                              )}
-                              {nextDateLabel && (
-                                <p className="font-[family-name:var(--font-label-sm)] text-white/90 text-[10px] leading-[14px] md:text-[12px] md:leading-[16px] capitalize mb-1">Próx: {nextDateLabel}</p>
-                              )}
-                              <div className="flex items-center gap-1 mt-1.5">
-                                <div className="flex-1 h-1.5 rounded-full bg-white/15 overflow-hidden">
-                                  <div className="h-full rounded-full transition-all" style={{ width: `${s.capacity > 0 ? (cell.enrolled / s.capacity) * 100 : 0}%`, backgroundColor: isFull ? "rgba(255,255,255,0.35)" : color }} />
+                          const nextDateLabel = nextDate
+                            ? new Date(nextDate + "T12:00:00").toLocaleDateString("es-CL", { day: "numeric", month: "short" })
+                            : null;
+
+                          return (
+                            <div key={day} className={`min-h-[120px] lg:min-h-[150px] flex transition-opacity duration-300 ${activeFilter === "all" || s.disciplines?.name === activeFilter ? "opacity-100" : "opacity-30"}`}>
+                              <div
+                                className={`w-full flex flex-col rounded-2xl p-4 lg:p-5 border-[1.5px] transition-all duration-300 relative overflow-hidden bg-white hover:shadow-xl hover:-translate-y-1 ${isFull ? "opacity-60 grayscale-[0.2]" : "cursor-pointer"} ${isLow ? "ring-2 ring-amber-400 ring-offset-2" : ""}`}
+                                style={{ borderColor: color, boxShadow: `0 4px 20px -10px ${color}40` }}
+                                onClick={() => !isFull && handleAgendar(s)}
+                              >
+                                {/* Top bar */}
+                                <div className="absolute top-0 left-0 right-0 h-1.5 opacity-90" style={{ backgroundColor: color }} />
+                                
+                                <div className="flex items-center justify-between mb-2 mt-1">
+                                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] lg:text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-md" style={{ backgroundColor: `rgba(${rgb}, 0.1)`, color: color }}>
+                                    {s.disciplines?.name}
+                                  </span>
+                                  {cell.userEnrolled && (
+                                    <span className="material-symbols-outlined text-[18px]" style={{ color }}>check_circle</span>
+                                  )}
                                 </div>
-                                <span className={`font-[family-name:var(--font-label-sm)] text-[10px] leading-[14px] md:text-[12px] md:leading-[16px] font-bold ${isFull ? "text-white/50" : "text-white"}`}>{remaining > 0 ? remaining : 0}/{s.capacity}</span>
-                              </div>
-                              {!isFull && (
-                                <button
-                                  onClick={() => handleAgendar(s)}
-                                  className="mt-2.5 w-full text-center py-1.5 rounded-lg text-[11px] md:text-[13px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider transition-colors cursor-pointer font-bold"
-                                  style={{ backgroundColor: `${color}2B`, color: "#fff", border: `1.5px solid ${color}` }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = color; e.currentTarget.style.color = textOnColor; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = `${color}2B`; e.currentTarget.style.color = "#fff"; }}
-                                >
-                                  {cell.userEnrolled ? "Inscrito ✓" : "Agendar"}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
 
-                {/* Legend */}
-                <div className="mt-10 flex flex-wrap gap-6 items-center">
-                  {legendItems.map((item) => (
-                    <div key={item.label} className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-full ${item.color}`} />
-                      <span className="font-[family-name:var(--font-label-sm)] text-white text-[12px] leading-[16px] md:text-[13px] uppercase tracking-wider">{item.label}</span>
-                    </div>
-                  ))}
-                  {uniqueDisciplines.map((d) => (
-                    <div key={d!.name} className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: d!.color_hex }} />
-                      <span className="font-[family-name:var(--font-label-sm)] text-white text-[12px] leading-[16px] md:text-[13px] uppercase tracking-wider">{d!.name}</span>
-                    </div>
-                  ))}
+                                {s.profiles && (
+                                  <p className="font-[family-name:var(--font-label-sm)] text-[13px] lg:text-[14px] text-slate-800 font-extrabold uppercase tracking-wide line-clamp-1 mb-1">{s.profiles.full_name}</p>
+                                )}
+                                
+                                {nextDateLabel && (
+                                  <p className="font-[family-name:var(--font-label-sm)] text-slate-500 text-[11px] lg:text-[12px] capitalize mb-3 flex items-center gap-1.5 font-medium">
+                                    <span className="material-symbols-outlined text-[14px]">event</span>
+                                    {nextDateLabel}
+                                  </p>
+                                )}
+                                
+                                <div className="mt-auto pt-2 border-t border-slate-100">
+                                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                                    <span className="font-[family-name:var(--font-label-sm)] text-[10px] lg:text-[11px] font-bold text-slate-400 uppercase tracking-wider">Cupos</span>
+                                    <span className={`font-[family-name:var(--font-label-sm)] text-[11px] lg:text-[12px] font-black ${isFull ? "text-red-500" : "text-slate-700"}`}>
+                                      {remaining > 0 ? remaining : 0}/{s.capacity}
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                    <div className="h-full rounded-full transition-all duration-500 ease-out" style={{ width: `${s.capacity > 0 ? (cell.enrolled / s.capacity) * 100 : 0}%`, backgroundColor: isFull ? "#ef4444" : color }} />
+                                  </div>
+                                </div>
+
+                                {isFull && (
+                                  <div className="absolute inset-0 bg-white/50 flex items-center justify-center backdrop-blur-[1px]">
+                                    <span className="bg-red-500 text-white font-bold text-[12px] uppercase tracking-wider px-4 py-1.5 rounded-full shadow-lg transform -rotate-12">Llena</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </>
+              </div>
             )}
 
-            <div className="mt-12">
-              <PageCTA />
-            </div>
+            {/* Legend inside the box */}
+            {times.length > 0 && (
+              <div className="mt-10 pt-6 border-t border-slate-100 flex flex-wrap gap-8 items-center justify-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded-full border-2 border-slate-200 bg-white shadow-sm" />
+                  <span className="font-[family-name:var(--font-label-sm)] text-slate-500 text-[12px] lg:text-[13px] uppercase tracking-wider font-bold">Disponible</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-amber-400 ring-2 ring-amber-400/30 ring-offset-2" />
+                  <span className="font-[family-name:var(--font-label-sm)] text-slate-500 text-[12px] lg:text-[13px] uppercase tracking-wider font-bold">Últimos cupos</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded-full bg-red-500 shadow-sm" />
+                  <span className="font-[family-name:var(--font-label-sm)] text-slate-500 text-[12px] lg:text-[13px] uppercase tracking-wider font-bold">Clase llena</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* CTA section outside the calendar */}
+        <section className="pb-16 px-5 md:px-6">
+          <div className="max-w-[1280px] mx-auto">
+            <PageCTA />
           </div>
         </section>
       </main>
