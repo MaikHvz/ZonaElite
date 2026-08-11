@@ -48,8 +48,31 @@ export default function DependentCard({
   const beltColor = sportProfiles[0]?.belt_grades?.color;
 
   return (
-    <div className="bg-surface-container border border-on-surface/5 rounded-2xl p-5 hover:border-primary/30 transition-colors relative overflow-hidden">
-      {beltColor && <BeltBanner color={beltColor} />}
+    <div
+      className={`bg-surface-container rounded-2xl p-5 transition-all duration-300 relative overflow-hidden group ${
+        beltColor ? "" : "border border-on-surface/5 hover:border-primary/30"
+      }`}
+      style={
+        beltColor
+          ? {
+              borderWidth: "1px",
+              borderStyle: "solid",
+              borderColor: beltColor,
+              background: `linear-gradient(145deg, var(--color-surface-container) 40%, ${beltColor}15 100%)`,
+              boxShadow: `0 4px 24px -6px ${beltColor}30`,
+            }
+          : {}
+      }
+    >
+      {beltColor && (
+        <div
+          className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+          style={{
+            background: `radial-gradient(circle at 80% 20%, ${beltColor}20 0%, transparent 60%)`,
+          }}
+        />
+      )}
+      {beltColor && <BeltBanner color={beltColor} opacity={0.2} />}
       <div className="relative z-10">
       <div className="flex items-center gap-4 mb-4">
         <div className="w-12 h-12 rounded-full btn-primary-gradient flex items-center justify-center shrink-0">
