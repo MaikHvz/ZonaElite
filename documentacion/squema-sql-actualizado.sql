@@ -844,13 +844,19 @@ CREATE POLICY "medical_records_select_own_or_admin" ON public.medical_records FO
 CREATE POLICY "medical_records_insert_admin" ON public.medical_records FOR INSERT WITH CHECK (public.is_admin());
 CREATE POLICY "medical_records_update_admin" ON public.medical_records FOR UPDATE USING (public.is_admin());
 ALTER TABLE public.belt_grades ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "belt_grades_select_auth" ON public.belt_grades;
 CREATE POLICY "belt_grades_select_auth" ON public.belt_grades FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "belt_grades_admin_write" ON public.belt_grades;
 CREATE POLICY "belt_grades_admin_write" ON public.belt_grades FOR ALL USING (public.is_admin());
 ALTER TABLE public.sport_profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "sport_profiles_select_own_or_admin" ON public.sport_profiles;
 CREATE POLICY "sport_profiles_select_own_or_admin" ON public.sport_profiles FOR SELECT USING (public.owns_beneficiary(beneficiary_id) OR public.is_admin());
+DROP POLICY IF EXISTS "sport_profiles_admin_write" ON public.sport_profiles;
 CREATE POLICY "sport_profiles_admin_write" ON public.sport_profiles FOR ALL USING (public.is_admin());
 ALTER TABLE public.sports_podiums ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "sports_podiums_select_own_or_admin" ON public.sports_podiums;
 CREATE POLICY "sports_podiums_select_own_or_admin" ON public.sports_podiums FOR SELECT USING (public.owns_beneficiary(beneficiary_id) OR public.is_admin());
+DROP POLICY IF EXISTS "sports_podiums_admin_write" ON public.sports_podiums;
 CREATE POLICY "sports_podiums_admin_write" ON public.sports_podiums FOR ALL USING (public.is_admin());
 
 -- =====================================================
