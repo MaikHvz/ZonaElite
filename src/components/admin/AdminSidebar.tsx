@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePendingTransferCount } from "@/components/admin/PendingTransferProvider";
 
 const sidebarLinks = [
@@ -39,8 +39,12 @@ export default function AdminSidebar({ open, onClose }: { open: boolean; onClose
   }, [open, onClose]);
 
   // Close sidebar on route change (mobile)
+  const lastPathname = useRef(pathname);
   useEffect(() => {
-    onClose();
+    if (lastPathname.current !== pathname) {
+      onClose();
+      lastPathname.current = pathname;
+    }
   }, [pathname, onClose]);
 
   return (
