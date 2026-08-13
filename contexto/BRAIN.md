@@ -119,7 +119,7 @@ src/
 │   │   └── asistencia/page.tsx   # Historial asistencia
 │   ├── eventos/[id]/page.tsx     # Detalle con Google Maps
 │   ├── horarios/page.tsx         # Grid semanal + inscripción
-│   ├── nosotros/page.tsx         # Info + GalleryCarousel
+│   ├── quienes-somos/page.tsx     # Historia interactiva (Kenpo/Kickboxing/MMA) + GalleryCarousel
 │   ├── productos/[id]/page.tsx   # Detalle producto
 │   ├── perfil/page.tsx           # Editar perfil
 │   ├── layout.tsx                # Root: Navbar, FadeUpObserver, ContactModal, SessionProvider
@@ -156,7 +156,7 @@ src/
 |------|---------|-------------|
 | `/` | `page.tsx` | Landing: Hero → IntroSection → Disciplines → Memberships → CTA → Footer |
 | `/horarios` | `horarios/page.tsx` | Grid semanal DB-driven, coloreado por disciplina, filtros, capacidad, "Agendar" |
-| `/nosotros` | `nosotros/page.tsx` | Filosofía, GalleryCarousel, Disciplinas (mock), FAQ, Schema LocalBusiness |
+| `/quienes-somos` | `quienes-somos/page.tsx` | Historia interactiva: American Kenpo (raíz) + Kickboxing + MMA (selector, capítulos, progreso). `HistoryExplorer.tsx` + `stories.ts`. GalleryCarousel, FAQ, Schema LocalBusiness. `/nosotros` → redirect 301 |
 | `/productos` | `productos/page.tsx` | Catálogo grid con filtros |
 | `/productos/[id]` | `productos/[id]/page.tsx` | Detalle: galería thumbnails (hasta 3), precio, stock |
 | `/eventos` | `eventos/page.tsx` | Unificado (torneos/ceremonias), tabs filtro |
@@ -309,7 +309,7 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 ### 5.6 Galería
 
 **Admin** en `/admin/configuracion`: Add/remove/reorder/toggle visibility. Images a `gallery/` folder en Storage.
-**Público** en `/nosotros`: `GalleryCarousel` — auto-play 5s, arrows, dots, fade transitions. Inserta con `active: true`.
+**Público** en `/quienes-somos`: `GalleryCarousel` — auto-play 5s, arrows, dots, fade transitions. Inserta con `active: true`.
 
 ### 5.7 Ficha Médica
 
@@ -357,7 +357,7 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 | `blog_posts` | Publicaciones blog | — |
 | `notifications` | Notificaciones | — |
 | `audit_logs` | Logs auditoría | — |
-| `gallery_images` | Galería (admin gestiona, muestra en /nosotros) | — |
+| `gallery_images` | Galería (admin gestiona, muestra en /quienes-somos) | — |
 | `consent_forms` | Formularios consentimiento | — |
 | `body_metrics` | Métricas corporales | FK → beneficiaries |
 | `medical_records` | Registros médicos | FK → beneficiaries |
@@ -476,7 +476,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 6. **Tailwind v4**: NO existe `tailwind.config.js`. Todo vía `@theme inline` en globals.css.
 7. **Next.js 16**: Usa `proxy.ts` en vez de `middleware.ts`.
 8. **RLS**: El browser client respeta RLS. El admin client bypassa. No mezclar.
-9. **Hardcoded data**: Las disciplinas en `/nosotros` son mock hardcoded, no de BD.
+9. **Hardcoded data**: Las historias en `/quienes-somos` son contenido estático en `src/components/history/stories.ts` (no de BD).
 10. **GalleryCarousel**: Siempre insertar con `active: true` explícito (PostgREST puede no aplicar defaults).
 11. **`after()`** de `next/server` para procesamiento background — no fire-and-forget.
 12. **Supabase PostgREST** no soporta ordering by nested FK columns.

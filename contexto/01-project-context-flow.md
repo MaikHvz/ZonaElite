@@ -170,14 +170,14 @@ Presente en todas las páginas vía `src/app/layout.tsx`. Incluye:
 
 ---
 
-### 3.5 Nosotros `/nosotros`
+### 3.5 Quiénes Somos `/quienes-somos` (Historia Interactiva)
 
-**Ruta**: `src/app/nosotros/page.tsx`
+**Ruta**: `src/app/quienes-somos/page.tsx` (antes `/nosotros`, redirect 301 en `next.config.ts`)
 
 Secciones:
-1. **Filosofía** → información de la academia
-2. **GalleryCarousel** → carrusel de imágenes (auto-play, flechas, puntos, transiciones fade)
-3. **Disciplinas** → datos hardcodeados (mock) de las 4 disciplinas (Kenpo, Kickboxing, Funcional, MMA)
+1. **Historia Interactiva** → `HistoryExplorer.tsx` (contenido en `history/stories.ts`): selector de 3 cards (Kenpo = raíz y apertura por defecto, Kickboxing, MMA), "qué es" primero, línea de tiempo por capítulos con revelado en scroll, barra de progreso de lectura, botones "Continuar leyendo" y navegación rápida de capítulos
+2. **Filosofía** → conecta la historia con la academia
+3. **GalleryCarousel** → carrusel de imágenes (auto-play, flechas, puntos, transiciones fade)
 4. **FAQ** → preguntas frecuentes con schema markup
 
 **SEO**: Schema `LocalBusiness` + `FAQ` para rich snippets
@@ -606,7 +606,7 @@ Total: 28 tablas en Supabase.
 | 20 | `blog_posts` | Publicaciones del blog |
 | 21 | `notifications` | Notificaciones a usuarios |
 | 22 | `audit_logs` | Logs de auditoría |
-| 23 | `gallery_images` | Imágenes de la galería (admin manages, display on `/nosotros`) |
+| 23 | `gallery_images` | Imágenes de la galería (admin manages, display on `/quienes-somos`) |
 | 24 | `consent_forms` | Formularios de consentimiento |
 | 25 | `body_metrics` | Métricas corporales |
 | 26 | `medical_records` | Registros médicos de dependientes |
@@ -621,7 +621,7 @@ Total: 28 tablas en Supabase.
   - Agregar/eliminar/reordenar
   - Toggle de visibilidad (visible/oculta)
 - **Almacenamiento**: Supabase Storage bucket `"public"`, carpeta `"gallery"`
-- **Visualización pública**: `GalleryCarousel` en `/nosotros`
+- **Visualización pública**: `GalleryCarousel` en `/quienes-somos`
   - Auto-play cada 5 segundos
   - Flechas de navegación controladas por usuario
   - Puntos indicadores

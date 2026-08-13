@@ -364,7 +364,7 @@ export default function AdminConfiguracionPage() {
         <div className="border-t border-on-surface/5 pt-5">
           <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase mb-1">Galería de Espacios</h3>
           <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant mb-4">
-            Imágenes del carrusel en la página /nosotros. Se muestran en el orden indicado.
+            Imágenes del carrusel en la página /quienes-somos. Se muestran en el orden indicado.
           </p>
 
           {galleryLoading ? (

@@ -9,7 +9,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Rutas Principales**:
   - `/` (`src/app/page.tsx`): Landing principal. Agrupa `Hero.tsx`, `IntroSection.tsx`, `Disciplines.tsx`, `Memberships.tsx` (con visualización de membresía destacada PRO), `GalleryCarousel.tsx`, `Philosophy.tsx`, `Lifestyle.tsx`.
     - 🔵 **PLANIFICADO (Clases Personalizadas)**: sección "¿Necesitas Clases Personalizadas?" debajo de las membresías normales, vía `PersonalizedPlans.tsx` (lee `personalized_plans`). Ver requisito citado en la sección 7.
-  - `/nosotros` (`src/app/nosotros/page.tsx`): Información sobre la academia.
+  - `/quienes-somos` (`src/app/quienes-somos/page.tsx`): **Historia interactiva de la academia** — selector de disciplinas (Kenpo = raíz y apertura por defecto, Kickboxing y MMA), lector por capítulos con línea de tiempo, barra de progreso de lectura, botones "Continuar leyendo" y navegación rápida. Contenido en `src/components/history/stories.ts`; interactividad en `src/components/history/HistoryExplorer.tsx`. `/nosotros` redirige 301 a esta ruta. Incluye `GalleryCarousel`, filosofía, FAQ y schema LocalBusiness.
   - `/horarios` (`src/app/horarios/page.tsx`): Tabla interactiva pública generada dinámicamente desde la BD.
   - `/blog`, `/blog/[slug]`: Motor de blog público leyendo desde la tabla `posts`.
   - `/eventos`, `/eventos/[id]`, `/torneos`, `/ceremonias`: Visualización pública de actividades, torneos y ceremonias.

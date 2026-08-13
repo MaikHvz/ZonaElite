@@ -120,7 +120,7 @@ export async function createClient() {
 |-------------|----------------------------------|
 | `products/` | Imágenes de productos de la tienda |
 | `events/`   | Imágenes de eventos              |
-| `gallery/`  | Imágenes del carrusel de `/nosotros` |
+| `gallery/`  | Imágenes del carrusel de `/quienes-somos` |
 | `blog/`     | Imágenes de portada de posts      |
 | `settings/` | Logo de la academia               |
 
@@ -1233,7 +1233,7 @@ await supabase.from("gallery_images").update({ active }).eq("id", id);
 await supabase.from("gallery_images").delete().eq("id", id);
 ```
 
-#### Display Público — `GalleryCarousel` en `/nosotros`
+#### Display Público — `GalleryCarousel` en `/quienes-somos`
 
 ```typescript
 supabase

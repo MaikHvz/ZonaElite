@@ -6,7 +6,7 @@ import ContactLink from "./ContactLink";
 const logoUrl = "/logo.png";
 
 const footerLinks = [
-  { label: "Nosotros", href: "/nosotros" },
+  { label: "Quiénes Somos", href: "/quienes-somos" },
   { label: "Horarios", href: "/horarios" },
   { label: "Política de Privacidad", href: "#" },
   { label: "Términos de Servicio", href: "#" },

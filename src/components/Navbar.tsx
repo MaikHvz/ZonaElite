@@ -11,7 +11,7 @@ import { useCart } from "@/context/CartContext";
 
 const navLinks = [
   { href: "/", label: "Inicio" },
-  { href: "/nosotros", label: "Nosotros" },
+  { href: "/quienes-somos", label: "Quiénes Somos" },
   { href: "/#disciplinas", label: "Disciplinas" },
   { href: "/horarios", label: "Horarios" },
   { href: "/#membresias", label: "Membresías" },

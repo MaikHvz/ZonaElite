@@ -2,27 +2,30 @@ import type { Metadata } from "next";
 import Footer from "@/components/Footer";
 import PageCTA from "@/components/PageCTA";
 import GalleryCarousel from "@/components/GalleryCarousel";
+import HistoryExplorer from "@/components/history/HistoryExplorer";
 
 export const metadata: Metadata = {
-  title: "Academia de Artes Marciales en La Serena | ZONAELITE",
+  title: "Quiénes Somos | Kenpo, Kickboxing y MMA en La Serena | ZONAELITE",
   description:
-    "Conoce ZONAELITE: academia de Kenpo, Kickboxing y MMA en La Serena. Defensa personal, entrenamiento funcional y formación marcial de élite. Filosofía, disciplina y excelencia deportiva.",
+    "Descubre quiénes somos y nuestra historia: la del American Kenpo, nuestra raíz; y las del Kickboxing y el MMA. Una historia interactiva que conecta mil años de arte marcial con la academia ZONAELITE en La Serena.",
   keywords: [
+    "quienes somos ZonaElite",
     "academia de artes marciales La Serena",
+    "historia del American Kenpo",
+    "que es el kenpo americano",
+    "historia del kickboxing",
+    "historia del MMA",
     "clases de kenpo La Serena",
     "kickboxing La Serena",
     "MMA La Serena",
     "defensa personal La Serena",
-    "entrenamiento funcional La Serena",
-    "artes marciales La Serena Chile",
     "academia de kenpo La Serena",
-    "clases de kickboxing La Serena",
     "gimnasio de artes marciales La Serena",
   ],
   openGraph: {
-    title: "Academia de Artes Marciales en La Serena | ZONAELITE",
+    title: "Quiénes Somos | Kenpo, Kickboxing y MMA en La Serena | ZONAELITE",
     description:
-      "Conoce ZONAELITE: academia de Kenpo, Kickboxing y MMA en La Serena. Defensa personal, entrenamiento funcional y formación marcial de élite.",
+      "Nuestra historia comienza con el American Kenpo, nuestra raíz, y continúa con el Kickboxing y el MMA. Léela como se vive: capítulo a capítulo.",
     type: "website",
     locale: "es_CL",
   },
@@ -157,7 +160,15 @@ const faqJsonLd = {
   ],
 };
 
-export default function NosotrosPage() {
+const embers = Array.from({ length: 16 }, (_, i) => ({
+  left: `${(i * 61) % 100}%`,
+  size: 4 + ((i * 7) % 10),
+  duration: 8 + ((i * 5) % 9),
+  delay: (i * 0.7) % 10,
+  drift: ((i % 2 === 0 ? 1 : -1) * (20 + ((i * 13) % 60))),
+}));
+
+export default function QuienesSomosPage() {
   return (
     <>
       <main className="pt-20">
@@ -170,10 +181,34 @@ export default function NosotrosPage() {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
         />
 
-        {/* Hero */}
-        <section className="relative py-[64px] md:py-[96px] overflow-hidden fade-up">
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-          <div className="relative max-w-[1280px] mx-auto px-5 md:px-6">
+        {/* ============ HERO ============ */}
+        <section className="relative overflow-hidden fade-up">
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(1100px 480px at 72% -8%, rgba(255,84,76,0.22), transparent 62%), radial-gradient(760px 420px at 12% 110%, rgba(255,84,76,0.10), transparent 60%)",
+            }}
+          />
+          {/* Brasas ascendentes */}
+          <div className="absolute inset-0 pointer-events-none">
+            {embers.map((e, i) => (
+              <span
+                key={i}
+                className="ember"
+                style={{
+                  left: e.left,
+                  width: e.size,
+                  height: e.size,
+                  ["--ember-duration" as string]: `${e.duration}s`,
+                  ["--ember-delay" as string]: `${e.delay}s`,
+                  ["--ember-drift" as string]: `${e.drift}px`,
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="relative max-w-[1280px] mx-auto px-5 md:px-6 pt-[64px] pb-[80px] md:pt-[104px] md:pb-[120px]">
             <div className="flex items-center gap-4 mb-6">
               <img
                 src="/logo.png"
@@ -181,56 +216,74 @@ export default function NosotrosPage() {
                 className="h-14 w-14 object-contain"
               />
               <span className="font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary">
-                Sobre Nosotros
+                Quiénes Somos
               </span>
             </div>
-            <h1 className="font-[family-name:var(--font-headline-lg)] text-[36px] leading-[40px] md:text-[52px] md:leading-[56px] md:tracking-[0.02em] text-on-surface uppercase tracking-tighter mb-6 max-w-4xl">
-              Academia de Kenpo, Kickboxing y{" "}
-              <span className="text-primary">MMA en La Serena</span>
+            <h1 className="font-[family-name:var(--font-display-xl)] text-[44px] leading-[46px] md:text-[64px] md:leading-[68px] text-on-surface uppercase tracking-tighter max-w-4xl mb-6">
+              Toda historia tiene una{" "}
+              <span className="text-primary text-glow-red">raíz</span>.{" "}
+              La nuestra es el Kenpo.
             </h1>
-            <p className="font-[family-name:var(--font-body-md)] text-[17px] leading-[26px] text-on-surface-variant max-w-3xl">
-              En Zona Elite Legacy, entendemos que las Artes Marciales son mucho
-              más que un deporte; son una filosofía de vida que te prepara para
-              cualquier desafío. Combinamos la tradición, la técnica y la ciencia
-              del combate para ofrecerte un sistema de Defensa Personal real y
-              efectivo.
+            <p className="font-[family-name:var(--font-body-md)] text-[17px] leading-[27px] text-on-surface-variant max-w-2xl mb-8">
+              Somos la academia de La Serena donde la tradición marcial se
+              encuentra con la ciencia del combate. Aquí vive el American Kenpo,
+              junto al Kickboxing y al MMA: tres historias que se entrelazan en
+              una sola forma de entrenar, defenderse y vivir.
             </p>
-          </div>
-        </section>
-
-        {/* Stats */}
-        <section className="py-10 border-y border-on-surface/5 fade-up">
-          <div className="max-w-[1280px] mx-auto px-5 md:px-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              {[
-                { value: "4+", label: "Disciplinas" },
-                { value: "100%", label: "Compromiso" },
-                { value: "0", label: "Egos" },
-                { value: "1", label: "Comunidad" },
-              ].map((stat) => (
-                <div key={stat.label} className="text-center">
-                  <span className="block font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[40px] leading-[44px] text-primary">
-                    {stat.value}
-                  </span>
-                  <span className="block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.1em] text-on-surface-variant mt-1">
-                    {stat.label}
-                  </span>
-                </div>
-              ))}
+            <div className="flex flex-wrap gap-4">
+              <a
+                href="#nuestra-historia"
+                className="inline-flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-base px-8 py-4 rounded-[0.25rem] uppercase tracking-widest hover:opacity-90 transition-opacity shadow-[0_0_34px_rgba(229,57,53,0.4)]"
+              >
+                Leer nuestra historia
+                <span className="material-symbols-outlined text-[20px] hint-bounce">
+                  arrow_downward
+                </span>
+              </a>
+              <a
+                href="/horarios"
+                className="inline-flex items-center gap-2 bg-surface-container-high text-white font-[family-name:var(--font-headline-md)] text-base px-8 py-4 rounded-[0.25rem] uppercase tracking-widest hover:bg-surface-container-highest transition-colors"
+              >
+                Reservar clase
+                <span className="material-symbols-outlined text-[20px]">
+                  calendar_month
+                </span>
+              </a>
             </div>
           </div>
+
+          {/* Indicador de scroll */}
+          <div className="relative flex justify-center pb-8">
+            <a
+              href="#nuestra-historia"
+              className="flex flex-col items-center gap-2 text-on-surface-variant hover:text-primary transition-colors"
+            >
+              <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-[0.25em]">
+                Descubre
+              </span>
+              <span className="material-symbols-outlined text-[18px] hint-bounce">
+                expand_more
+              </span>
+            </a>
+          </div>
         </section>
 
-        {/* Filosofía */}
+        {/* ============ HISTORIA INTERACTIVA ============ */}
+        <section className="relative">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <HistoryExplorer />
+        </section>
+
+        {/* ============ FILOSOFÍA (conecta la historia con la academia) ============ */}
         <section className="py-[64px] md:py-[96px] fade-up">
           <div className="max-w-[1280px] mx-auto px-5 md:px-6">
             <div className="grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-12 md:gap-16 items-start">
               <div>
                 <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-5">
-                  Nuestro Sistema
+                  Nuestra Filosofía
                 </span>
                 <h2 className="font-[family-name:var(--font-headline-md)] text-[28px] leading-[32px] md:text-[32px] md:leading-[36px] text-on-surface uppercase tracking-tighter">
-                  Nuestra <span className="text-primary">Filosofía</span>
+                  De la raíz, <span className="text-primary">tu fortaleza</span>
                 </h2>
               </div>
               <div className="space-y-5">
@@ -248,8 +301,8 @@ export default function NosotrosPage() {
                 </p>
                 <blockquote className="border-l-[3px] border-primary pl-6 py-2 my-6 bg-primary/5 rounded-r-lg">
                   <p className="font-[family-name:var(--font-body-lg)] text-[18px] leading-[28px] text-on-surface italic">
-                    &ldquo;Sabemos lo que somos… pero aún no sabemos lo que podemos
-                    llegar a ser.&rdquo;
+                    &ldquo;Sabemos lo que somos… pero aún no sabemos lo que
+                    podemos llegar a ser.&rdquo;
                   </p>
                 </blockquote>
                 <p className="font-[family-name:var(--font-body-md)] text-[16px] leading-[26px] text-on-surface-variant">
@@ -263,67 +316,11 @@ export default function NosotrosPage() {
           </div>
         </section>
 
-        {/* Galería */}
+        {/* ============ GALERÍA ============ */}
         <GalleryCarousel />
 
-        {/* Disciplinas Detalladas */}
+        {/* ============ ESTILO DE VIDA ============ */}
         <section className="py-[64px] md:py-[96px] bg-surface-container-low fade-up">
-          <div className="max-w-[1280px] mx-auto px-5 md:px-6">
-            <div className="mb-12">
-              <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-5">
-                Programas
-              </span>
-              <h2 className="font-[family-name:var(--font-headline-md)] text-[28px] leading-[32px] md:text-[32px] md:leading-[36px] text-on-surface uppercase tracking-tighter mb-4">
-                Formación Marcial de Élite
-              </h2>
-              <p className="font-[family-name:var(--font-body-md)] text-[16px] leading-[24px] text-on-surface-variant max-w-3xl">
-                Domina las disciplinas más completas y prepárate para proteger lo
-                que más quieres:
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[
-                {
-                  icon: "sports_martial_arts",
-                  name: "Kenpo",
-                  desc: "La ciencia de la defensa personal urbana. Velocidad y lógica aplicada a la protección real.",
-                },
-                {
-                  icon: "sports_kabaddi",
-                  name: "Kick Boxing",
-                  desc: "Potencia explosiva y dominio del combate de pie. Disciplina que forja tu carácter y tu físico.",
-                },
-                {
-                  icon: "hardware",
-                  name: "MMA",
-                  desc: "La evolución total. Aprende a transicionar entre el golpeo y la lucha, adaptándote a cualquier situación.",
-                },
-              ].map((d) => (
-                <div
-                  key={d.name}
-                  className="group relative bg-surface-container rounded-2xl p-8 border border-on-surface/5 hover:border-primary/20 transition-all duration-300 hover:shadow-[0_8px_32px_rgba(255,84,76,0.08)]"
-                >
-                  <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-primary/0 via-primary/40 to-primary/0 rounded-t-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center mb-5">
-                    <span className="material-symbols-outlined text-primary text-[22px]">
-                      {d.icon}
-                    </span>
-                  </div>
-                  <h3 className="font-[family-name:var(--font-headline-md)] text-[20px] leading-[24px] text-on-surface uppercase mb-3">
-                    {d.name}
-                  </h3>
-                  <p className="font-[family-name:var(--font-body-md)] text-[15px] leading-[24px] text-on-surface-variant">
-                    {d.desc}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Estilo de Vida */}
-        <section className="py-[64px] md:py-[96px] fade-up">
           <div className="max-w-[1280px] mx-auto px-5 md:px-6">
             <div className="grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-12 md:gap-16 items-start">
               <div>
@@ -336,33 +333,39 @@ export default function NosotrosPage() {
               </div>
               <div className="space-y-8">
                 <p className="font-[family-name:var(--font-body-md)] text-[16px] leading-[26px] text-on-surface-variant">
-                  No solo entrenas para defenderte, entrenas para vivir mejor. Te
-                  ofrecemos un ambiente deportivo y saludable, libre de egos, donde
-                  el respeto es nuestra base.
+                  No solo entrenas para defenderte, entrenas para vivir mejor.
+                  Te ofrecemos un ambiente deportivo y saludable, libre de egos,
+                  donde el respeto es nuestra base.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="bg-surface-container-low rounded-xl p-6 border border-on-surface/5">
+                  <div className="bg-surface-container rounded-xl p-6 border border-on-surface/5">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                      <span className="material-symbols-outlined text-primary text-[20px]">group</span>
+                      <span className="material-symbols-outlined text-primary text-[20px]">
+                        group
+                      </span>
                     </div>
                     <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] leading-[20px] text-on-surface uppercase mb-2">
                       Clases Personalizadas
                     </h3>
                     <p className="font-[family-name:var(--font-body-md)] text-[14px] leading-[22px] text-on-surface-variant">
                       Diseñadas para tu ritmo, enfocadas en mejorar tu agilidad,
-                      potencia y resistencia. Semi-personalizadas para grupos reducidos.
+                      potencia y resistencia. Semi-personalizadas para grupos
+                      reducidos.
                     </p>
                   </div>
-                  <div className="bg-surface-container-low rounded-xl p-6 border border-on-surface/5">
+                  <div className="bg-surface-container rounded-xl p-6 border border-on-surface/5">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                      <span className="material-symbols-outlined text-primary text-[20px]">fitness_center</span>
+                      <span className="material-symbols-outlined text-primary text-[20px]">
+                        fitness_center
+                      </span>
                     </div>
                     <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] leading-[20px] text-on-surface uppercase mb-2">
                       Comunidad Motivadora
                     </h3>
                     <p className="font-[family-name:var(--font-body-md)] text-[14px] leading-[22px] text-on-surface-variant">
                       Un espacio donde cada entrenamiento te acerca a tu mejor
-                      versión física y mental. Potencia tus resultados con Funcional Trainer.
+                      versión física y mental. Potencia tus resultados con
+                      Funcional Trainer.
                     </p>
                   </div>
                 </div>
@@ -371,8 +374,8 @@ export default function NosotrosPage() {
           </div>
         </section>
 
-        {/* FAQ */}
-        <section className="py-[64px] md:py-[96px] bg-surface-container-low fade-up">
+        {/* ============ FAQ ============ */}
+        <section className="py-[64px] md:py-[96px] fade-up">
           <div className="max-w-[1280px] mx-auto px-5 md:px-6">
             <div className="mb-10">
               <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-5">
@@ -396,6 +399,10 @@ export default function NosotrosPage() {
                 {
                   q: "¿Qué disciplinas se enseñan?",
                   a: "Enseñamos Kenpo, Kickboxing, MMA (Artes Marciales Mixtas) y Entrenamiento Funcional con nuestro sistema de Funcional Trainer.",
+                },
+                {
+                  q: "¿Por qué el Kenpo es tan importante para ustedes?",
+                  a: "Porque el American Kenpo es la raíz de la academia: un sistema de defensa personal real, científico y adaptable, que nació en la tradición milenaria y llegó a Chile para quedarse.",
                 },
                 {
                   q: "¿Dónde está ubicada la academia?",
@@ -422,7 +429,7 @@ export default function NosotrosPage() {
           </div>
         </section>
 
-        {/* CTA */}
+        {/* ============ CTA ============ */}
         <PageCTA />
       </main>
 

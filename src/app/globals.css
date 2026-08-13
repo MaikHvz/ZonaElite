@@ -227,3 +227,167 @@ body {
   visibility: visible;
   pointer-events: auto;
 }
+
+/* ============================================================
+   Quiénes Somos — Historia Interactiva
+   ============================================================ */
+
+/* Reveal de capítulos de la historia (más profundo que .fade-up,
+   con escalonado de párrafos e ítems internos) */
+.story-reveal {
+  opacity: 0;
+  transform: translateY(36px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.story-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.story-reveal .story-item {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.55s ease-out, transform 0.55s ease-out;
+  transition-delay: var(--item-delay, 0ms);
+}
+
+.story-reveal.is-visible .story-item {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Ascenso de partículas (brasa) para el hero de la historia */
+@keyframes ember-rise {
+  0% {
+    transform: translateY(0) translateX(0) scale(1);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.75;
+  }
+  60% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: translateY(-78vh) translateX(var(--ember-drift, 30px)) scale(0.2);
+    opacity: 0;
+  }
+}
+
+.ember {
+  position: absolute;
+  bottom: 6%;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    rgba(255, 180, 172, 0.95) 0%,
+    rgba(255, 84, 76, 0.35) 55%,
+    transparent 75%
+  );
+  pointer-events: none;
+  animation: ember-rise linear infinite;
+  animation-duration: var(--ember-duration, 9s);
+  animation-delay: var(--ember-delay, 0s);
+}
+
+/* Pulso del nodo de la línea de tiempo */
+@keyframes node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--pulse-color, rgba(255, 84, 76, 0.45));
+  }
+  50% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+
+.node-pulse {
+  animation: node-pulse 2.4s ease-in-out infinite;
+}
+
+/* Rebote sutil del icono "continuar leyendo" */
+@keyframes hint-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+.hint-bounce {
+  animation: hint-bounce 1.6s ease-in-out infinite;
+}
+
+/* Glow respirante de la card activa del selector de historias */
+@keyframes card-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 22px var(--glow-color, rgba(255, 84, 76, 0.28));
+  }
+  50% {
+    box-shadow: 0 0 44px var(--glow-color, rgba(255, 84, 76, 0.5));
+  }
+}
+
+.card-glow {
+  animation: card-glow 3.2s ease-in-out infinite;
+}
+
+/* Cinta de lectura: barra que se va llenando con el scroll */
+.story-progress-fill {
+  transition: width 0.12s linear;
+}
+
+/* Línea de la línea de tiempo que se "pinta" progresivamente */
+.story-timeline {
+  background: linear-gradient(
+    to bottom,
+    var(--tl-accent, #ff544c) 0%,
+    rgba(255, 180, 172, 0.35) 40%,
+    rgba(229, 226, 225, 0.08) 100%
+  );
+}
+
+/* Botón "Continuar leyendo" */
+.story-continue-btn {
+  background: linear-gradient(135deg, var(--continue-a, #ff544c), #b71c1c);
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+}
+
+.story-continue-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 34px rgba(255, 84, 76, 0.35);
+}
+
+/* Respetar usuarios con movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .ember,
+  .node-pulse,
+  .hint-bounce,
+  .card-glow {
+    animation: none !important;
+  }
+  .story-reveal {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+  .story-reveal .story-item {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+  .story-progress-fill {
+    transition: none;
+  }
+}

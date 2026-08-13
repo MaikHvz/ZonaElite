@@ -2,6 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   skipTrailingSlashRedirect: true,
+  async redirects() {
+    return [
+      {
+        source: "/nosotros",
+        destination: "/quienes-somos",
+        permanent: true,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {
