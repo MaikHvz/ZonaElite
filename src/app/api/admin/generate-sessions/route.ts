@@ -1,11 +1,29 @@
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { getChileToday, addDaysChile } from "@/lib/dates";
 
 const WEEKS_AHEAD = 4;
 
 export async function POST() {
   try {
+    const server = await createClient();
+    const { data: { user: sessionUser }, error: authError } = await server.auth.getUser();
+
+    if (authError || !sessionUser) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const { data: profile } = await server
+      .from("profiles")
+      .select("role_id")
+      .eq("id", sessionUser.id)
+      .single();
+
+    if (!profile || profile.role_id !== 1) {
+      return NextResponse.json({ error: "Solo administradores pueden generar sesiones" }, { status: 403 });
+    }
+
     const supabase = getAdminClient();
 
     const { data: activeSchedules, error: schedErr } = await supabase

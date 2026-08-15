@@ -672,11 +672,6 @@ ok("B-008: verify/route notifica al admin si la membresía falla",
   verifyRoute.includes("notifyPaymentWithoutMembership") &&
   /result\.success\) \{[\s\S]*?\} else \{[\s\S]*?notifyPaymentWithoutMembership/.test(verifyRoute));
 
-const forceConfirmRoute = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
-ok("B-008: force-confirm notifica al admin si la membresía falla",
-  forceConfirmRoute.includes("notifyPaymentWithoutMembership") &&
-  /result\.success\) \{[\s\S]*?\} else \{[\s\S]*?notifyPaymentWithoutMembership/.test(forceConfirmRoute));
-
 const flowHelpers = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
 const assignModal = readFileSync(join(ROOT, "src", "components", "admin", "AssignMembershipModal.tsx"), "utf8");
 
@@ -1002,7 +997,6 @@ section("O. Notificaciones de pago al usuario (aprobado/rechazado/anulado/pendie
 const flowHelpersO = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
 const confirmRouteO = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
 const verifyRouteO = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
-const forceConfirmRouteO = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
 
 ok("O: existe helper notifyUserPaymentStatus en flow-helpers",
   /export async function notifyUserPaymentStatus/.test(flowHelpers) &&
@@ -1028,8 +1022,6 @@ ok("O: verify notifica rechazado/anulado/pendiente y aprobado",
   /notifyUserPaymentStatus\(admin, fullPayment, "cancelled"\)/.test(verifyRouteO) &&
   /notifyUserPaymentStatus\(admin, fullPayment, "pending"\)/.test(verifyRouteO) &&
   /notifyUserPaymentStatus\(admin, fullPayment, "approved"\)/.test(verifyRouteO));
-ok("O: force-confirm notifica aprobado",
-  /notifyUserPaymentStatus\(admin, payment, "approved"\)/.test(forceConfirmRouteO));
 ok("O: create-order no notifica (evita duplicar/noise)",
   !createOrderRoute.includes("notifyUserPaymentStatus"));
 
@@ -1042,7 +1034,6 @@ const createOrderRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "
 const flowHelpersP = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
 const confirmRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
 const verifyRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
-const forceConfirmRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
 const adminMembresiasP = readFileSync(join(ROOT, "src", "app", "admin", "membresias", "page.tsx"), "utf8");
 const deleteConfirmP = readFileSync(join(ROOT, "src", "components", "admin", "DeleteConfirm.tsx"), "utf8");
 const statusBadgeP = readFileSync(join(ROOT, "src", "components", "admin", "StatusBadge.tsx"), "utf8");
@@ -1088,13 +1079,9 @@ ok("P: confirmation importa y llama confirmPersonalizedPack",
 ok("P: verify importa y llama confirmPersonalizedPack",
   verifyRouteP.includes("confirmPersonalizedPack") &&
   /await confirmPersonalizedPack\(admin, fullPayment\.id, user\.id\);/.test(verifyRouteP));
-ok("P: force-confirm importa y llama confirmPersonalizedPack",
-  forceConfirmRouteP.includes("confirmPersonalizedPack") &&
-  /await confirmPersonalizedPack\(admin, paymentId, payment\.user_id\);/.test(forceConfirmRouteP));
-ok("P: las 3 rutas marcan assignedSomething al crear el pack",
+ok("P: las 2 rutas marcan assignedSomething al crear el pack",
   /const result = await confirmPersonalizedPack\(supabase, payment\.id, payment\.user_id\);[\s\S]*?if \(result\.success\)[\s\S]*?assignedSomething = true;/.test(confirmRouteP) &&
-  /await confirmPersonalizedPack\(admin, fullPayment\.id, user\.id\);[\s\S]*?assignedSomething = true;/.test(verifyRouteP) &&
-  /await confirmPersonalizedPack\(admin, paymentId, payment\.user_id\);[\s\S]*?assignedSomething = true;/.test(forceConfirmRouteP));
+  /await confirmPersonalizedPack\(admin, fullPayment\.id, user\.id\);[\s\S]*?assignedSomething = true;/.test(verifyRouteP));
 
 // P4. Admin: CRUD de planes + packs (consumo/cancelación/filtros)
 ok("P: admin tiene tab 'Personalizadas' con 3 tabs",
@@ -1998,7 +1985,6 @@ const storeOrderStatusRouteT = readFileSync(join(ROOT, "src", "app", "api", "sto
 const storeAdminOrdersRouteT = readFileSync(join(ROOT, "src", "app", "api", "store", "admin", "orders", "route.ts"), "utf8");
 const confirmationRouteT = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
 const verifyRouteT = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
-const forceConfirmRouteT = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
 const flowLibT = readFileSync(join(ROOT, "src", "lib", "flow.ts"), "utf8");
 const cartContextT = readFileSync(join(ROOT, "src", "context", "CartContext.tsx"), "utf8");
 const rootLayoutT = readFileSync(join(ROOT, "src", "app", "layout.tsx"), "utf8");
@@ -2100,11 +2086,9 @@ ok("AA: confirmation incluye order_id en select y maneja tienda",
   /isStorePayment\(payment\)/.test(confirmationRouteT) &&
   /handleStorePaymentRejected\(supabase, payment\)/.test(confirmationRouteT) &&
   /handleStorePaymentApproved\(supabase, payment\)/.test(confirmationRouteT));
-ok("AA: verify y force-confirm también manejan tienda",
+ok("AA: verify también maneja tienda",
   /\.select\("[^"]*order_id[^"]*"\)/.test(verifyRouteT) &&
-  /isStorePayment\(fullPayment\)/.test(verifyRouteT) &&
-  /isStorePayment\(payment\)/.test(forceConfirmRouteT) &&
-  /handleStorePaymentApproved\(admin, payment\)/.test(forceConfirmRouteT));
+  /isStorePayment\(fullPayment\)/.test(verifyRouteT));
 ok("AA: CartContext persiste en localStorage con add/remove/quantity/clear",
   /const STORAGE_KEY = "ze_cart";/.test(cartContextT) &&
   /window\.localStorage\.getItem\(STORAGE_KEY\)/.test(cartContextT) &&

@@ -1,0 +1,302 @@
+diff --git a/contexto/informe-bugs.md b/contexto/informe-bugs.md
+index 3b36c1f..c2c35e5 100644
+--- a/contexto/informe-bugs.md
++++ b/contexto/informe-bugs.md
+@@ -459,6 +459,32 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
+ 
+ ---
+ 
++## B-020 — Rutas de debug/reintento manual reaparecieron sin protección (`force-confirm`, `debug`) + `generate-sessions` sin guard admin
++
++| Campo | Valor |
++|-------|-------|
++| **Estado** | 🟢 RESUELTO (2026-08-15) |
++| **Severidad** | 🔴 Crítico |
++| **Módulo** | Pago Flow / Admin |
++| **Fuente** | Auditoría 2026-08-15 |
++
++**Descripción:** `PLAN-PRODUCCION.md` (Fix #1) documentaba la eliminación de `src/app/api/flow/debug/route.ts` y `src/app/api/flow/force-confirm/route.ts` por ser accesibles sin autenticación. En algún punto del desarrollo posterior de B-008/B-018/B-019 ambas rutas volvieron a existir en el repo (como herramienta de debug mientras se armaban los fixes de pagos Flow) y quedaron sin ningún guard de auth:
++- `force-confirm` (POST) marcaba cualquier `paymentId` como `pagado` y creaba membresía/pack/orden de tienda vía cliente admin, sin autenticación ni verificación de rol. **Sin ningún caller en el código** (ni la UI del admin lo invoca) — dinero real en riesgo si alguien descubre el endpoint.
++- `debug` (GET) exponía los últimos 20 pagos (incluido `flow_token`) sin autenticación.
++
++Adicionalmente, `src/app/api/admin/generate-sessions/route.ts` (sí usada desde `/admin/asistencia`, botón "Generar sesiones") no tenía el guard `role_id === 1` que sí tienen sus pares (`create-user`, `create-dependent`, `update-dependent`).
++
++**Solución aplicada:**
++1. Eliminados `src/app/api/flow/debug/` y `src/app/api/flow/force-confirm/` completos (sin callers reales; las funciones compartidas que usaban — `confirmAndCreateMembership`, `notifyPaymentWithoutMembership`, `confirmPersonalizedPack`, `handleStorePaymentApproved` — siguen intactas en `flow-helpers.ts`/`store.ts`, usadas por `confirmation/route.ts` y `verify/route.ts`).
++2. `generate-sessions/route.ts` — agregado el mismo guard de sesión + `role_id !== 1 → 403` que el resto de `/api/admin/*`.
++3. `scripts/test-flows.mjs` — removidas las ~7 aserciones que leían `force-confirm/route.ts` (secciones B-008, O, P, AA); ya no aplican.
++
++**Verificación:** suite **567 passed, 0 failed** (bajó de 570: las 3 aserciones eliminadas eran las que testeaban el archivo borrado), `npx tsc --noEmit` limpio (tras purgar `.next/types` stale). Sin migración SQL.
++
++**Referencias:** `PLAN-PRODUCCION.md` (Fix #1 original), `src/app/api/admin/generate-sessions/route.ts`, `scripts/test-flows.mjs`.
++
++---
++
+ | Fecha | Acción |
+ |-------|--------|
+ | 2026-08-01 | Creación del informe con hallazgos de la auditoría de flujos críticos + verificación de BD en vivo. |
+@@ -477,3 +503,4 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
+ | 2026-08-02 | **B-018 resuelto:** pagos Flow rechazados/anulados se marcan en BD y el usuario recibe feedback diferenciado (rechazado/cancelado/pendiente) en `/dashboard/pagos` + filtro "Rechazado" en `/admin/ventas`. Suite en verde (195 tests). Sin migración. |
+ | 2026-08-02 | **B-018 ampliado:** overlays centrados con botón OK — `PaymentErrorModal` rojo para rechazado/anulado/error y `PaymentSuccessModal` verde con OK primario para pago exitoso. Suite en verde (198 tests). |
+ | 2026-08-02 | **B-019 resuelto:** la recompra post-rechazo ya no reutiliza el token muerto (`create-order` usa `mapFlowStatus`: `3`/`4` → marca y crea orden nueva, `2` → `already_paid`) y `CheckoutModal` nunca queda bloqueado (timeout `AbortController` 20 s). Suite en verde (206 tests). Sin migración. |
++| 2026-08-15 | **B-020 resuelto:** eliminadas `flow/debug` y `flow/force-confirm` (habían reaparecido sin auth pese a estar "eliminadas" en `PLAN-PRODUCCION.md`); `generate-sessions` ahora exige `role_id === 1`. Suite en verde (567 tests). Sin migración. |
+diff --git a/scripts/test-flows.mjs b/scripts/test-flows.mjs
+index 33120e4..dbbe5a6 100644
+--- a/scripts/test-flows.mjs
++++ b/scripts/test-flows.mjs
+@@ -672,11 +672,6 @@ ok("B-008: verify/route notifica al admin si la membresía falla",
+   verifyRoute.includes("notifyPaymentWithoutMembership") &&
+   /result\.success\) \{[\s\S]*?\} else \{[\s\S]*?notifyPaymentWithoutMembership/.test(verifyRoute));
+ 
+-const forceConfirmRoute = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
+-ok("B-008: force-confirm notifica al admin si la membresía falla",
+-  forceConfirmRoute.includes("notifyPaymentWithoutMembership") &&
+-  /result\.success\) \{[\s\S]*?\} else \{[\s\S]*?notifyPaymentWithoutMembership/.test(forceConfirmRoute));
+-
+ const flowHelpers = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
+ const assignModal = readFileSync(join(ROOT, "src", "components", "admin", "AssignMembershipModal.tsx"), "utf8");
+ 
+@@ -1002,7 +997,6 @@ section("O. Notificaciones de pago al usuario (aprobado/rechazado/anulado/pendie
+ const flowHelpersO = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
+ const confirmRouteO = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
+ const verifyRouteO = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
+-const forceConfirmRouteO = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
+ 
+ ok("O: existe helper notifyUserPaymentStatus en flow-helpers",
+   /export async function notifyUserPaymentStatus/.test(flowHelpers) &&
+@@ -1028,8 +1022,6 @@ ok("O: verify notifica rechazado/anulado/pendiente y aprobado",
+   /notifyUserPaymentStatus\(admin, fullPayment, "cancelled"\)/.test(verifyRouteO) &&
+   /notifyUserPaymentStatus\(admin, fullPayment, "pending"\)/.test(verifyRouteO) &&
+   /notifyUserPaymentStatus\(admin, fullPayment, "approved"\)/.test(verifyRouteO));
+-ok("O: force-confirm notifica aprobado",
+-  /notifyUserPaymentStatus\(admin, payment, "approved"\)/.test(forceConfirmRouteO));
+ ok("O: create-order no notifica (evita duplicar/noise)",
+   !createOrderRoute.includes("notifyUserPaymentStatus"));
+ 
+@@ -1042,7 +1034,6 @@ const createOrderRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "
+ const flowHelpersP = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
+ const confirmRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
+ const verifyRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
+-const forceConfirmRouteP = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
+ const adminMembresiasP = readFileSync(join(ROOT, "src", "app", "admin", "membresias", "page.tsx"), "utf8");
+ const deleteConfirmP = readFileSync(join(ROOT, "src", "components", "admin", "DeleteConfirm.tsx"), "utf8");
+ const statusBadgeP = readFileSync(join(ROOT, "src", "components", "admin", "StatusBadge.tsx"), "utf8");
+@@ -1088,13 +1079,9 @@ ok("P: confirmation importa y llama confirmPersonalizedPack",
+ ok("P: verify importa y llama confirmPersonalizedPack",
+   verifyRouteP.includes("confirmPersonalizedPack") &&
+   /await confirmPersonalizedPack\(admin, fullPayment\.id, user\.id\);/.test(verifyRouteP));
+-ok("P: force-confirm importa y llama confirmPersonalizedPack",
+-  forceConfirmRouteP.includes("confirmPersonalizedPack") &&
+-  /await confirmPersonalizedPack\(admin, paymentId, payment\.user_id\);/.test(forceConfirmRouteP));
+-ok("P: las 3 rutas marcan assignedSomething al crear el pack",
++ok("P: las 2 rutas marcan assignedSomething al crear el pack",
+   /const result = await confirmPersonalizedPack\(supabase, payment\.id, payment\.user_id\);[\s\S]*?if \(result\.success\)[\s\S]*?assignedSomething = true;/.test(confirmRouteP) &&
+-  /await confirmPersonalizedPack\(admin, fullPayment\.id, user\.id\);[\s\S]*?assignedSomething = true;/.test(verifyRouteP) &&
+-  /await confirmPersonalizedPack\(admin, paymentId, payment\.user_id\);[\s\S]*?assignedSomething = true;/.test(forceConfirmRouteP));
++  /await confirmPersonalizedPack\(admin, fullPayment\.id, user\.id\);[\s\S]*?assignedSomething = true;/.test(verifyRouteP));
+ 
+ // P4. Admin: CRUD de planes + packs (consumo/cancelación/filtros)
+ ok("P: admin tiene tab 'Personalizadas' con 3 tabs",
+@@ -1998,7 +1985,6 @@ const storeOrderStatusRouteT = readFileSync(join(ROOT, "src", "app", "api", "sto
+ const storeAdminOrdersRouteT = readFileSync(join(ROOT, "src", "app", "api", "store", "admin", "orders", "route.ts"), "utf8");
+ const confirmationRouteT = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
+ const verifyRouteT = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
+-const forceConfirmRouteT = readFileSync(join(ROOT, "src", "app", "api", "flow", "force-confirm", "route.ts"), "utf8");
+ const flowLibT = readFileSync(join(ROOT, "src", "lib", "flow.ts"), "utf8");
+ const cartContextT = readFileSync(join(ROOT, "src", "context", "CartContext.tsx"), "utf8");
+ const rootLayoutT = readFileSync(join(ROOT, "src", "app", "layout.tsx"), "utf8");
+@@ -2100,11 +2086,9 @@ ok("AA: confirmation incluye order_id en select y maneja tienda",
+   /isStorePayment\(payment\)/.test(confirmationRouteT) &&
+   /handleStorePaymentRejected\(supabase, payment\)/.test(confirmationRouteT) &&
+   /handleStorePaymentApproved\(supabase, payment\)/.test(confirmationRouteT));
+-ok("AA: verify y force-confirm también manejan tienda",
++ok("AA: verify también maneja tienda",
+   /\.select\("[^"]*order_id[^"]*"\)/.test(verifyRouteT) &&
+-  /isStorePayment\(fullPayment\)/.test(verifyRouteT) &&
+-  /isStorePayment\(payment\)/.test(forceConfirmRouteT) &&
+-  /handleStorePaymentApproved\(admin, payment\)/.test(forceConfirmRouteT));
++  /isStorePayment\(fullPayment\)/.test(verifyRouteT));
+ ok("AA: CartContext persiste en localStorage con add/remove/quantity/clear",
+   /const STORAGE_KEY = "ze_cart";/.test(cartContextT) &&
+   /window\.localStorage\.getItem\(STORAGE_KEY\)/.test(cartContextT) &&
+diff --git a/src/app/api/admin/generate-sessions/route.ts b/src/app/api/admin/generate-sessions/route.ts
+index edaced2..386cc4a 100644
+--- a/src/app/api/admin/generate-sessions/route.ts
++++ b/src/app/api/admin/generate-sessions/route.ts
+@@ -1,11 +1,29 @@
+ import { NextResponse } from "next/server";
+ import { getAdminClient } from "@/lib/supabase/admin";
++import { createClient } from "@/lib/supabase/server";
+ import { getChileToday, addDaysChile } from "@/lib/dates";
+ 
+ const WEEKS_AHEAD = 4;
+ 
+ export async function POST() {
+   try {
++    const server = await createClient();
++    const { data: { user: sessionUser }, error: authError } = await server.auth.getUser();
++
++    if (authError || !sessionUser) {
++      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
++    }
++
++    const { data: profile } = await server
++      .from("profiles")
++      .select("role_id")
++      .eq("id", sessionUser.id)
++      .single();
++
++    if (!profile || profile.role_id !== 1) {
++      return NextResponse.json({ error: "Solo administradores pueden generar sesiones" }, { status: 403 });
++    }
++
+     const supabase = getAdminClient();
+ 
+     const { data: activeSchedules, error: schedErr } = await supabase
+diff --git a/src/app/api/flow/debug/route.ts b/src/app/api/flow/debug/route.ts
+deleted file mode 100644
+index c87cc68..0000000
+--- a/src/app/api/flow/debug/route.ts
++++ /dev/null
+@@ -1,34 +0,0 @@
+-import { NextResponse } from "next/server";
+-import { getAdminClient } from "@/lib/supabase/admin";
+-import { FLOW_LOG_PREFIX } from "@/lib/flow";
+-
+-export const dynamic = "force-dynamic";
+-export const maxDuration = 10;
+-
+-const DEBUG_LOG = `${FLOW_LOG_PREFIX}/debug`;
+-
+-export async function GET() {
+-  try {
+-    const admin = getAdminClient();
+-    const { data: payments, error } = await admin
+-      .from("payments")
+-      .select("id, status, flow_token, created_at, updated_at")
+-      .order("created_at", { ascending: false })
+-      .limit(20);
+-
+-    if (error) throw error;
+-
+-    console.log(`${DEBUG_LOG} returning ${payments?.length ?? 0} recent payments`);
+-
+-    return NextResponse.json({
+-      success: true,
+-      recentPayments: payments ?? [],
+-    });
+-  } catch (err) {
+-    console.error(`${DEBUG_LOG} error`, err);
+-    return NextResponse.json(
+-      { success: false, error: String(err) },
+-      { status: 500 }
+-    );
+-  }
+-}
+diff --git a/src/app/api/flow/force-confirm/route.ts b/src/app/api/flow/force-confirm/route.ts
+deleted file mode 100644
+index f59baed..0000000
+--- a/src/app/api/flow/force-confirm/route.ts
++++ /dev/null
+@@ -1,101 +0,0 @@
+-import { NextResponse } from "next/server";
+-import { getAdminClient } from "@/lib/supabase/admin";
+-import { FLOW_LOG_PREFIX } from "@/lib/flow";
+-import { confirmAndCreateMembership, confirmPersonalizedPack, extendEnrollment, markPaymentAsPaid, notifyPaymentWithoutMembership, notifyUserPaymentStatus } from "@/lib/flow-helpers";
+-import { isStorePayment, handleStorePaymentApproved } from "@/lib/store";
+-
+-export const dynamic = "force-dynamic";
+-export const maxDuration = 15;
+-
+-const FORCE_LOG = `${FLOW_LOG_PREFIX}/force-confirm`;
+-
+-export async function POST(request: Request) {
+-  try {
+-    const admin = getAdminClient();
+-    const body = await request.json();
+-    const { paymentId } = body;
+-
+-    if (!paymentId) {
+-      return NextResponse.json({ error: "paymentId required" }, { status: 400 });
+-    }
+-
+-    console.log(`${FORCE_LOG} attempting force-confirm for payment ${paymentId}`);
+-
+-    const { data: payment, error: fetchError } = await admin
+-      .from("payments")
+-      .select("*")
+-      .eq("id", paymentId)
+-      .single();
+-
+-    if (fetchError || !payment) {
+-      return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+-    }
+-
+-    if (payment.status === "pagado") {
+-      return NextResponse.json({ success: true, message: "Already paid" });
+-    }
+-
+-    await markPaymentAsPaid(admin, paymentId, "force-confirm", undefined);
+-
+-    // Only call confirmAndCreateMembership if concept includes membership
+-    const hasMembership = /membres[íi]a/i.test(payment.concept || "");
+-    let assignedSomething = false;
+-    if (hasMembership) {
+-      const result = await confirmAndCreateMembership(admin, paymentId, payment.user_id);
+-      if (result.success) {
+-        assignedSomething = true;
+-      } else {
+-        console.error(`${FORCE_LOG} membership creation failed:`, result.error);
+-        await notifyPaymentWithoutMembership(admin, payment, result.error || "Error al crear membresía");
+-      }
+-    }
+-
+-    // Handle enrollment if included in payment record
+-    if (payment.include_enrollment && payment.enrollment_plan_id && payment.beneficiary_id) {
+-      const enrollResult = await extendEnrollment(
+-        admin,
+-        paymentId,
+-        payment.beneficiary_id,
+-        payment.enrollment_plan_id
+-      );
+-      if (enrollResult.success) {
+-        assignedSomething = true;
+-      } else {
+-        console.error(`${FORCE_LOG} enrollment extension failed:`, enrollResult.error);
+-      }
+-    }
+-
+-    // Clases personalizadas (módulo desacoplado): concepto "Clase Personalizada X"
+-    const hasPersonalizedConcept = /^Clase Personalizad[ao]/i.test(payment.concept || "");
+-    if (hasPersonalizedConcept) {
+-      const packResult = await confirmPersonalizedPack(admin, paymentId, payment.user_id);
+-      if (packResult.success) {
+-        assignedSomething = true;
+-      } else {
+-        console.error(`${FORCE_LOG} personalized pack creation failed:`, packResult.error);
+-        await notifyPaymentWithoutMembership(admin, payment, packResult.error || "Error al crear pack personalizado");
+-      }
+-    }
+-
+-    // Tienda (módulo desacoplado): pago con order_id + concepto "Tienda: ...".
+-    if (isStorePayment(payment)) {
+-      const storeResult = await handleStorePaymentApproved(admin, payment);
+-      if (storeResult.success) {
+-        assignedSomething = true;
+-      } else {
+-        console.error(`${FORCE_LOG} store order confirmation failed:`, storeResult.error);
+-      }
+-    }
+-
+-    if (assignedSomething) {
+-      await notifyUserPaymentStatus(admin, payment, "approved");
+-    }
+-
+-    console.log(`${FORCE_LOG} payment ${paymentId} force-confirmed successfully`);
+-
+-    return NextResponse.json({ success: true, message: "Payment force-confirmed" });
+-  } catch (err) {
+-    console.error(`${FORCE_LOG} error`, err);
+-    return NextResponse.json({ error: String(err) }, { status: 500 });
+-  }
+-}

@@ -459,6 +459,32 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 
 ---
 
+## B-020 — Rutas de debug/reintento manual reaparecieron sin protección (`force-confirm`, `debug`) + `generate-sessions` sin guard admin
+
+| Campo | Valor |
+|-------|-------|
+| **Estado** | 🟢 RESUELTO (2026-08-15) |
+| **Severidad** | 🔴 Crítico |
+| **Módulo** | Pago Flow / Admin |
+| **Fuente** | Auditoría 2026-08-15 |
+
+**Descripción:** `PLAN-PRODUCCION.md` (Fix #1) documentaba la eliminación de `src/app/api/flow/debug/route.ts` y `src/app/api/flow/force-confirm/route.ts` por ser accesibles sin autenticación. En algún punto del desarrollo posterior de B-008/B-018/B-019 ambas rutas volvieron a existir en el repo (como herramienta de debug mientras se armaban los fixes de pagos Flow) y quedaron sin ningún guard de auth:
+- `force-confirm` (POST) marcaba cualquier `paymentId` como `pagado` y creaba membresía/pack/orden de tienda vía cliente admin, sin autenticación ni verificación de rol. **Sin ningún caller en el código** (ni la UI del admin lo invoca) — dinero real en riesgo si alguien descubre el endpoint.
+- `debug` (GET) exponía los últimos 20 pagos (incluido `flow_token`) sin autenticación.
+
+Adicionalmente, `src/app/api/admin/generate-sessions/route.ts` (sí usada desde `/admin/asistencia`, botón "Generar sesiones") no tenía el guard `role_id === 1` que sí tienen sus pares (`create-user`, `create-dependent`, `update-dependent`).
+
+**Solución aplicada:**
+1. Eliminados `src/app/api/flow/debug/` y `src/app/api/flow/force-confirm/` completos (sin callers reales; las funciones compartidas que usaban — `confirmAndCreateMembership`, `notifyPaymentWithoutMembership`, `confirmPersonalizedPack`, `handleStorePaymentApproved` — siguen intactas en `flow-helpers.ts`/`store.ts`, usadas por `confirmation/route.ts` y `verify/route.ts`).
+2. `generate-sessions/route.ts` — agregado el mismo guard de sesión + `role_id !== 1 → 403` que el resto de `/api/admin/*`.
+3. `scripts/test-flows.mjs` — removidas las ~7 aserciones que leían `force-confirm/route.ts` (secciones B-008, O, P, AA); ya no aplican.
+
+**Verificación:** suite **567 passed, 0 failed** (bajó de 570: las 3 aserciones eliminadas eran las que testeaban el archivo borrado), `npx tsc --noEmit` limpio (tras purgar `.next/types` stale). Sin migración SQL.
+
+**Referencias:** `PLAN-PRODUCCION.md` (Fix #1 original), `src/app/api/admin/generate-sessions/route.ts`, `scripts/test-flows.mjs`.
+
+---
+
 | Fecha | Acción |
 |-------|--------|
 | 2026-08-01 | Creación del informe con hallazgos de la auditoría de flujos críticos + verificación de BD en vivo. |
@@ -477,3 +503,4 @@ El modelo per-session `(beneficiary_id, session_id)` queda como única fuente de
 | 2026-08-02 | **B-018 resuelto:** pagos Flow rechazados/anulados se marcan en BD y el usuario recibe feedback diferenciado (rechazado/cancelado/pendiente) en `/dashboard/pagos` + filtro "Rechazado" en `/admin/ventas`. Suite en verde (195 tests). Sin migración. |
 | 2026-08-02 | **B-018 ampliado:** overlays centrados con botón OK — `PaymentErrorModal` rojo para rechazado/anulado/error y `PaymentSuccessModal` verde con OK primario para pago exitoso. Suite en verde (198 tests). |
 | 2026-08-02 | **B-019 resuelto:** la recompra post-rechazo ya no reutiliza el token muerto (`create-order` usa `mapFlowStatus`: `3`/`4` → marca y crea orden nueva, `2` → `already_paid`) y `CheckoutModal` nunca queda bloqueado (timeout `AbortController` 20 s). Suite en verde (206 tests). Sin migración. |
+| 2026-08-15 | **B-020 resuelto:** eliminadas `flow/debug` y `flow/force-confirm` (habían reaparecido sin auth pese a estar "eliminadas" en `PLAN-PRODUCCION.md`); `generate-sessions` ahora exige `role_id === 1`. Suite en verde (567 tests). Sin migración. |
