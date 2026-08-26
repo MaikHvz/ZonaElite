@@ -2,7 +2,17 @@ import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-const VALID_CATEGORIES = ["nino", "adulto"];
+const VALID_CATEGORIES = ["nino", "juvenil", "adulto"];
+
+function computeCategoryFromBirth(birthDate: string): string {
+  const birth = new Date(birthDate + "T12:00:00");
+  const now = new Date();
+  const ageMs = now.getTime() - birth.getTime();
+  const ageYears = ageMs / (365.25 * 24 * 60 * 60 * 1000);
+  if (ageYears < 10) return "nino";
+  if (ageYears < 16) return "juvenil";
+  return "adulto";
+}
 
 export async function POST(request: Request) {
   try {
@@ -30,7 +40,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Tutor, nombre y fecha de nacimiento son obligatorios" }, { status: 400 });
     }
 
-    if (!VALID_CATEGORIES.includes(category)) {
+    const finalCategory = category && VALID_CATEGORIES.includes(category)
+      ? category
+      : computeCategoryFromBirth(birth_date);
+    if (!VALID_CATEGORIES.includes(finalCategory)) {
       return NextResponse.json({ error: "Categoría inválida" }, { status: 400 });
     }
 
@@ -63,7 +76,7 @@ export async function POST(request: Request) {
         full_name: full_name.trim(),
         rut: rut?.trim() || null,
         birth_date,
-        category,
+        category: finalCategory,
         address: address?.trim() || null,
         weight: weight ?? null,
         height: height ?? null,
@@ -94,7 +107,7 @@ export async function POST(request: Request) {
       action: "create_dependent",
       entity: "dependents",
       entity_id: dependent.id,
-      metadata: { tutor_id, tutor_name: tutor.full_name, full_name: dependent.full_name, category, address: dependent.address, weight: dependent.weight, height: dependent.height, dominant_hand: dependent.dominant_hand },
+      metadata: { tutor_id, tutor_name: tutor.full_name, full_name: dependent.full_name, category: finalCategory, address: dependent.address, weight: dependent.weight, height: dependent.height, dominant_hand: dependent.dominant_hand },
     });
 
     return NextResponse.json({ dependent });

@@ -9,10 +9,9 @@
 -- =====================================================
 -- Nota: Supabase no expone ENUMs via PostgREST.
 -- Los valores de texto se usan en lugar de ENUMs nativos:
---   dependents.category: 'nino' | 'adulto'
--- membership_plans.category: 'adulto' | 'nino'
--- membership_plans.tokens: NULL = ilimitado, nÃºmero = clases incluidas
---   schedules.category: 'ninos' | 'adultos' | 'ambos'
+--   dependents.category: 'nino' | 'juvenil' | 'adulto'
+-- membership_plans.category: 'adulto' | 'nino' | 'juvenil'
+--   schedules.category: text[] — '{ninos}' | '{juveniles}' | '{adultos}' | '{ninos,juveniles,adultos}'
 --   attendance.status: 'presente' | 'ausente' | 'justificado'
 --   blog_posts.status: 'borrador' | 'publicado' | 'programado'
 --   product_orders.status: 'borrador' | 'pendiente' | 'pagado' | 'enviado' | 'entregado' | 'cancelado'
@@ -224,7 +223,7 @@ CREATE TABLE IF NOT EXISTS public.schedules (
   end_time time NOT NULL,
   capacity integer DEFAULT 20 NOT NULL,
   created_at timestamptz DEFAULT now() NOT NULL,
-  category text DEFAULT 'ambos' NOT NULL,
+  category text[] DEFAULT '{ninos,juveniles,adultos}' NOT NULL,
   active boolean DEFAULT true NOT NULL,
   description text,
   mode text DEFAULT 'normal' NOT NULL,
@@ -275,7 +274,8 @@ CREATE TABLE IF NOT EXISTS public.dependents (
   CONSTRAINT dependents_pkey PRIMARY KEY (id),
   CONSTRAINT dependents_weight_check CHECK (weight > 0 AND weight <= 300),
   CONSTRAINT dependents_height_check CHECK (height > 0 AND height <= 250),
-  CONSTRAINT dependents_dominant_hand_check CHECK (dominant_hand IN ('diestro', 'zurdo'))
+  CONSTRAINT dependents_dominant_hand_check CHECK (dominant_hand IN ('diestro', 'zurdo')),
+  CONSTRAINT dependents_category_check CHECK (category IN ('nino', 'juvenil', 'adulto'))
 );
 
 CREATE TABLE IF NOT EXISTS public.beneficiaries (
@@ -401,7 +401,8 @@ CREATE TABLE IF NOT EXISTS public.membership_plans (
   tokens integer, -- NULL = ilimitado, nÃºmero = clases incluidas
   active boolean DEFAULT true NOT NULL,
   created_at timestamptz DEFAULT now() NOT NULL,
-  CONSTRAINT membership_plans_pkey PRIMARY KEY (id)
+  CONSTRAINT membership_plans_pkey PRIMARY KEY (id),
+  CONSTRAINT membership_plans_category_check CHECK (category IN ('nino', 'juvenil', 'adulto'))
 );
 
 CREATE TABLE IF NOT EXISTS public.memberships (
@@ -616,7 +617,7 @@ ALTER TABLE public.class_enrollments
 
 ALTER TABLE public.schedules
   ADD CONSTRAINT schedules_category_check
-  CHECK (category IN ('ninos', 'adultos', 'ambos'));
+  CHECK (category <@ ARRAY['ninos', 'juveniles', 'adultos']);
 
 ALTER TABLE public.schedules
   ADD CONSTRAINT schedules_mode_check

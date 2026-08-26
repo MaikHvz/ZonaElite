@@ -779,6 +779,7 @@ export default function AdminMembresiasPage() {
             <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Categoría *</label>
             <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 cursor-pointer">
               <option value="adulto">Adulto</option>
+              <option value="juvenil">Juvenil</option>
               <option value="nino">Niño</option>
             </select>
           </div>

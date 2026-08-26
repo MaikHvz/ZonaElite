@@ -33,7 +33,7 @@ export default function EditDependentModal({
   const [fullName, setFullName] = useState("");
   const [rut, setRut] = useState("");
   const [birthDate, setBirthDate] = useState("");
-  const [category, setCategory] = useState<"nino" | "adulto">("nino");
+  const [category, setCategory] = useState<"nino" | "juvenil" | "adulto">("nino");
   const [address, setAddress] = useState("");
   const [sameAddress, setSameAddress] = useState(false);
   const [tutorAddress, setTutorAddress] = useState("");
@@ -48,7 +48,7 @@ export default function EditDependentModal({
       setFullName(dependent.full_name);
       setRut(dependent.rut || "");
       setBirthDate(dependent.birth_date);
-      setCategory(dependent.category === "adulto" ? "adulto" : "nino");
+      setCategory(dependent.category === "adulto" ? "adulto" : dependent.category === "juvenil" ? "juvenil" : "nino");
       setAddress(dependent.address || "");
       setWeight(dependent.weight != null ? String(dependent.weight) : "");
       setHeight(dependent.height != null ? String(dependent.height) : "");
@@ -207,21 +207,27 @@ export default function EditDependentModal({
             <label className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
               Categoría *
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              {(["nino", "adulto"] as const).map((cat) => (
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: "nino" as const, label: "Niño", color: "blue" },
+                { value: "juvenil" as const, label: "Juvenil", color: "amber" },
+                { value: "adulto" as const, label: "Adulto", color: "green" },
+              ]).map((cat) => (
                 <button
-                  key={cat}
+                  key={cat.value}
                   type="button"
-                  onClick={() => setCategory(cat)}
+                  onClick={() => setCategory(cat.value)}
                   className={`py-2.5 rounded-lg border font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider transition-colors cursor-pointer ${
-                    category === cat
-                      ? cat === "nino"
+                    category === cat.value
+                      ? cat.color === "blue"
                         ? "bg-blue-500/15 border-blue-500/40 text-blue-400"
+                        : cat.color === "amber"
+                        ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
                         : "bg-green-500/15 border-green-500/40 text-green-400"
                       : "bg-surface-container border-on-surface/10 text-on-surface-variant hover:border-on-surface/20"
                   }`}
                 >
-                  {cat === "nino" ? "Niño" : "Adulto"}
+                  {cat.label}
                 </button>
               ))}
             </div>

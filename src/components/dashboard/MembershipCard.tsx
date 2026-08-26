@@ -137,8 +137,9 @@ export default function MembershipCard({
             {beneficiaryName && (
               <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant mt-0.5">
                 {beneficiaryName}
-                {membership.beneficiary?.dependent?.category === "nino" &&
-                  " (carga)"}
+                {membership.beneficiary?.dependent?.category === "nino" ||
+                  membership.beneficiary?.dependent?.category === "juvenil"
+                    ? " (carga)" : ""}
               </p>
             )}
           </div>

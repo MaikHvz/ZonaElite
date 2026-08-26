@@ -231,7 +231,7 @@ export default function CheckoutModal({
               profile_id: ben.profile_id,
               dependent_id: ben.dependent_id,
               label: dep.full_name,
-              sublabel: `Carga · ${dep.category === "nino" ? "Niño" : "Adulto"}`,
+              sublabel: `Carga · ${dep.category === "nino" ? "Niño" : dep.category === "juvenil" ? "Juvenil" : "Adulto"}`,
               hasActiveEnrollment,
               enrollmentEndDate: hasActiveEnrollment ? e?.end_date || null : null,
               enrollmentPlanName: hasActiveEnrollment ? e?.enrollment_plans?.name || null : null,
@@ -426,7 +426,7 @@ export default function CheckoutModal({
               </div>
               <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
                 {plan.duration_days} días ·{" "}
-                {plan.category === "nino" ? "Niños" : "Adultos"}
+                {plan.category === "nino" ? "Niños" : plan.category === "juvenil" ? "Juveniles" : "Adultos"}
               </p>
               {plan.benefits && plan.benefits.length > 0 && (
                 <ul className="mt-3 space-y-1">

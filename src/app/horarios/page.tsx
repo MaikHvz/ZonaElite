@@ -17,7 +17,7 @@ interface Schedule {
   start_time: string;
   end_time: string;
   capacity: number;
-  category: string;
+  category: string[];
   active: boolean;
   description: string | null;
   mode: string;

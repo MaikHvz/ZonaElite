@@ -13,7 +13,7 @@ interface Schedule {
   start_time: string;
   end_time: string;
   capacity: number;
-  category: string;
+  category: string[];
   active: boolean;
   description: string | null;
   disciplines: { name: string; color_hex: string; icon: string } | null;
@@ -182,12 +182,9 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
         }
       }
 
-      if (schedule.category === "ninos" && planCategory !== "nino") {
+      if (!schedule.category.includes(planCategory)) {
         eligible = false;
-        ineligibleReason = "Clase solo para niños";
-      } else if (schedule.category === "adultos" && planCategory !== "adulto") {
-        eligible = false;
-        ineligibleReason = "Clase solo para adultos";
+        ineligibleReason = "Categoría no compatible con esta clase";
       } else if (!hasActiveEnrollment) {
         eligible = false;
         ineligibleReason = "Sin inscripción a la academia";
@@ -289,12 +286,9 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
           }
         }
 
-        if (schedule.category === "ninos" && planCategory !== "nino") {
+        if (!schedule.category.includes(planCategory)) {
           eligible = false;
-          ineligibleReason = "Clase solo para niños";
-        } else if (schedule.category === "adultos" && planCategory !== "adulto") {
-          eligible = false;
-          ineligibleReason = "Clase solo para adultos";
+          ineligibleReason = "Categoría no compatible con esta clase";
         } else if (!hasActiveEnrollment) {
           eligible = false;
           ineligibleReason = "Sin inscripción a la academia";
@@ -409,7 +403,7 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
           </div>
           <div className="flex items-center gap-4 mt-3">
             <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">
-              Categoría: {schedule.category === "ninos" ? "Niños" : schedule.category === "adultos" ? "Adultos" : "Ambos"}
+              Categoría: {schedule.category.map(c => c === "ninos" ? "Niños" : c === "juveniles" ? "Juveniles" : c === "adultos" ? "Adultos" : c).join(", ")}
             </span>
             {schedule.room && (
               <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">
@@ -500,9 +494,10 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-[family-name:var(--font-headline-sm)] text-[14px] text-on-surface truncate">{b.label}</span>
-                        <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full ${b.category === "nino" ? "bg-blue-500/10 text-blue-400" : "bg-amber-500/10 text-amber-400"
-                          }`}>
-                          {b.category === "nino" ? "Niño" : "Adulto"}
+                        <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
+                          b.category === "nino" ? "bg-blue-500/10 text-blue-400" : b.category === "juvenil" ? "bg-amber-500/10 text-amber-400" : "bg-green-500/10 text-green-400"
+                        }`}>
+                          {b.category === "nino" ? "Niño" : b.category === "juvenil" ? "Juvenil" : "Adulto"}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">

@@ -284,3 +284,16 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Integraciones actualizadas**: `Navbar` (label "Quiénes Somos"), `Footer`, `sitemap.ts` → `/quienes-somos`, texto informativo en `admin/configuracion`. `GalleryCarousel`/`PageCTA`/FAQ reutilizados sin cambios.
 - **Sin cambios de BD**: no hay migraciones ni cambios en `squema-sql-actualizado.sql` (el espejo queda 1:1). Requisito/análisis en `contexto/requisitos/quienes-somos-historia-interactiva.md`.
 - **Verificación**: `npx tsc --noEmit` limpio, `npx eslint src/components/history` limpio, `npm run build` OK (ruta estática), suite `scripts/test-flows.mjs` en verde (570 tests).
+
+## 27. Categoría Juvenil + Horarios Multi-selección (2026-08-26)
+**Requisito**: Agregar una tercera categoría de usuario "juvenil" (edades 10-15 años) junto a "niño" (<10) y "adulto" (>=16). Los horarios deben permitir seleccionar múltiples categorías (niños, juveniles, adultos) en vez de un solo valor. La categoría se auto-asigna según la fecha de nacimiento al crear/editar cargas y se recalcula al cargar datos. Los planes de membresía también soportan la categoría "juvenil".
+- **Esquema** (migración `026_categoria_juvenil.sql`):
+  - `dependents.category`: CHECK `('nino', 'juvenil', 'adulto')`. Datos existentes recalculados según `birth_date`.
+  - `membership_plans.category`: CHECK `('nino', 'juvenil', 'adulto')`.
+  - `schedules.category`: cambiado de `text` a `text[]` (array PostgreSQL). Default `'{ninos,juveniles,adultos}'`. Datos migrados: `'ambos'` → `'{ninos,juveniles,adultos}'`, `'ninos'` → `'{ninos}'`, `'adultos'` → `'{adultos}'`.
+  - Función SQL `compute_category_from_birth(date)` para cálculo de categoría.
+- **APIs**: `create-dependent` y `update-dependent` aceptan `"juvenil"` en `VALID_CATEGORIES` y auto-asignan según `birth_date` si no se envía categoría. `create-user` acepta `birth_date`, `phone`, `rut` opcionales.
+- **Frontend**: Modales de carga (admin y dashboard) muestran 3 opciones de categoría (Niño/Juvenil/Adulto) con colores azul/ámbar/verde. Auto-asignación al cambiar `birth_date`. Admin horarios usa checkboxes multi-selección para categorías del horario. Labels actualizados en tabla usuarios, asistencia, ficha, checkout, membership card.
+- **Elegibilidad**: `EnrollModal.tsx` usa `schedule.category.includes(planCategory)` — cada horario puede combinar las 3 categorías.
+- **Recálculo**: la categoría de los dependientes se recalcula en `admin/usuarios/page.tsx` al cargar basándose en `birth_date` (16+ años = adulto).
+- **Estado**: Implementado. Migración `026_categoria_juvenil.sql` lista para aplicar. Espejo actualizado en `squema-sql-actualizado.sql`.

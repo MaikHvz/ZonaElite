@@ -41,7 +41,7 @@ export default function VerFichaModal({ open, onClose, dependent }: VerFichaModa
     { label: "Nombre", value: dependent.full_name },
     {
       label: "Tipo",
-      value: dependent.category === "nino" ? "Niño" : "Adulto",
+      value: dependent.category === "nino" ? "Niño" : dependent.category === "juvenil" ? "Juvenil" : "Adulto",
     },
     {
       label: "Fecha de nacimiento",

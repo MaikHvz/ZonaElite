@@ -118,7 +118,7 @@ export default function PersonalizedCheckoutModal({
             list.push({
               id: bId,
               label: dep.full_name,
-              sublabel: `Carga · ${dep.category === "nino" ? "Niño" : "Adulto"}`,
+              sublabel: `Carga · ${dep.category === "nino" ? "Niño" : dep.category === "juvenil" ? "Juvenil" : "Adulto"}`,
             });
           }
         }

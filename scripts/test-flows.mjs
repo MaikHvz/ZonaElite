@@ -1740,7 +1740,7 @@ ok("V: openEdit de carga abre el modal en modo edición (sin early return)",
 ok("V: página renderiza CreateDependentModal con tutors (no dependientes)",
   /<CreateDependentModal[\s\S]*?tutors=\{users\.filter\(\(u\) => !u\._isDependent\)[\s\S]*?editingDependent=\{editingDependent\}/.test(adminUsuariosT));
 ok("V: create-dependent inserta en dependents con tutor_id y campos completos",
-  /\.from\("dependents"\)\s*\.insert\(\{[\s\S]*?tutor_id,[\s\S]*?full_name: full_name\.trim\(\),[\s\S]*?rut: rut\?\.trim\(\) \|\| null,[\s\S]*?birth_date,[\s\S]*?category,[\s\S]*?address: address\?\.trim\(\) \|\| null,[\s\S]*?weight: weight \?\? null,[\s\S]*?height: height \?\? null,[\s\S]*?dominant_hand: dominant_hand \|\| null,[\s\S]*?\}\s*\)[\s\S]*?\.select\("id, tutor_id, full_name, rut, birth_date, category, address, weight, height, dominant_hand, created_at"\)/.test(createDependentRouteT));
+  /\.from\("dependents"\)\s*\.insert\(\{[\s\S]*?tutor_id,[\s\S]*?full_name: full_name\.trim\(\),[\s\S]*?rut: rut\?\.trim\(\) \|\| null,[\s\S]*?birth_date,[\s\S]*?category: finalCategory,[\s\S]*?address: address\?\.trim\(\) \|\| null,[\s\S]*?weight: weight \?\? null,[\s\S]*?height: height \?\? null,[\s\S]*?dominant_hand: dominant_hand \|\| null,[\s\S]*?\}\s*\)[\s\S]*?\.select\("id, tutor_id, full_name, rut, birth_date, category, address, weight, height, dominant_hand, created_at"\)/.test(createDependentRouteT));
 ok("V: create-dependent asegura beneficiaries por dependent_id (idempotente)",
   /\.from\("beneficiaries"\)\s*\.select\("id"\)[\s\S]*?\.eq\("dependent_id", dependent\.id\)[\s\S]*?if \(!existingBeneficiary\)[\s\S]*?\.from\("beneficiaries"\)\.insert\(\{[\s\S]*?dependent_id: dependent\.id,[\s\S]*?profile_id: null,[\s\S]*?\}\)/.test(createDependentRouteT));
 ok("V: create-dependent valida admin y categoría, registra audit_logs",
@@ -1748,7 +1748,7 @@ ok("V: create-dependent valida admin y categoría, registra audit_logs",
   /VALID_CATEGORIES\.includes\(category\)/.test(createDependentRouteT) &&
   /action: "create_dependent",[\s\S]*?entity: "dependents"/.test(createDependentRouteT));
 ok("V: update-dependent actualiza campos y registra audit_logs",
-  /\.from\("dependents"\)\s*\.update\(\{[\s\S]*?full_name: full_name\.trim\(\),[\s\S]*?rut: rut\?\.trim\(\) \|\| null,[\s\S]*?birth_date,[\s\S]*?category,[\s\S]*?\}\)[\s\S]*?\.eq\("id", dependent_id\)/.test(updateDependentRouteT) &&
+  /\.from\("dependents"\)\s*\.update\(\{[\s\S]*?full_name: full_name\.trim\(\),[\s\S]*?rut: rut\?\.trim\(\) \|\| null,[\s\S]*?birth_date,[\s\S]*?category: finalCategory,[\s\S]*?\}\)[\s\S]*?\.eq\("id", dependent_id\)/.test(updateDependentRouteT) &&
   /action: "update_dependent",[\s\S]*?entity: "dependents"/.test(updateDependentRouteT));
 ok("V: CreateDependentModal tiene selector de tutor + campos nombre/rut/fecha/categoría",
   /Usuario tutor \(padre\/madre\) \*/.test(createDependentModalT) &&
@@ -1756,7 +1756,7 @@ ok("V: CreateDependentModal tiene selector de tutor + campos nombre/rut/fecha/ca
   /RUT \(opcional\)/.test(createDependentModalT) &&
   /Fecha de nacimiento \*/.test(createDependentModalT) &&
   /Categoría \*/.test(createDependentModalT) &&
-  /setCategory\(cat\)[\s\S]*?cat === "nino" \? "Niño" : "Adulto"/.test(createDependentModalT));
+  /setCategory\(cat\.value\)/.test(createDependentModalT));
 ok("V: CreateDependentModal llama a create/update según modo y valida tutor",
   /editingDependent \? "\/api\/admin\/update-dependent" : "\/api\/admin\/create-dependent"/.test(createDependentModalT) &&
   /Debes seleccionar el usuario al que se asignará la carga/.test(createDependentModalT));
@@ -1890,7 +1890,7 @@ ok("Y: admin CreateDependentModal soporta address + checkbox del tutor",
   /Usar la misma dirección que el tutor/.test(createDependentModalT));
 ok("Y: update-dependent actualiza address y lo registra en audit",
   /address: address\?\.trim\(\) \|\| null,[\s\S]*?\.eq\("id", dependent_id\)/.test(updateDependentRouteT) &&
-  /metadata: \{ full_name: dependent\.full_name, category, address: dependent\.address, weight: dependent\.weight, height: dependent\.height, dominant_hand: dependent\.dominant_hand \}/.test(updateDependentRouteT));
+  /metadata: \{ full_name: dependent\.full_name, category: finalCategory, address: dependent\.address, weight: dependent\.weight, height: dependent\.height, dominant_hand: dependent\.dominant_hand \}/.test(updateDependentRouteT));
 ok("Y: admin/usuarios pasa address al modal de dependientes (edición y tutores)",
   /address: u\._address \|\| null,[\s\S]*?\}/.test(adminUsuariosT) &&
   /tutors=\{users\.filter\(\(u\) => !u\._isDependent\)\.map\(\(u\) => \(\{ id: u\.id, full_name: u\.full_name, email: u\.email, address: u\.address \|\| null \}\)\)\}/.test(adminUsuariosT));

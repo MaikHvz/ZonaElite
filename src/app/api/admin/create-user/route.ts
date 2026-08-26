@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, full_name, role_id = 4 } = body;
+    const { email, full_name, role_id = 4, birth_date, phone, rut } = body;
 
     if (!email || !full_name) {
       return NextResponse.json({ error: "Email y nombre son obligatorios" }, { status: 400 });
@@ -60,8 +60,14 @@ export async function POST(request: Request) {
 
     const userId = authUser.user.id;
 
-    if (role_id !== 4) {
-      await admin.from("profiles").update({ role_id }).eq("id", userId);
+    const profileUpdate: Record<string, unknown> = {};
+    if (role_id !== 4) profileUpdate.role_id = role_id;
+    if (birth_date) profileUpdate.birth_date = birth_date;
+    if (phone) profileUpdate.phone = phone;
+    if (rut) profileUpdate.rut = rut;
+
+    if (Object.keys(profileUpdate).length > 0) {
+      await admin.from("profiles").update(profileUpdate).eq("id", userId);
     }
 
     const { data: existingBeneficiary } = await admin
@@ -88,7 +94,7 @@ export async function POST(request: Request) {
       action: "create_user",
       entity: "profiles",
       entity_id: userId,
-      metadata: { email, full_name, role_id, method: "admin_create" },
+      metadata: { email, full_name, role_id, birth_date: birth_date || null, phone: phone || null, rut: rut || null, method: "admin_create" },
     });
 
     return NextResponse.json({

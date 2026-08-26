@@ -88,10 +88,12 @@ export default function DependentCard({
             className={`inline-block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${
               dependent.category === "nino"
                 ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                : dependent.category === "juvenil"
+                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
                 : "bg-green-500/10 text-green-400 border-green-500/20"
             }`}
           >
-            {dependent.category === "nino" ? "Niño" : "Adulto"}
+            {dependent.category === "nino" ? "Niño" : dependent.category === "juvenil" ? "Juvenil" : "Adulto"}
           </span>
         </div>
       </div>

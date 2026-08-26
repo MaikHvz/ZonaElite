@@ -878,8 +878,8 @@ export default function AdminAsistenciaPage() {
                         <div>
                           <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{r.full_name}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider ${r.category === "nino" ? "text-blue-400" : "text-on-surface-variant/60"}`}>
-                              {r.category === "nino" ? "Niño" : "Adulto"}
+                            <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider ${r.category === "nino" ? "text-blue-400" : r.category === "juvenil" ? "text-amber-400" : "text-on-surface-variant/60"}`}>
+                              {r.category === "nino" ? "Niño" : r.category === "juvenil" ? "Juvenil" : "Adulto"}
                             </span>
                             {r.activePlan ? (
                               <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
@@ -1301,8 +1301,8 @@ export default function AdminAsistenciaPage() {
                                           </div>
                                           <div className="min-w-0">
                                             <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">{b.full_name}</p>
-                                            <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider ${b.category === "nino" ? "text-blue-400" : "text-on-surface-variant/60"}`}>
-                                              {b.category === "nino" ? "Niño" : "Adulto"}
+                                            <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider ${b.category === "nino" ? "text-blue-400" : b.category === "juvenil" ? "text-amber-400" : "text-on-surface-variant/60"}`}>
+                                              {b.category === "nino" ? "Niño" : b.category === "juvenil" ? "Juvenil" : "Adulto"}
                                             </span>
                                           </div>
                                         </div>

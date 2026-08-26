@@ -383,9 +383,9 @@ class_enrollments.beneficiary_id ──→ beneficiaries.id
 
 ### Enum values (texto, no nativos)
 
-- `dependents.category`: `'nino'` | `'adulto'`
-- `membership_plans.category`: `'adulto'` | `'nino'`
-- `schedules.category`: `'ninos'` | `'adultos'` | `'ambos'`
+- `dependents.category`: `'nino'` | `'juvenil'` | `'adulto'`
+- `membership_plans.category`: `'adulto'` | `'nino'` | `'juvenil'`
+- `schedules.category`: `text[]` — array con valores de `'ninos'` | `'juveniles'` | `'adultos'`
 - `attendance.status`: `'presente'` | `'ausente'` | `'justificado'`
 - `payments.status`: `'pendiente'` | `'pagado'` | `'fallido'` | `'reembolsado'`
 - `memberships.status`: `'activa'` | `'vencida'` | `'cancelada'` | `'suspendida'`
@@ -480,8 +480,9 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 10. **GalleryCarousel**: Siempre insertar con `active: true` explícito (PostgREST puede no aplicar defaults).
 11. **`after()`** de `next/server` para procesamiento background — no fire-and-forget.
 12. **Supabase PostgREST** no soporta ordering by nested FK columns.
-13. **`membership_plans.category`** = `'adulto'|'nino'`, **`dependents.category`** = `'nino'|'adulto'` (orden invertido).
+13. **`membership_plans.category`** = `'adulto'|'nino'|'juvenil'`, **`dependents.category`** = `'nino'|'juvenil'|'adulto'`. Edades: nino <10, juvenil 10-15, adulto >=16.
 14. **`beneficiaries`** no tiene columna `category` — el category viene del `dependent` o se asume `'adulto'`.
+15. **`schedules.category`** es ahora `text[]` (array PostgreSQL) con valores `'ninos'|'juveniles'|'adultos'`. La elegibilidad se evalúa con `schedule.category.includes(planCategory)`.
 15. **Spanish** en todo el contenido visible.
 16. **Zonas Horarias**: NUNCA usar `new Date().toISOString().split("T")[0]` para calcular "hoy", ya que usa UTC y genera un desfase después de las 20:00 hora Chile. SIEMPRE importar y usar `getChileToday()` y `addDaysChile()` desde `src/lib/dates.ts`. Para límites de mes/trimestre usar los helpers Chile-aware de `dates.ts` (`chileMonthStartDate()`, `chileMonthEndDate()`, `chileQuarterStartDate()`, `chileQuarterEndDate()`, etc.) y convertir a instantes UTC con `chileDateToUtc()` cuando se comparen columnas TIMESTAMPTZ. El scan estático de `scripts/test-flows.mjs` falla (exit 1) si reaparecen los patrones `toISOString().split("T")[0]` o `new Date(y, m, 1).toISOString()`.
 17. **Suite de pruebas**: `scripts/test-flows.mjs` (Node 24+, sin deps) cubre zona horaria Chile, firma HMAC de Flow, contratos de esquema/RLS, ciclo de vida de inscripción y los módulos de clases personalizadas, desinscripción en asistencia, pago manual por transferencia, crear/asignar carga desde admin, edición de cargas con validación de RUT, dirección en perfil y cargas, datos físicos (peso/altura/mano) + modal "Ver Ficha" y el perfil deportivo (disciplina/grado/podios) (secciones P/Q/R/S/T/U/V/W/X/Y/Z/AB, 567 tests). Comando: `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/test-flows.mjs`.

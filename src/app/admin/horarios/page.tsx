@@ -19,7 +19,7 @@ interface Schedule {
   start_time: string;
   end_time: string;
   capacity: number;
-  category: string;
+  category: string[];
   active: boolean;
   description: string | null;
   mode: string;
@@ -34,9 +34,9 @@ interface Profile { id: string; full_name: string; }
 interface Plan { id: string; name: string; active: boolean; }
 
 const DAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-const CATEGORIES = [
-  { value: "ambos", label: "Ambos" },
+const CATEGORY_OPTIONS = [
   { value: "ninos", label: "Niños" },
+  { value: "juveniles", label: "Juveniles" },
   { value: "adultos", label: "Adultos" },
 ];
 const MODE_FILTERS = [
@@ -47,7 +47,7 @@ const MODE_FILTERS = [
 const emptyForm = {
   discipline_id: "", professor_id: "", room: "", day_of_week: 1,
   start_time: "08:00", end_time: "09:00", capacity: 20,
-  category: "ambos", active: true, description: "",
+  category: ["ninos", "juveniles", "adultos"] as string[], active: true, description: "",
   mode: "normal",
 };
 
@@ -96,6 +96,7 @@ export default function AdminHorariosPage() {
 
   const openEdit = (s: Schedule) => {
     setEditing(s);
+    const scheduleCategory = Array.isArray(s.category) ? s.category : [s.category];
     setForm({
       discipline_id: s.discipline_id,
       professor_id: s.professor_id,
@@ -104,7 +105,7 @@ export default function AdminHorariosPage() {
       start_time: s.start_time,
       end_time: s.end_time,
       capacity: s.capacity,
-      category: s.category,
+      category: scheduleCategory,
       active: s.active,
       description: s.description || "",
       mode: s.mode,
@@ -119,6 +120,14 @@ export default function AdminHorariosPage() {
 
   const togglePlan = (planId: string) => {
     setSelectedPlans((prev) => prev.includes(planId) ? prev.filter((p) => p !== planId) : [...prev, planId]);
+  };
+
+  const toggleCategory = (cat: string) => {
+    setForm((prev) => {
+      const current = prev.category;
+      const next = current.includes(cat) ? current.filter((c) => c !== cat) : [...current, cat];
+      return { ...prev, category: next.length > 0 ? next : current };
+    });
   };
 
   const handleSave = async () => {
@@ -240,7 +249,7 @@ export default function AdminHorariosPage() {
       "Disciplina": s.disciplines?.name || "—",
       "Instructor": s.profiles?.full_name || "—",
       "Modalidad": s.mode === "personalizado" ? "Personalizada" : "Membresías",
-      "Categoría": ({ ninos: "Niños", adultos: "Adultos", ambos: "Ambos" }[s.category] || s.category),
+      "Categoría": (Array.isArray(s.category) ? s.category : [s.category]).map(c => ({ ninos: "Niños", juveniles: "Juveniles", adultos: "Adultos" }[c] || c)).join(", "),
       "Cupos": s.capacity,
       "Sala": s.room || "—",
       "Activo": s.active ? "Sí" : "No",
@@ -288,7 +297,7 @@ export default function AdminHorariosPage() {
     );
   };
 
-  const categoryLabel = (c: string) => ({ ninos: "Niños", adultos: "Adultos", ambos: "Ambos" }[c] || c);
+  const categoryLabel = (c: string) => ({ ninos: "Niños", juveniles: "Juveniles", adultos: "Adultos" }[c] || c);
   const activeDisciplines = disciplines.filter((d) => d.active);
 
   const filteredSchedules = schedules.filter((s) => modeFilter === "todas" || s.mode === modeFilter);
@@ -357,7 +366,20 @@ export default function AdminHorariosPage() {
             </div>
           )},
           { key: "professor_id", label: "Instructor", render: (s) => s.profiles?.full_name || "—" },
-          { key: "category", label: "Categoría", render: (s) => <StatusBadge status={s.category === "ninos" ? "publicado" : s.category === "adultos" ? "programado" : "borrador"} /> },
+          { key: "category", label: "Categoría", render: (s) => {
+            const cats = Array.isArray(s.category) ? s.category : [s.category];
+            return (
+              <div className="flex flex-wrap gap-1">
+                {cats.map((c) => (
+                  <span key={c} className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
+                    c === "ninos" ? "bg-blue-500/10 text-blue-400" : c === "juveniles" ? "bg-amber-500/10 text-amber-400" : "bg-green-500/10 text-green-400"
+                  }`}>
+                    {categoryLabel(c)}
+                  </span>
+                ))}
+              </div>
+            );
+          } },
           { key: "capacity", label: "Cupos", render: (s) => String(s.capacity) },
           { key: "active", label: "Estado", render: (s) => <StatusBadge status={s.active ? "activo" : "cancelado"} /> },
         ]}
@@ -421,10 +443,28 @@ export default function AdminHorariosPage() {
               <input inputMode="numeric" value={form.capacity || ""} onChange={(e) => setForm({ ...form, capacity: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
             </div>
             <div>
-              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Categoría *</label>
-              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 cursor-pointer">
-                {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
+              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Categorías permitidas *</label>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORY_OPTIONS.map((cat) => (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    onClick={() => toggleCategory(cat.value)}
+                    className={`px-3 py-1.5 rounded-lg text-[12px] font-[family-name:var(--font-label-sm)] uppercase tracking-wider transition-colors cursor-pointer ${
+                      form.category.includes(cat.value)
+                        ? cat.value === "ninos"
+                          ? "bg-blue-500/15 border border-blue-500/40 text-blue-400"
+                          : cat.value === "juveniles"
+                          ? "bg-amber-500/15 border border-amber-500/40 text-amber-400"
+                          : "bg-green-500/15 border border-green-500/40 text-green-400"
+                        : "border border-on-surface/10 text-on-surface-variant hover:border-on-surface/20"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-on-surface-variant/50 mt-1">Selecciona qué categorías pueden asistir a esta clase</p>
             </div>
             <div>
               <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Sala</label>

@@ -40,6 +40,21 @@ interface Dependent { id: string; full_name: string; tutor_id: string; birth_dat
 
 const ROLE_LABELS: Record<number, string> = { 1: "Administrador", 2: "Instructor", 3: "Recepción", 4: "Alumno" };
 
+function computeCategoryFromBirth(birthDate: string | null | undefined): string {
+  if (!birthDate) return "adulto";
+  const birth = new Date(birthDate + "T12:00:00");
+  const now = new Date();
+  const ageMs = now.getTime() - birth.getTime();
+  const ageYears = ageMs / (365.25 * 24 * 60 * 60 * 1000);
+  if (ageYears < 10) return "nino";
+  if (ageYears < 16) return "juvenil";
+  return "adulto";
+}
+
+function categoryLabel(cat: string): string {
+  return cat === "nino" ? "Niño" : cat === "juvenil" ? "Juvenil" : "Adulto";
+}
+
 export default function AdminUsuariosPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -53,7 +68,7 @@ export default function AdminUsuariosPage() {
   const [exporting, setExporting] = useState(false);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ email: "", full_name: "", role_id: 4 });
+  const [createForm, setCreateForm] = useState({ email: "", full_name: "", role_id: 4, birth_date: "", phone: "", rut: "" });
   const [creating, setCreating] = useState(false);
   const [resultModalOpen, setResultModalOpen] = useState(false);
   const [createdUser, setCreatedUser] = useState<{ email: string; full_name: string } | null>(null);
@@ -160,6 +175,7 @@ export default function AdminUsuariosPage() {
         "Recepción": 0,
         "Alumno": 0,
         "Carga (Niño)": 0,
+        "Carga (Juvenil)": 0,
         "Carga (Adulto)": 0,
       };
 
@@ -176,7 +192,7 @@ export default function AdminUsuariosPage() {
         if (tieneMembresia && tieneInscripcion) totalActivosAmbos++;
 
         const rolTipo = u._isDependent
-          ? `Carga (${u._category === "nino" ? "Niño" : "Adulto"})`
+          ? `Carga (${u._category === "nino" ? "Niño" : u._category === "juvenil" ? "Juvenil" : "Adulto"})`
           : ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`;
 
         if (rolCounts[rolTipo] !== undefined) rolCounts[rolTipo]++;
@@ -245,6 +261,7 @@ export default function AdminUsuariosPage() {
               ["Personal Recepción", rolCounts["Recepción"] || 0],
               ["Alumnos Titulares", rolCounts["Alumno"] || 0],
               ["Cargas (Niños)", rolCounts["Carga (Niño)"] || 0],
+              ["Cargas (Juveniles)", rolCounts["Carga (Juvenil)"] || 0],
               ["Cargas (Adultos)", rolCounts["Carga (Adulto)"] || 0],
             ],
           },
@@ -327,7 +344,7 @@ export default function AdminUsuariosPage() {
           _tutorName: p.full_name,
           _tutorId: p.id,
           _birthDate: d.birth_date,
-          _category: d.category,
+          _category: computeCategoryFromBirth(d.birth_date),
           _address: d.address || null,
           _weight: d.weight ?? null,
           _height: d.height ?? null,
@@ -385,7 +402,7 @@ export default function AdminUsuariosPage() {
       setTempPassword(data.tempPassword);
       setCreateModalOpen(false);
       setResultModalOpen(true);
-      setCreateForm({ email: "", full_name: "", role_id: 4 });
+      setCreateForm({ email: "", full_name: "", role_id: 4, birth_date: "", phone: "", rut: "" });
       await load();
     } catch (e) {
       setToast({ msg: getSupabaseErrorMessage(e, "crear usuario"), type: "error" });
@@ -502,7 +519,7 @@ export default function AdminUsuariosPage() {
             </div>
           )},
           { key: "role_id", label: "Rol / Tipo", render: (u) => {
-            if (u._isDependent) return <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">{u._category === "nino" ? "Niño" : "Adulto"}</span>;
+            if (u._isDependent) return <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">{categoryLabel(u._category || "nino")}</span>;
             return ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`;
           }},
           { key: "phone", label: "Teléfono", render: (u) => u._isDependent ? "—" : (u.phone || "—") },
@@ -576,6 +593,37 @@ export default function AdminUsuariosPage() {
                 <option key={r.id} value={r.id}>{r.name.charAt(0).toUpperCase() + r.name.slice(1)}</option>
               ))}
             </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Fecha de Nacimiento (opcional)</label>
+              <input
+                type="date"
+                value={createForm.birth_date}
+                onChange={(e) => setCreateForm({ ...createForm, birth_date: e.target.value })}
+                className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50"
+              />
+            </div>
+            <div>
+              <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Teléfono (opcional)</label>
+              <input
+                type="tel"
+                value={createForm.phone}
+                onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                placeholder="+569..."
+                className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface/30 focus:outline-none focus:border-primary/50"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">RUT (opcional)</label>
+            <input
+              type="text"
+              value={createForm.rut}
+              onChange={(e) => setCreateForm({ ...createForm, rut: e.target.value })}
+              placeholder="12.345.678-9"
+              className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface/30 focus:outline-none focus:border-primary/50"
+            />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-on-surface/5">
             <button
