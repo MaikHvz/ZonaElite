@@ -55,6 +55,12 @@ function categoryLabel(cat: string): string {
   return cat === "nino" ? "Niño" : cat === "juvenil" ? "Juvenil" : "Adulto";
 }
 
+function categoryBadgeClass(cat: string): string {
+  if (cat === "nino") return "bg-blue-500/10 text-blue-400 border-blue-500/20";
+  if (cat === "juvenil") return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+  return "bg-green-500/10 text-green-400 border-green-500/20";
+}
+
 export default function AdminUsuariosPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -519,8 +525,16 @@ export default function AdminUsuariosPage() {
             </div>
           )},
           { key: "role_id", label: "Rol / Tipo", render: (u) => {
-            if (u._isDependent) return <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">{categoryLabel(u._category || "nino")}</span>;
+            if (u._isDependent) return <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">Carga</span>;
             return ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`;
+          }},
+          { key: "_category", label: "Categoría", render: (u) => {
+            const cat = u._isDependent ? (u._category || "adulto") : computeCategoryFromBirth(u.birth_date);
+            return (
+              <span className={`inline-block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${categoryBadgeClass(cat)}`}>
+                {categoryLabel(cat)}
+              </span>
+            );
           }},
           { key: "phone", label: "Teléfono", render: (u) => u._isDependent ? "—" : (u.phone || "—") },
           { key: "rut", label: "RUT", render: (u) => u.rut || "—" },

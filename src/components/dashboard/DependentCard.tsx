@@ -95,6 +95,14 @@ export default function DependentCard({
           >
             {dependent.category === "nino" ? "Niño" : dependent.category === "juvenil" ? "Juvenil" : "Adulto"}
           </span>
+          <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant mt-1">
+            Puede inscribirse en clases de categoría{" "}
+            {dependent.category === "nino"
+              ? "niños"
+              : dependent.category === "juvenil"
+              ? "juveniles y niños"
+              : "adultos, juveniles y niños"}
+          </p>
         </div>
       </div>
 
