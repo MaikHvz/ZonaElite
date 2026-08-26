@@ -4,6 +4,12 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getChileToday } from "@/lib/dates";
 
+function categoryToPlural(cat: string): string {
+  if (cat === "nino") return "ninos";
+  if (cat === "juvenil") return "juveniles";
+  return "adultos";
+}
+
 interface Schedule {
   id: string;
   discipline_id: string;
@@ -182,7 +188,7 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
         }
       }
 
-      if (!schedule.category.includes(planCategory)) {
+      if (!schedule.category.includes(categoryToPlural(planCategory))) {
         eligible = false;
         ineligibleReason = "Categoría no compatible con esta clase";
       } else if (!hasActiveEnrollment) {
@@ -286,7 +292,7 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
           }
         }
 
-        if (!schedule.category.includes(planCategory)) {
+        if (!schedule.category.includes(categoryToPlural(planCategory))) {
           eligible = false;
           ineligibleReason = "Categoría no compatible con esta clase";
         } else if (!hasActiveEnrollment) {
