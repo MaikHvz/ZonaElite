@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { STORIES, DEFAULT_STORY_ID, type DisciplineStory } from "./stories";
 
-const STORY_ORDER: Record<string, number> = { kenpo: 0, kickboxing: 1, mma: 2 };
+const STORY_ORDER: Record<string, number> = { kenpo: 0, kickboxing: 1, sport_kempo: 2 };
 
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined") return false;

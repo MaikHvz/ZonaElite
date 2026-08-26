@@ -34,24 +34,24 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_SITE_URL || "https://zonaelite.cl"
   ),
   title: {
-    default: "ZONAELITE | Academia de Kenpo, Kickboxing, MMA en La Serena",
+    default: "ZONAELITE | Academia de Kenpo, Kickboxing, Sport Kempo en La Serena",
     template: "%s | ZONAELITE",
   },
   description:
-    "Academia de artes marciales en La Serena: Kenpo, Kickboxing, MMA y Entrenamiento Funcional. Defensa personal, disciplina y excelencia deportiva. Primera clase de prueba gratuita.",
+    "Academia de artes marciales en La Serena: Kenpo, Kickboxing, Sport Kempo y Entrenamiento Funcional. Defensa personal, disciplina y excelencia deportiva. Primera clase de prueba gratuita.",
   keywords: [
     "artes marciales La Serena",
     "kenpo La Serena",
     "kickboxing La Serena",
-    "MMA La Serena",
+    "Sport Kempo La Serena",
     "defensa personal La Serena",
     "academia de artes marciales",
     "entrenamiento funcional La Serena",
   ],
   openGraph: {
-    title: "ZONAELITE | Academia de Kenpo, Kickboxing, MMA en La Serena",
+    title: "ZONAELITE | Academia de Kenpo, Kickboxing, Sport Kempo en La Serena",
     description:
-      "Academia de artes marciales en La Serena: Kenpo, Kickboxing, MMA y Entrenamiento Funcional. Defensa personal, disciplina y excelencia deportiva.",
+      "Academia de artes marciales en La Serena: Kenpo, Kickboxing, Sport Kempo y Entrenamiento Funcional. Defensa personal, disciplina y excelencia deportiva.",
     type: "website",
     locale: "es_CL",
   },

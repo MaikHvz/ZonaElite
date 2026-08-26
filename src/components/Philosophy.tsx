@@ -77,19 +77,19 @@ export default function Philosophy() {
               </p>
             </div>
 
-            {/* MMA */}
+            {/* Sport Kempo */}
             <div className="bg-surface-container rounded-2xl p-6 border border-on-surface/5 hover:border-primary/30 transition-colors duration-300">
               <div className="w-10 h-10 rounded-full glass-panel flex items-center justify-center mb-4">
                 <span className="material-symbols-outlined text-primary text-xl">
-                  hardware
+                  shield
                 </span>
               </div>
               <h4 className="font-[family-name:var(--font-headline-md)] text-[20px] leading-[24px] text-on-surface uppercase mb-3">
-                MMA
+                Sport Kempo
               </h4>
               <p className="font-[family-name:var(--font-body-md)] text-[16px] leading-[24px] text-on-surface-variant">
-                La evolución total. Aprende a transicionar entre el golpeo y la
-                lucha, adaptándote a cualquier situación.
+                La vertiente competitiva y reglamentada del Kenpo. Alto
+                rendimiento internacional con reglas justas y ética deportiva.
               </p>
             </div>
           </div>

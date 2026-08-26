@@ -63,23 +63,22 @@ El Funcional complementa perfectamente cualquier arte marcial que practiques. Lo
     color: "#ff9800",
   },
   {
-    title: "MMA",
-    icon: "hardware",
-    shortDescription: "Entrenamiento integral combinando múltiples disciplinas de combate.",
-    extendedDescription: `Las Artes Marciales Mixtas (MMA) representan la cúspide de la evolución marcial: un sistema de combate completo que integra golpeo, lucha de pie, trabajo en el suelo y todas las transiciones entre estos rangos. Es la disciplina más completa y exigente que existe.
+    title: "Sport Kempo",
+    icon: "shield",
+    shortDescription: "Competición reglamentada de alto rendimiento international.",
+    extendedDescription: `El Sport Kempo (o Kempo Deportivo) es la vertiente competitiva, reglamentada y moderna de las artes marciales del Kenpo. Nació de la necesidad de unificar bajo un mismo marco normativo a las distintas escuelas tradicionales de Kenpo/Kempo que existían a nivel mundial, permitiendo que practicantes de diversos estilos comparen sus habilidades en un entorno seguro, deportivo y estructurado.
 
-En ZonaElite, nuestro programa de MMA incluye:
-• Striking: boxeo, kickboxing, muay thai y defensa ante golpes
-• Wrestling: takedowns, clinch, control de la distancia y derribo
-• Grappling: posiciones de suelo, control, sumisiones y defensas
-• Transiciones fluidas entre rango de golpeo, clinch y suelo
-• Acondicionamiento específico para combate: intervalos y sparring técnico
-• Estrategia y mentalidad competitiva para quienes buscan la competencia amateur o profesional
+A diferencia del entrenamiento tradicional —que suele enfocarse estrictamente en la defensa personal callejera, la ejecución de formas técnicas (katas) y la filosofía marcial—, el Sport Kempo está diseñado específicamente para el alto rendimiento y la competición internacional, rigiéndose por estándares deportivos globales.
 
-El MMA no es para todos, pero es para quien no acepta límites. Cada clase es una confrontación con tus propios límites físicos y mentales. Aquí no hay zonas de confort: hay evolución constante y compañeros que te elevan en cada sesión.`,
+En ZonaElite, el Sport Kempo se distingue por:
+• Reglas Unificadas: criterios de puntuación y arbitraje estandarizados para competidores de diferentes ramas del Kenpo
+• Cumplimiento y Ética Deportiva: organizaciones internacionales como la International Kempo Federation (IKF) operan bajo estrictos códigos éticos, cumpliendo con las normativas de la Agencia Mundial Antidopaje (WADA)
+• Inclusión: categorías infantiles, juveniles, adultos, sénior y modalidades adaptadas para deportistas con limitaciones de movilidad
+
+El Sport Kempo es la disciplina para quienes buscan medirse en igualdad de condiciones, con reglas justas y el respaldo de organismos internacionales.`,
     imageUrl:
       "https://lh3.googleusercontent.com/aida-public/AB6AXuC8SJCEQv60z_WavNOCT9BVcHU35An_I7K4NccMiAjfJveloo157o1wQtVMc8_v9_YYpb1nojSqkh7QAnGGAXcUsFhQSBMPG_x67DN6523f8tGr0phlvJ5BpoyGRA0qPBquFEdOMMUjQbpI9JkFdeCIdAiM_YPIQ9GqYfJ1F9n6sOO1b8ysh6OTqNNwByra8K9_VVmCp6gll-t8b0xDzCnt5udOQ9J-go3dldFuZh0R2nKNdq-QF4VrzA",
-    alt: "Luchador de MMA en postura preparada",
+    alt: "Competidor de Sport Kempo en postura preparada",
     color: "#e91e63",
   },
 ];

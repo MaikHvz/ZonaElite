@@ -5,27 +5,27 @@ import GalleryCarousel from "@/components/GalleryCarousel";
 import HistoryExplorer from "@/components/history/HistoryExplorer";
 
 export const metadata: Metadata = {
-  title: "Quiénes Somos | Kenpo, Kickboxing y MMA en La Serena | ZONAELITE",
+    title: "Quiénes Somos | Kenpo, Kickboxing y Sport Kempo en La Serena | ZONAELITE",
   description:
-    "Descubre quiénes somos y nuestra historia: la del American Kenpo, nuestra raíz; y las del Kickboxing y el MMA. Una historia interactiva que conecta mil años de arte marcial con la academia ZONAELITE en La Serena.",
+    "Descubre quiénes somos y nuestra historia: la del American Kenpo, nuestra raíz; y las del Kickboxing y el Sport Kempo. Una historia interactiva que conecta mil años de arte marcial con la academia ZONAELITE en La Serena.",
   keywords: [
     "quienes somos ZonaElite",
     "academia de artes marciales La Serena",
     "historia del American Kenpo",
     "que es el kenpo americano",
     "historia del kickboxing",
-    "historia del MMA",
+    "historia del Sport Kempo",
     "clases de kenpo La Serena",
     "kickboxing La Serena",
-    "MMA La Serena",
+    "Sport Kempo La Serena",
     "defensa personal La Serena",
     "academia de kenpo La Serena",
     "gimnasio de artes marciales La Serena",
   ],
   openGraph: {
-    title: "Quiénes Somos | Kenpo, Kickboxing y MMA en La Serena | ZONAELITE",
+  title: "Quiénes Somos | Kenpo, Kickboxing y Sport Kempo en La Serena | ZONAELITE",
     description:
-      "Nuestra historia comienza con el American Kenpo, nuestra raíz, y continúa con el Kickboxing y el MMA. Léela como se vive: capítulo a capítulo.",
+      "Nuestra historia comienza con el American Kenpo, nuestra raíz, y continúa con el Kickboxing y el Sport Kempo. Léela como se vive: capítulo a capítulo.",
     type: "website",
     locale: "es_CL",
   },
@@ -36,7 +36,7 @@ const jsonLd = {
   "@type": "LocalBusiness",
   name: "ZONAELITE Academia",
   description:
-    "Academia de Kenpo, Kickboxing, MMA y Acondicionamiento Físico en La Serena. Defensa personal y entrenamiento de alto rendimiento.",
+    "Academia de Kenpo, Kickboxing, Sport Kempo y Acondicionamiento Físico en La Serena. Defensa personal y entrenamiento de alto rendimiento.",
   url: "https://zonaelite.cl",
   telephone: "+56-9-XXXX-XXXX",
   address: {
@@ -80,9 +80,9 @@ const jsonLd = {
         "@type": "Offer",
         itemOffered: {
           "@type": "Service",
-          name: "Clases de MMA",
+          name: "Clases de Sport Kempo",
           description:
-            "Entrenamiento integral de artes marciales mixtas en La Serena.",
+            "Entrenamiento competitivo de Sport Kempo en La Serena.",
         },
       },
       {
@@ -138,7 +138,7 @@ const faqJsonLd = {
       name: "¿Qué disciplinas se enseñan en ZONAELITE?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Enseñamos Kenpo, Kickboxing, MMA (Artes Marciales Mixtas) y Entrenamiento Funcional con nuestro sistema de Funcional Trainer.",
+        text: "Enseñamos Kenpo, Kickboxing, Sport Kempo (Kempo Deportivo) y Entrenamiento Funcional con nuestro sistema de Funcional Trainer.",
       },
     },
     {
@@ -227,7 +227,7 @@ export default function QuienesSomosPage() {
             <p className="font-[family-name:var(--font-body-md)] text-[17px] leading-[27px] text-on-surface-variant max-w-2xl mb-8">
               Somos la academia de La Serena donde la tradición marcial se
               encuentra con la ciencia del combate. Aquí vive el American Kenpo,
-              junto al Kickboxing y al MMA: tres historias que se entrelazan en
+              junto al Kickboxing y al Sport Kempo: tres historias que se entrelazan en
               una sola forma de entrenar, defenderse y vivir.
             </p>
             <div className="flex flex-wrap gap-4">
@@ -398,7 +398,7 @@ export default function QuienesSomosPage() {
                 },
                 {
                   q: "¿Qué disciplinas se enseñan?",
-                  a: "Enseñamos Kenpo, Kickboxing, MMA (Artes Marciales Mixtas) y Entrenamiento Funcional con nuestro sistema de Funcional Trainer.",
+                  a: "Enseñamos Kenpo, Kickboxing, Sport Kempo (Kempo Deportivo) y Entrenamiento Funcional con nuestro sistema de Funcional Trainer.",
                 },
                 {
                   q: "¿Por qué el Kenpo es tan importante para ustedes?",

@@ -107,7 +107,7 @@ function ReceiptDocument({ data }: { data: ReceiptData }) {
             Recibo generado el {new Date(data.issuedAt).toLocaleDateString("es-CL", { year: "numeric", month: "long", day: "numeric" })}
           </Text>
           <Text style={styles.footerText}>
-            ZONAELITE — Academia de Kenpo, Kickboxing y MMA en La Serena
+            ZONAELITE — Academia de Kenpo, Kickboxing y Sport Kempo en La Serena
           </Text>
         </View>
       </Page>

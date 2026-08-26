@@ -27,7 +27,7 @@ export default function Hero() {
           </h1>
 
           <p className="font-[family-name:var(--font-body-lg)] text-[18px] leading-[28px] md:text-xl text-on-surface-variant max-w-2xl mb-10 border-l-4 border-primary pl-4 opacity-90">
-            Entrena Kenpo, Kickboxing, MMA y Acondicionamiento Físico en un
+            Entrena Kenpo, Kickboxing, Sport Kempo y Acondicionamiento Físico en un
             ambiente diseñado para desarrollar disciplina, confianza y
             rendimiento.
           </p>
