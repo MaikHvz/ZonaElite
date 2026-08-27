@@ -359,6 +359,20 @@ export default function HorariosPage() {
                                   )}
                                 </div>
 
+                                {s.category && s.category.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mb-1.5">
+                                    {s.category.map((cat) => (
+                                      <span key={cat} className={`font-[family-name:var(--font-label-sm)] text-[9px] lg:text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                                        cat === "ninos" ? "bg-blue-100 text-blue-700" :
+                                        cat === "juveniles" ? "bg-amber-100 text-amber-700" :
+                                        "bg-green-100 text-green-700"
+                                      }`}>
+                                        {cat === "ninos" ? "Niños" : cat === "juveniles" ? "Juveniles" : "Adultos"}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
                                 {s.profiles && (
                                   <p className="font-[family-name:var(--font-label-sm)] text-[13px] lg:text-[14px] text-slate-800 font-extrabold uppercase tracking-wide line-clamp-1 mb-1">{s.profiles.full_name}</p>
                                 )}
