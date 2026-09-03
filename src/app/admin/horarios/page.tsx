@@ -76,8 +76,8 @@ export default function AdminHorariosPage() {
       supabase.from("profiles").select("id, full_name").order("full_name"),
       supabase.from("membership_plans").select("id, name, active").eq("active", true).order("name"),
       supabase.from("personalized_plans").select("id, name, active").eq("active", true).order("name"),
-    ]);
-    setSchedules((sRes.data as Schedule[]) || []);
+    const schedList = ((sRes.data as Schedule[]) || []).map((s) => ({ ...s, mode: s.mode || "normal" }));
+    setSchedules(schedList);
     setDisciplines((dRes.data as Discipline[]) || []);
     setProfessors((pRes.data as Profile[]) || []);
     setPlans((plRes.data as Plan[]) || []);
@@ -97,6 +97,7 @@ export default function AdminHorariosPage() {
   const openEdit = (s: Schedule) => {
     setEditing(s);
     const scheduleCategory = Array.isArray(s.category) ? s.category : [s.category];
+    const sMode = s.mode || "normal";
     setForm({
       discipline_id: s.discipline_id,
       professor_id: s.professor_id,
@@ -108,7 +109,7 @@ export default function AdminHorariosPage() {
       category: scheduleCategory,
       active: s.active,
       description: s.description || "",
-      mode: s.mode,
+      mode: sMode,
     });
     setSelectedPlans(
       s.mode === "personalizado"
@@ -302,8 +303,8 @@ export default function AdminHorariosPage() {
 
   const filteredSchedules = schedules.filter((s) => modeFilter === "todas" || s.mode === modeFilter);
 
-  const renderModeBadge = (m: string) =>
-    m === "personalizado" ? (
+  const renderModeBadge = (m: string | null | undefined) =>
+    (m || "normal") === "personalizado" ? (
       <span className="inline-flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
         Personalizada
       </span>
@@ -395,15 +396,46 @@ export default function AdminHorariosPage() {
       <FormModal open={modalOpen} title={editing ? "Editar Clase" : form.mode === "personalizado" ? "Nueva Clase Personalizada" : "Nueva Clase Normal"} onClose={() => setModalOpen(false)}>
         <div className="space-y-4">
           <div>
-            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Modalidad</label>
-            <div className="px-4 py-2.5 rounded-lg bg-surface-container border border-on-surface/10 text-[14px] text-on-surface">
-              {form.mode === "personalizado" ? "Personalizada" : "Normal"}
-              <span className="ml-2 text-[11px] text-on-surface-variant/60">
-                {form.mode === "personalizado"
-                  ? "Solo acepta planes personalizados y alumnos con pack"
-                  : "Clase de membresías regular (filtra por tipo de membresía)"}
-              </span>
+            <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Modalidad *</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (form.mode !== "normal") {
+                    setForm({ ...form, mode: "normal" });
+                    setSelectedPlans([]);
+                  }
+                }}
+                className={`py-2 px-3 rounded-lg text-[13px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider border transition-colors cursor-pointer text-center ${
+                  form.mode === "normal"
+                    ? "btn-primary-gradient text-white border-transparent"
+                    : "border-on-surface/10 text-on-surface-variant hover:border-primary/40 bg-surface-container"
+                }`}
+              >
+                Normal (Membresías)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (form.mode !== "personalizado") {
+                    setForm({ ...form, mode: "personalizado" });
+                    setSelectedPlans([]);
+                  }
+                }}
+                className={`py-2 px-3 rounded-lg text-[13px] font-[family-name:var(--font-headline-md)] uppercase tracking-wider border transition-colors cursor-pointer text-center ${
+                  form.mode === "personalizado"
+                    ? "bg-purple-600/30 text-purple-200 border-purple-500/50 font-bold"
+                    : "border-on-surface/10 text-on-surface-variant hover:border-purple-500/30 bg-surface-container"
+                }`}
+              >
+                Personalizada
+              </button>
             </div>
+            <p className="text-[11px] text-on-surface-variant/60 mt-1.5">
+              {form.mode === "personalizado"
+                ? "Solo acepta planes personalizados y alumnos con pack."
+                : "Clase grupal regular accesible para alumnos con membresía."}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>

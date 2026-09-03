@@ -102,14 +102,15 @@ export default function HorariosPage() {
   };
 
   const loadSchedule = useCallback(async () => {
-    const { data: schedules } = await supabase
+    const { data: rawData } = await supabase
       .from("schedules")
       .select("*, disciplines(name, color_hex, icon), profiles(full_name), class_plans(plan_id), personalized_schedule_plans(plan_id)")
       .eq("active", true)
       .order("start_time");
 
-    if (!schedules) { setLoading(false); return; }
+    if (!rawData) { setLoading(false); return; }
 
+    const schedules = (rawData as Schedule[]).map((s) => ({ ...s, mode: s.mode || "normal" }));
     const modeSchedules = (schedules as Schedule[]).filter((s) => s.mode === modeFilter);
 
     const todayObj = new Date();
@@ -176,6 +177,7 @@ export default function HorariosPage() {
 
   const handleModeChange = (mode: string) => {
     if (mode === modeFilter) return;
+    setLoading(true);
     setActiveFilter("all");
     setModeFilter(mode);
   };
