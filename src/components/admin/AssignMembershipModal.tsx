@@ -60,16 +60,50 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
     setSearching(true);
     const supabase = createClient();
 
-    const { data: profiles } = await supabase.from("profiles").select("id, full_name, email").ilike("full_name", `%${q}%`).limit(10);
+    // 1. Buscar titulares por nombre o email
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .or(`full_name.ilike.%${q}%,email.ilike.%${q}%`)
+      .limit(10);
     const foundProfiles = (profiles as Profile[]) || [];
 
-    if (foundProfiles.length === 0) { setResults([]); setSearching(false); return; }
+    // 2. Buscar cargas (dependents) por nombre
+    const { data: matchedDeps } = await supabase
+      .from("dependents")
+      .select("id, full_name, tutor_id, category")
+      .ilike("full_name", `%${q}%`)
+      .limit(10);
+    const foundDeps = (matchedDeps as Dependent[]) || [];
 
-    const tutorIds = foundProfiles.map((p) => p.id);
-    const { data: deps } = await supabase.from("dependents").select("id, full_name, tutor_id, category").in("tutor_id", tutorIds);
+    // Obtener tutores de las cargas encontradas que no estén ya en foundProfiles
+    const existingProfileIds = new Set(foundProfiles.map((p) => p.id));
+    const missingTutorIds = Array.from(
+      new Set(foundDeps.map((d) => d.tutor_id).filter((tId) => tId && !existingProfileIds.has(tId)))
+    );
+
+    let tutorProfiles: Profile[] = [];
+    if (missingTutorIds.length > 0) {
+      const { data: tutors } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", missingTutorIds);
+      tutorProfiles = (tutors as Profile[]) || [];
+    }
+
+    const allProfiles = [...foundProfiles, ...tutorProfiles];
+
+    if (allProfiles.length === 0) { setResults([]); setSearching(false); return; }
+
+    // Traer todas las cargas asociadas a todos los perfiles encontrados
+    const allProfileIds = allProfiles.map((p) => p.id);
+    const { data: deps } = await supabase
+      .from("dependents")
+      .select("id, full_name, tutor_id, category")
+      .in("tutor_id", allProfileIds);
     const allDeps = (deps as Dependent[]) || [];
 
-    const grouped: GroupedResult[] = foundProfiles.map((p) => ({
+    const grouped: GroupedResult[] = allProfiles.map((p) => ({
       profile: p,
       dependents: allDeps.filter((d) => d.tutor_id === p.id),
     }));
@@ -83,9 +117,8 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
     return () => clearTimeout(t);
   }, [searchUsers]);
 
-  const selectProfile = async (p: Profile) => {
+  const selectProfileAndBeneficiary = async (p: Profile, targetDependentId: string | null = null) => {
     setSelectedProfile(p);
-    setForm({ ...form, search: p.full_name, beneficiaryId: "", planId: "", amount: 0 });
     const supabase = createClient();
     const depRes = await supabase.from("dependents").select("id, full_name, tutor_id, category").eq("tutor_id", p.id);
     const deps = (depRes.data as Dependent[]) || [];
@@ -106,6 +139,36 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
     }
 
     setBeneficiaries(benList);
+
+    let chosenBeneficiaryId = "";
+    if (targetDependentId) {
+      const b = benList.find((ben) => ben.dependent_id === targetDependentId);
+      chosenBeneficiaryId = b?.id || "";
+      const matchedDep = deps.find((d) => d.id === targetDependentId);
+      setForm((prev) => ({
+        ...prev,
+        search: matchedDep ? `${matchedDep.full_name} (Carga de ${p.full_name})` : p.full_name,
+        beneficiaryId: chosenBeneficiaryId,
+        planId: "",
+        amount: 0,
+      }));
+    } else {
+      const b = benList.find((ben) => ben.profile_id === p.id);
+      chosenBeneficiaryId = b?.id || "";
+      setForm((prev) => ({
+        ...prev,
+        search: p.full_name,
+        beneficiaryId: chosenBeneficiaryId,
+        planId: "",
+        amount: 0,
+      }));
+    }
+
+    if (chosenBeneficiaryId) {
+      checkExistingMembership(chosenBeneficiaryId);
+    } else {
+      setExistingMembership(null);
+    }
   };
 
   const getBeneficiaryId = (profileId: string, dependentId: string | null): string => {
@@ -236,7 +299,16 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
               className="w-full bg-surface-container border border-on-surface/10 rounded-lg pl-10 pr-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 disabled:opacity-50"
             />
             {selectedProfile && (
-              <button onClick={() => { setSelectedProfile(null); setForm({ ...form, search: "", beneficiaryId: "", planId: "", amount: 0 }); setDependents([]); setBeneficiaries([]); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface cursor-pointer">
+              <button
+                onClick={() => {
+                  setSelectedProfile(null);
+                  setForm({ ...form, search: "", beneficiaryId: "", planId: "", amount: 0 });
+                  setDependents([]);
+                  setBeneficiaries([]);
+                  setExistingMembership(null);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface cursor-pointer"
+              >
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             )}
@@ -245,7 +317,7 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
             <div className="mt-1 bg-surface-container border border-on-surface/10 rounded-lg max-h-60 overflow-y-auto">
               {results.map((group) => (
                 <div key={group.profile.id} className="border-b border-on-surface/5 last:border-0">
-                  <button onClick={() => selectProfile(group.profile)} className="w-full text-left px-4 py-2.5 hover:bg-on-surface/5 transition-colors cursor-pointer">
+                  <button onClick={() => selectProfileAndBeneficiary(group.profile, null)} className="w-full text-left px-4 py-2.5 hover:bg-on-surface/5 transition-colors cursor-pointer">
                     <div className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-primary text-[16px]">person</span>
                       <div>
@@ -257,11 +329,11 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
                   {group.dependents.length > 0 && (
                     <div className="bg-surface-container/50 border-t border-on-surface/5">
                       {group.dependents.map((d) => (
-                        <button key={d.id} onClick={() => selectProfile(group.profile)} className="w-full text-left pl-10 pr-4 py-2 hover:bg-on-surface/5 transition-colors cursor-pointer">
+                        <button key={d.id} onClick={() => selectProfileAndBeneficiary(group.profile, d.id)} className="w-full text-left pl-10 pr-4 py-2 hover:bg-on-surface/5 transition-colors cursor-pointer">
                           <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-on-surface-variant text-[14px]">child_care</span>
                             <div>
-                              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{d.full_name}</p>
+                              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface font-medium">{d.full_name}</p>
                               <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant">Carga de {group.profile.full_name}</p>
                             </div>
                           </div>
