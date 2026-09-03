@@ -7,6 +7,7 @@ import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
 import AssignMembershipModal from "@/components/admin/AssignMembershipModal";
+import AssignPersonalizedModal from "@/components/admin/AssignPersonalizedModal";
 import MembershipReceipt from "@/components/admin/MembershipReceipt";
 import type { ReceiptData } from "@/components/admin/MembershipReceipt";
 import Toast from "@/components/admin/Toast";
@@ -37,6 +38,7 @@ export default function AdminMembresiasPage() {
   const [deleting, setDeleting] = useState(false);
   const [newBenefit, setNewBenefit] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
+  const [assignPackOpen, setAssignPackOpen] = useState(false);
   const [editMembership, setEditMembership] = useState<Membership | null>(null);
   const [editForm, setEditForm] = useState({ endDate: "", status: "" });
   const [editSaving, setEditSaving] = useState(false);
@@ -61,14 +63,23 @@ export default function AdminMembresiasPage() {
   const [consuming, setConsuming] = useState(false);
   const [cancelPackTarget, setCancelPackTarget] = useState<PersonalizedPack | null>(null);
   const [cancellingPack, setCancellingPack] = useState(false);
+  const [editPack, setEditPack] = useState<PersonalizedPack | null>(null);
+  const [editPackForm, setEditPackForm] = useState({
+    startDate: "",
+    endDate: "",
+    totalClasses: 1,
+    usedClasses: 0,
+    status: "activa",
+  });
+  const [editPackSaving, setEditPackSaving] = useState(false);
 
   const load = async () => {
     const supabase = createClient();
     const [pRes, mRes, ppRes, pkRes] = await Promise.all([
       supabase.from("membership_plans").select("*").order("price"),
-      supabase.from("memberships").select("*, membership_plans(name), profiles:purchased_by(full_name), beneficiaries!inner(dependents(full_name, profiles!tutor_id(full_name)), profiles(full_name))").order("created_at", { ascending: false }),
+      supabase.from("memberships").select("*, membership_plans(name), profiles:purchased_by(full_name), beneficiaries(dependents(full_name, profiles!tutor_id(full_name)), profiles(full_name))").order("created_at", { ascending: false }),
       supabase.from("personalized_plans").select("*").order("price"),
-      supabase.from("personalized_packs").select("*, personalized_plans(name), profiles:purchased_by(full_name), beneficiaries!inner(dependents(full_name, profiles!tutor_id(full_name)), profiles(full_name))").order("created_at", { ascending: false }),
+      supabase.from("personalized_packs").select("*, personalized_plans(name), beneficiaries(dependents(full_name, profiles!tutor_id(full_name)), profiles(full_name))").order("created_at", { ascending: false }),
     ]);
     setPlans((pRes.data as Plan[]) || []);
     setMemberships((mRes.data as Membership[]) || []);
@@ -306,6 +317,46 @@ export default function AdminMembresiasPage() {
     }
   };
 
+  const openEditPack = (p: PersonalizedPack) => {
+    setEditPack(p);
+    setEditPackForm({
+      startDate: p.start_date,
+      endDate: p.end_date,
+      totalClasses: p.total_classes,
+      usedClasses: p.used_classes,
+      status: p.status,
+    });
+  };
+
+  const handleSavePack = async () => {
+    if (!editPack) return;
+    try {
+      setEditPackSaving(true);
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("personalized_packs")
+        .update({
+          start_date: editPackForm.startDate,
+          end_date: editPackForm.endDate,
+          total_classes: editPackForm.totalClasses,
+          used_classes: editPackForm.usedClasses,
+          status: editPackForm.status,
+        })
+        .eq("id", editPack.id);
+      if (error) {
+        setToast({ msg: getSupabaseErrorMessage(error, "actualizar pack"), type: "error" });
+        return;
+      }
+      setEditPack(null);
+      await load();
+      setToast({ msg: "Pack personalizado actualizado", type: "success" });
+    } catch (e) {
+      setToast({ msg: getSupabaseErrorMessage(e, "guardar pack"), type: "error" });
+    } finally {
+      setEditPackSaving(false);
+    }
+  };
+
   const toggleTokenDetails = async (m: Membership) => {
     if (expandedToken === m.id) {
       setExpandedToken(null);
@@ -384,6 +435,12 @@ export default function AdminMembresiasPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] text-on-surface uppercase tracking-tighter">Membresías</h1>
         <div className="flex gap-3">
+          {tab === "personalizadas" && (
+            <button onClick={() => setAssignPackOpen(true)} className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] px-5 py-2.5 rounded-lg uppercase tracking-wider hover:opacity-90 transition-opacity cursor-pointer">
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Asignar Plan Personalizado
+            </button>
+          )}
           {tab === "membresias" && (
             <button onClick={() => setAssignOpen(true)} className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[13px] px-5 py-2.5 rounded-lg uppercase tracking-wider hover:opacity-90 transition-opacity cursor-pointer">
               <span className="material-symbols-outlined text-[18px]">add</span>
@@ -524,30 +581,26 @@ export default function AdminMembresiasPage() {
         </div>
         <DataTable
           columns={[
-            { key: "beneficiary_id", label: "Beneficiario", render: (p) => getPackBeneficiaryName(p) },
+            { key: "beneficiary_id", label: "Beneficiario", render: (p) => (
+              <div>
+                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{getPackBeneficiaryName(p)}</p>
+              </div>
+            )},
             { key: "plan_id", label: "Plan", render: (p) => p.personalized_plans?.name || "—" },
             { key: "start_date", label: "Inicio", render: (p) => new Date(p.start_date).toLocaleDateString("es-CL") },
             { key: "end_date", label: "Fin", render: (p) => new Date(p.end_date).toLocaleDateString("es-CL") },
             { key: "used_classes", label: "Clases", render: (p) => `${p.used_classes} / ${p.total_classes}` },
             { key: "status", label: "Estado", render: (p) => <StatusBadge status={effectivePackStatus(p)} /> },
-            { key: "actions", label: "Acciones", render: (p) => (
-              <div className="flex items-center justify-end gap-2">
+            { key: "consume", label: "Consumir", render: (p) => (
+              <div className="flex items-center gap-2">
                 {effectivePackStatus(p) === "activa" && (
                   <button
                     onClick={() => setConsumeTarget(p)}
-                    title="Consumir clase"
-                    className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                    title="Consumir 1 clase"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 transition-colors text-[11px] font-[family-name:var(--font-label-sm)] uppercase tracking-wider cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-[18px]">fact_check</span>
-                  </button>
-                )}
-                {(effectivePackStatus(p) === "activa" || effectivePackStatus(p) === "agotada" || effectivePackStatus(p) === "vencida") && (
-                  <button
-                    onClick={() => setCancelPackTarget(p)}
-                    title="Cancelar pack"
-                    className="text-on-surface-variant hover:text-red-400 transition-colors cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">cancel</span>
+                    <span className="material-symbols-outlined text-[14px]">fact_check</span>
+                    Consumir
                   </button>
                 )}
               </div>
@@ -555,7 +608,9 @@ export default function AdminMembresiasPage() {
           ]}
           data={filteredPacks}
           loading={loading}
-          emptyMessage="No hay packs de clases personalizadas"
+          onEdit={openEditPack}
+          onDelete={setCancelPackTarget}
+          emptyMessage={packFilter === "todas" ? "No hay packs de clases personalizadas" : `No hay packs ${packFilter}`}
         />
         </>
       ) : (

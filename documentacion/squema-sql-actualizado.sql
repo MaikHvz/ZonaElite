@@ -1,4 +1,4 @@
-﻿-- =====================================================================
+-- =====================================================================
 -- SCHEMA COMPLETO DE LA BASE DE DATOS: ZonaElite
 -- Proyecto: sfkkfcticgqdqvzthimz
 -- Generado automaticamente desde PostgREST OpenAPI + contexto SQL
@@ -657,6 +657,7 @@ ALTER TABLE public.blog_posts ADD CONSTRAINT blog_posts_author_id_fkey FOREIGN K
 ALTER TABLE public.notifications ADD CONSTRAINT notifications_sent_by_fkey FOREIGN KEY (sent_by) REFERENCES public.profiles(id);
 ALTER TABLE public.audit_logs ADD CONSTRAINT audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id);
 ALTER TABLE public.consent_forms ADD CONSTRAINT consent_forms_beneficiary_id_fkey FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id);
+ALTER TABLE public.personalized_packs ADD CONSTRAINT personalized_packs_purchased_by_fkey FOREIGN KEY (purchased_by) REFERENCES public.profiles(id);
 ALTER TABLE public.body_metrics ADD CONSTRAINT body_metrics_beneficiary_id_fkey FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id);
 ALTER TABLE public.medical_records ADD CONSTRAINT medical_records_beneficiary_id_fkey FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id);
 
