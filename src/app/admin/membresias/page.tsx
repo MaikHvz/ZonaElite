@@ -405,10 +405,15 @@ export default function AdminMembresiasPage() {
         </div>
       </div>
 
-      <div className="flex gap-4 mb-6">
+      <div className="flex flex-wrap gap-3 mb-6">
         {(["planes", "membresias", "personalizadas"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`font-[family-name:var(--font-headline-md)] text-[13px] uppercase tracking-wider px-4 py-2 rounded-lg transition-colors cursor-pointer ${tab === t ? "btn-primary-gradient text-white" : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"}`}>
-            {t === "planes" ? "Planes" : t === "membresias" ? "Membresías" : "Personalizadas"}
+          <button key={t} onClick={() => setTab(t)} className={`font-[family-name:var(--font-headline-md)] text-[13px] uppercase tracking-wider px-4 py-2.5 rounded-lg transition-colors cursor-pointer flex items-center gap-2 ${tab === t ? "btn-primary-gradient text-white" : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"}`}>
+            <span>{t === "planes" ? "Planes" : t === "membresias" ? "Membresías" : "Personalizadas"}</span>
+            {t !== "planes" && (
+              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${tab === t ? "bg-white/20 text-white" : "bg-on-surface/10 text-on-surface-variant"}`}>
+                {t === "membresias" ? memberships.length : personalizedPacks.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -958,11 +963,61 @@ export default function AdminMembresiasPage() {
       {/* Cancel pack confirmation */}
       <DeleteConfirm open={!!cancelPackTarget} title="Cancelar Pack" message={`¿Estás seguro de cancelar el pack de "${cancelPackTarget ? cancelPackTarget.personalized_plans?.name : ""}" para ${cancelPackTarget ? getPackBeneficiaryName(cancelPackTarget) : ""}? Esta acción no se puede deshacer.`} onConfirm={handleCancelPack} onCancel={() => setCancelPackTarget(null)} loading={cancellingPack} confirmLabel="Cancelar Pack" />
 
+      {/* Edit personalized pack modal */}
+      <FormModal open={!!editPack} title="Editar Pack Personalizado" onClose={() => setEditPack(null)}>
+        <div className="space-y-4">
+          {editPack && (
+            <>
+              <div className="bg-surface-container rounded-lg p-4 border border-on-surface/5">
+                <p className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1">Beneficiario</p>
+                <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">{getPackBeneficiaryName(editPack)}</p>
+                <p className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1 mt-2">Plan</p>
+                <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">{editPack.personalized_plans?.name || "Plan Personalizado"}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Fecha de inicio</label>
+                  <input type="date" value={editPackForm.startDate} onChange={(e) => setEditPackForm({ ...editPackForm, startDate: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+                </div>
+                <div>
+                  <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Fecha de vencimiento *</label>
+                  <input type="date" value={editPackForm.endDate} onChange={(e) => setEditPackForm({ ...editPackForm, endDate: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Clases totales</label>
+                  <input inputMode="numeric" value={editPackForm.totalClasses || ""} onChange={(e) => setEditPackForm({ ...editPackForm, totalClasses: Number(e.target.value.replace(/[^0-9]/g, "")) || 1 })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+                </div>
+                <div>
+                  <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Clases consumidas</label>
+                  <input inputMode="numeric" value={editPackForm.usedClasses || 0} onChange={(e) => setEditPackForm({ ...editPackForm, usedClasses: Number(e.target.value.replace(/[^0-9]/g, "")) || 0 })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50" />
+                </div>
+              </div>
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Estado</label>
+                <select value={editPackForm.status} onChange={(e) => setEditPackForm({ ...editPackForm, status: e.target.value })} className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 cursor-pointer">
+                  <option value="activa">Activa</option>
+                  <option value="agotada">Agotada</option>
+                  <option value="vencida">Vencida</option>
+                  <option value="cancelada">Cancelada</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t border-on-surface/5">
+                <button onClick={() => setEditPack(null)} className="px-4 py-2.5 rounded-lg border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[14px] cursor-pointer">Cancelar</button>
+                <button onClick={handleSavePack} disabled={editPackSaving} className="px-4 py-2.5 rounded-lg btn-primary-gradient text-white text-[14px] disabled:opacity-50 cursor-pointer">{editPackSaving ? "Guardando..." : "Guardar Cambios"}</button>
+              </div>
+            </>
+          )}
+        </div>
+      </FormModal>
+
       {/* Cancel confirmation */}
       <DeleteConfirm open={!!cancelTarget} title="Cancelar Membresía" message={`¿Estás seguro de cancelar la membresía de "${cancelTarget ? getBeneficiaryName(cancelTarget) : ""}"? Esta acción no se puede deshacer.`} onConfirm={handleCancelMembership} onCancel={() => setCancelTarget(null)} loading={cancelling} />
 
-      {/* Assign membership modal */}
+      {/* Assign modals */}
       <AssignMembershipModal open={assignOpen} onClose={() => setAssignOpen(false)} onSaved={load} />
+      <AssignPersonalizedModal open={assignPackOpen} onClose={() => setAssignPackOpen(false)} onSaved={load} />
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
