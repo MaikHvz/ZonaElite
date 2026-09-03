@@ -17,6 +17,7 @@ interface PersonalizedCheckoutModalProps {
   open: boolean;
   onClose: () => void;
   defaultBeneficiaryId?: string | null;
+  defaultPlanId?: string | null;
 }
 
 function formatCLP(amount: number) {
@@ -27,13 +28,14 @@ export default function PersonalizedCheckoutModal({
   open,
   onClose,
   defaultBeneficiaryId = null,
+  defaultPlanId = null,
 }: PersonalizedCheckoutModalProps) {
   const { user } = useSession();
   const overlayRef = useRef<HTMLDivElement>(null);
   const [beneficiaries, setBeneficiaries] = useState<BeneficiaryOption[]>([]);
   const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState("");
   const [plans, setPlans] = useState<PersonalizedPlanData[]>([]);
-  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [selectedPlanId, setSelectedPlanId] = useState(defaultPlanId || "");
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,10 +141,12 @@ export default function PersonalizedCheckoutModal({
   }, [open, user, defaultBeneficiaryId]);
 
   useEffect(() => {
-    if (plans.length > 0 && !selectedPlanId) {
+    if (defaultPlanId) {
+      setSelectedPlanId(defaultPlanId);
+    } else if (plans.length > 0 && !selectedPlanId) {
       setSelectedPlanId(plans[0].id);
     }
-  }, [plans, selectedPlanId]);
+  }, [open, defaultPlanId, plans, selectedPlanId]);
 
   if (!open) return null;
 

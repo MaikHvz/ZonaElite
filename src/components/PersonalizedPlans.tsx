@@ -11,6 +11,7 @@ export default function PersonalizedPlans() {
   const [plans, setPlans] = useState<PersonalizedPlanData[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
   useEffect(() => {
     getActivePersonalizedPlans().then((res) => {
@@ -33,6 +34,13 @@ export default function PersonalizedPlans() {
 
   const formatPrice = (price: number) => "$" + price.toLocaleString("es-CL");
 
+  const gridColsClass =
+    plans.length === 1
+      ? "grid-cols-1 max-w-[380px]"
+      : plans.length === 2
+      ? "grid-cols-1 md:grid-cols-2 max-w-[740px]"
+      : "grid-cols-1 md:grid-cols-3 max-w-[1020px]";
+
   return (
     <section className="py-[64px] md:py-[96px] px-5 md:px-6 max-w-[1280px] mx-auto">
       <div className="text-center mb-16">
@@ -49,7 +57,7 @@ export default function PersonalizedPlans() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-5 items-stretch max-w-[960px] mx-auto">
+      <div className={`grid ${gridColsClass} gap-6 md:gap-5 items-stretch mx-auto`}>
         {plans.map((plan) => {
           const features = Array.isArray(plan.features) ? plan.features : [];
           return (
@@ -108,7 +116,10 @@ export default function PersonalizedPlans() {
               <div className="px-7 pb-7">
                 {user ? (
                   <button
-                    onClick={() => setCheckoutOpen(true)}
+                    onClick={() => {
+                      setSelectedPlanId(plan.id);
+                      setCheckoutOpen(true);
+                    }}
                     className="w-full py-3 px-6 text-center font-[family-name:var(--font-headline-md)] text-[13px] leading-[16px] uppercase rounded-lg transition-all duration-200 cursor-pointer border border-on-surface/15 text-on-surface hover:bg-on-surface/5 hover:border-on-surface/25 hover:scale-[1.01]"
                   >
                     Comprar ahora
@@ -129,7 +140,11 @@ export default function PersonalizedPlans() {
 
       <PersonalizedCheckoutModal
         open={checkoutOpen}
-        onClose={() => setCheckoutOpen(false)}
+        onClose={() => {
+          setCheckoutOpen(false);
+          setSelectedPlanId(null);
+        }}
+        defaultPlanId={selectedPlanId}
       />
     </section>
   );
