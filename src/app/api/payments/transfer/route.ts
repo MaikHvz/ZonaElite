@@ -17,16 +17,37 @@ const ALLOWED_MIME = [
   "image/webp",
   "image/gif",
   "application/pdf",
+  "image/heic",
+  "image/heif",
+  "image/avif",
+  "image/bmp",
+  "image/jfif",
+  "image/pjpeg",
+  "image/svg+xml",
+  "image/tiff",
+  "application/x-pdf",
 ];
 const MAX_VOUCHER_BYTES = 5 * 1024 * 1024;
 
-function extFromMime(type: string): string {
+function extFromMime(type: string, name?: string): string {
+  const extFromName = (name || "").split(".").pop()?.toLowerCase();
+  if (extFromName && ["jpg", "jpeg", "png", "webp", "gif", "pdf", "heic", "heif", "avif", "bmp", "svg", "jfif"].includes(extFromName)) {
+    return extFromName === "jpeg" || extFromName === "jfif" ? "jpg" : extFromName;
+  }
   const map: Record<string, string> = {
     "image/jpeg": "jpg",
+    "image/pjpeg": "jpg",
+    "image/jfif": "jpg",
     "image/png": "png",
     "image/webp": "webp",
     "image/gif": "gif",
+    "image/heic": "heic",
+    "image/heif": "heif",
+    "image/avif": "avif",
+    "image/bmp": "bmp",
+    "image/svg+xml": "svg",
     "application/pdf": "pdf",
+    "application/x-pdf": "pdf",
   };
   return map[type] || "jpg";
 }
@@ -93,19 +114,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "La academia no tiene datos bancarios configurados" }, { status: 400 });
     }
 
-    // Voucher: obligatorio, imagen o PDF, máx 5MB
+    // Voucher: obligatorio, imagen o PDF, máx 10MB
     if (!fileBase64) {
       return NextResponse.json({ error: "Debes adjuntar el comprobante de tu transferencia" }, { status: 400 });
     }
     const dataUrlMatch = /^data:([^;]+);base64,(.*)$/.exec(fileBase64);
-    const mime = dataUrlMatch ? dataUrlMatch[1] : (fileName || "").split(".").pop() === "pdf" ? "application/pdf" : "";
-    if (!ALLOWED_MIME.includes(mime)) {
-      return NextResponse.json({ error: "Formato no válido. Usa JPG, PNG, WebP, GIF o PDF." }, { status: 400 });
+    let mime = dataUrlMatch ? dataUrlMatch[1].toLowerCase() : "";
+    const extFromName = (fileName || "").split(".").pop()?.toLowerCase() || "";
+
+    if (!mime || mime === "application/octet-stream" || mime === "binary/octet-stream") {
+      if (extFromName === "pdf") mime = "application/pdf";
+      else if (["jpg", "jpeg", "jfif", "pjpeg"].includes(extFromName)) mime = "image/jpeg";
+      else if (extFromName === "png") mime = "image/png";
+      else if (extFromName === "webp") mime = "image/webp";
+      else if (extFromName === "gif") mime = "image/gif";
+      else if (["heic", "heif"].includes(extFromName)) mime = "image/heic";
+      else if (extFromName === "avif") mime = "image/avif";
+      else if (extFromName === "bmp") mime = "image/bmp";
+      else if (extFromName === "svg") mime = "image/svg+xml";
+    }
+
+    if (!ALLOWED_MIME.includes(mime) && !mime.startsWith("image/")) {
+      return NextResponse.json({ error: "Formato no válido. Usa JPG, PNG, WebP, HEIC, PDF u otros formatos de imagen." }, { status: 400 });
     }
     const b64 = dataUrlMatch ? dataUrlMatch[2] : fileBase64.split(",").pop() || "";
     const voucherBytes = Buffer.from(b64, "base64");
     if (voucherBytes.length === 0 || voucherBytes.length > MAX_VOUCHER_BYTES) {
-      return NextResponse.json({ error: "El comprobante supera 5MB o está vacío" }, { status: 400 });
+      return NextResponse.json({ error: "El comprobante supera 10MB o está vacío" }, { status: 400 });
     }
 
     // Validar beneficiario (mismo patrón que create-order)

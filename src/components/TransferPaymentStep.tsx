@@ -17,7 +17,25 @@ interface TransferPaymentStepProps {
 }
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
+const EXTRA_ALLOWED_TYPES = [
+  "image/heic",
+  "image/heif",
+  "image/avif",
+  "image/bmp",
+  "image/jfif",
+  "image/pjpeg",
+  "image/svg+xml",
+  "image/tiff",
+  "application/x-pdf",
+];
+const ALLOWED_EXTENSIONS = [
+  "jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "avif", "bmp", "jfif", "pdf", "svg", "tif", "tiff"
+];
 const MAX_SIZE = 5 * 1024 * 1024;
+
+function isPdfFile(f: File): boolean {
+  return f.type === "application/pdf" || f.type === "application/x-pdf" || f.name.toLowerCase().endsWith(".pdf");
+}
 
 function formatCLP(amount: number) {
   return "$" + amount.toLocaleString("es-CL");
@@ -69,7 +87,10 @@ export default function TransferPaymentStep({
     setFile(f);
     setPreviewUrl(null);
     if (!f) return;
-    if (!ALLOWED_TYPES.includes(f.type)) {
+    const ext = f.name.split(".").pop()?.toLowerCase() || "";
+    const isMimeOk = ALLOWED_TYPES.includes(f.type) || EXTRA_ALLOWED_TYPES.includes(f.type) || f.type.startsWith("image/");
+    const isExtOk = ALLOWED_EXTENSIONS.includes(ext);
+    if (!isMimeOk && !isExtOk) {
       setError("Formato no válido. Usa JPG, PNG, WebP, GIF o PDF.");
       setFile(null);
       return;
@@ -79,8 +100,12 @@ export default function TransferPaymentStep({
       setFile(null);
       return;
     }
-    if (f.type !== "application/pdf") {
-      setPreviewUrl(URL.createObjectURL(f));
+    if (!isPdfFile(f) && ext !== "heic" && ext !== "heif") {
+      try {
+        setPreviewUrl(URL.createObjectURL(f));
+      } catch {
+        setPreviewUrl(null);
+      }
     }
   };
 
@@ -223,29 +248,42 @@ export default function TransferPaymentStep({
         <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">
           Comprobante de transferencia *
         </label>
-        <label className="flex flex-col items-center justify-center gap-2 border border-dashed border-on-surface/20 rounded-xl py-6 cursor-pointer hover:border-primary/40 transition-colors">
+        <label className="flex flex-col items-center justify-center gap-2 border border-dashed border-on-surface/20 rounded-xl py-6 px-4 cursor-pointer hover:border-primary/40 transition-colors">
           {previewUrl ? (
-            <img src={previewUrl} alt="Comprobante" className="max-h-40 rounded-lg object-contain" />
+            <div className="flex flex-col items-center gap-2">
+              <img src={previewUrl} alt="Comprobante" className="max-h-40 rounded-lg object-contain" />
+              <span className="font-[family-name:var(--font-label-sm)] text-[11px] text-primary underline">Cambiar archivo</span>
+            </div>
+          ) : file ? (
+            <div className="flex flex-col items-center gap-1.5 text-center">
+              <span className="material-symbols-outlined text-primary text-[36px]">
+                {isPdfFile(file) ? "picture_as_pdf" : "image"}
+              </span>
+              <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface font-semibold max-w-xs truncate">
+                {file.name}
+              </span>
+              <span className="font-[family-name:var(--font-label-sm)] text-[10px] text-on-surface-variant">
+                {(file.size / (1024 * 1024)).toFixed(2)} MB · Clic para cambiar
+              </span>
+            </div>
           ) : (
             <>
               <span className="material-symbols-outlined text-on-surface-variant text-[28px]">upload_file</span>
               <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">
-                {file ? file.name : "Subir imagen o PDF (máx 5MB)"}
+                Subir imagen o PDF (máx 10MB)
+              </span>
+              <span className="font-[family-name:var(--font-body-sm)] text-[10px] text-on-surface-variant/60">
+                JPG, PNG, WebP, HEIC, PDF, etc.
               </span>
             </>
           )}
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+            accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.bmp,.gif,.jfif"
             className="hidden"
             onChange={(e) => handleFile(e.target.files?.[0] || null)}
           />
         </label>
-        {file && file.type === "application/pdf" && (
-          <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant mt-1.5">
-            {file.name}
-          </p>
-        )}
       </div>
 
       {error && (

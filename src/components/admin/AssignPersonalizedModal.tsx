@@ -269,9 +269,9 @@ export default function AssignPersonalizedModal({ open, onClose, onSaved }: Prop
     if (receiptFile) {
       const ext = receiptFile.name.split(".").pop();
       const path = `receipts/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("receipts").upload(path, receiptFile);
+      const { error: uploadError } = await supabase.storage.from("public").upload(path, receiptFile, { upsert: true });
       if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage.from("receipts").getPublicUrl(path);
+        const { data: { publicUrl } } = supabase.storage.from("public").getPublicUrl(path);
         receiptUrl = publicUrl;
       }
     }
@@ -534,7 +534,7 @@ export default function AssignPersonalizedModal({ open, onClose, onSaved }: Prop
           </label>
           <input
             type="file"
-            accept="image/*,.pdf"
+            accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.bmp,.gif,.jfif"
             onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
             className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2 text-[13px] text-on-surface-variant file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-[12px] file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
           />

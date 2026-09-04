@@ -76,6 +76,7 @@ export default function AdminHorariosPage() {
       supabase.from("profiles").select("id, full_name").order("full_name"),
       supabase.from("membership_plans").select("id, name, active").eq("active", true).order("name"),
       supabase.from("personalized_plans").select("id, name, active").eq("active", true).order("name"),
+    ]);
     const schedList = ((sRes.data as Schedule[]) || []).map((s) => ({ ...s, mode: s.mode || "normal" }));
     setSchedules(schedList);
     setDisciplines((dRes.data as Discipline[]) || []);

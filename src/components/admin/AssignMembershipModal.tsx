@@ -432,9 +432,9 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
           <label className="flex items-center gap-2 p-3 bg-surface-container border border-on-surface/10 rounded-lg cursor-pointer hover:border-on-surface/20 transition-colors">
             <span className="material-symbols-outlined text-on-surface-variant text-[20px]">upload_file</span>
             <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
-              {receiptFile ? receiptFile.name : "Subir imagen del comprobante..."}
+              {receiptFile ? receiptFile.name : "Subir imagen o PDF del comprobante..."}
             </span>
-            <input type="file" accept="image/*" onChange={(e) => setReceiptFile(e.target.files?.[0] || null)} className="hidden" />
+            <input type="file" accept="image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.avif,.bmp,.gif,.jfif" onChange={(e) => setReceiptFile(e.target.files?.[0] || null)} className="hidden" />
           </label>
         </div>
 
