@@ -32,9 +32,51 @@ const ALLOWED_EXTENSIONS = [
   "jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "avif", "bmp", "jfif", "pdf", "svg", "tif", "tiff"
 ];
 const MAX_SIZE = 5 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 1600;
+const IMAGE_QUALITY = 0.8;
 
 function isPdfFile(f: File): boolean {
   return f.type === "application/pdf" || f.type === "application/x-pdf" || f.name.toLowerCase().endsWith(".pdf");
+}
+
+async function compressImage(file: File): Promise<File> {
+  if (isPdfFile(file)) return file;
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("No se pudo decodificar la imagen"));
+      img.src = url;
+    });
+    let { naturalWidth: w, naturalHeight: h } = img;
+    if (!w || !h) return file;
+    if (Math.max(w, h) > MAX_IMAGE_DIMENSION) {
+      const ratio = MAX_IMAGE_DIMENSION / Math.max(w, h);
+      w = Math.round(w * ratio);
+      h = Math.round(h * ratio);
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, w, h);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/webp", IMAGE_QUALITY)
+    );
+    if (blob && blob.size > 0 && blob.size < file.size) {
+      const base = file.name.replace(/\.[^.]+$/, "") || "comprobante";
+      return new File([blob], `${base}.webp`, { type: "image/webp" });
+    }
+    return file;
+  } catch {
+    return file;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 function formatCLP(amount: number) {
@@ -129,7 +171,8 @@ export default function TransferPaymentStep({
     setSubmitting(true);
     setError(null);
     try {
-      const fileBase64 = await fileToBase64(file);
+      const fileToSend = await compressImage(file);
+      const fileBase64 = await fileToBase64(fileToSend);
       const res = await fetch("/api/payments/transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -140,22 +183,29 @@ export default function TransferPaymentStep({
           includeEnrollment,
           enrollmentPlanId,
           rut: rut.trim() || undefined,
-          fileName: file.name,
+          fileName: fileToSend.name,
           fileBase64,
         }),
       });
 
-      const data = await res.json();
+      let data: { error?: string; reference?: string } | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
 
       if (!res.ok) {
-        setError(data.error || "Error al enviar la solicitud");
+        setError(data?.error || `Error al enviar la solicitud (${res.status}). Intenta de nuevo.`);
         return;
       }
 
-      setDone({ reference: data.reference || "" });
+      setDone({ reference: data?.reference || "" });
       onSuccess?.();
     } catch {
-      setError("Error de conexión. Intenta de nuevo.");
+      setError(
+        "Sin respuesta del servidor. Tu solicitud pudo quedar registrada: revisa el estado en 'Mis solicitudes' antes de reintentar."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -270,7 +320,7 @@ export default function TransferPaymentStep({
             <>
               <span className="material-symbols-outlined text-on-surface-variant text-[28px]">upload_file</span>
               <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">
-                Subir imagen o PDF (máx 10MB)
+                Subir imagen o PDF (máx 5MB)
               </span>
               <span className="font-[family-name:var(--font-body-sm)] text-[10px] text-on-surface-variant/60">
                 JPG, PNG, WebP, HEIC, PDF, etc.

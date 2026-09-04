@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import crypto from "crypto";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
     const b64 = dataUrlMatch ? dataUrlMatch[2] : fileBase64.split(",").pop() || "";
     const voucherBytes = Buffer.from(b64, "base64");
     if (voucherBytes.length === 0 || voucherBytes.length > MAX_VOUCHER_BYTES) {
-      return NextResponse.json({ error: "El comprobante supera 10MB o está vacío" }, { status: 400 });
+      return NextResponse.json({ error: "El comprobante supera 5MB o está vacío" }, { status: 400 });
     }
 
     // Validar beneficiario (mismo patrón que create-order)
@@ -283,7 +283,50 @@ export async function POST(request: Request) {
         .eq("id", user.id);
     }
 
-    // Notificación in-app a staff
+    // Responder primero al usuario: el request en background (notificación +
+    // correos SMTP) puede tardar varios segundos y, en móviles, agotar
+    // maxDuration tras dejar la solicitud registrada — mostrando un falso
+    // "Error de conexión" al cliente aunque la solicitud ya esté en el admin.
+    after(() =>
+      notifyAdminsInBackground({
+        paymentId: payment.id,
+        userId: payment.user_id,
+        reference: payment.commerce_order as string,
+        concept: payment.concept as string,
+        amount: Number(payment.amount) || 0,
+        receiptUrl,
+        rut: rut?.trim() || null,
+        userEmail: user.email || "Usuario",
+      })
+    );
+
+    return NextResponse.json({ ok: true, paymentId: payment.id, reference: payment.commerce_order });
+  } catch (error) {
+    console.error(ROUTE_LOG, "Unexpected error:", error);
+    return NextResponse.json(
+      { error: "Error al enviar la solicitud. Intenta de nuevo." },
+      { status: 500 }
+    );
+  }
+}
+
+interface AdminNotifyParams {
+  paymentId: string;
+  userId: string;
+  reference: string;
+  concept: string;
+  amount: number;
+  receiptUrl: string | null;
+  rut: string | null;
+  userEmail: string;
+}
+
+async function notifyAdminsInBackground(params: AdminNotifyParams) {
+  const { paymentId, userId, reference, concept, amount, receiptUrl, rut, userEmail } = params;
+  const admin = getAdminClient();
+
+  // Notificación in-app a staff
+  try {
     const { data: adminProfile } = await admin
       .from("profiles")
       .select("id")
@@ -296,10 +339,10 @@ export async function POST(request: Request) {
         type: "sistema",
         subject: "Nueva solicitud de pago por transferencia",
         content: JSON.stringify({
-          payment_id: payment.id,
-          user_id: payment.user_id,
-          concept: payment.concept,
-          reference: payment.commerce_order,
+          payment_id: paymentId,
+          user_id: userId,
+          concept,
+          reference,
           receipt_url: receiptUrl,
         }),
         target: "staff",
@@ -307,57 +350,51 @@ export async function POST(request: Request) {
         sent_at: new Date().toISOString(),
       });
     }
+  } catch (err) {
+    console.error(ROUTE_LOG, "Notification insert failed:", err);
+  }
 
-    // Correo a todos los admins (best-effort, patrón create-user)
-    try {
-      const { data: admins } = await admin
-        .from("profiles")
-        .select("email")
-        .eq("role_id", 1);
-      const adminEmails = (admins || [])
-        .map((a) => a.email)
-        .filter((e): e is string => Boolean(e));
-      const fallback = process.env.SMTP_USER;
-      const recipients: string[] = adminEmails.length
-        ? adminEmails
-        : fallback
-          ? [fallback]
-          : [];
+  // Correo a todos los admins (best-effort, patrón create-user)
+  try {
+    const { data: admins } = await admin
+      .from("profiles")
+      .select("email")
+      .eq("role_id", 1);
+    const adminEmails = (admins || [])
+      .map((a) => a.email)
+      .filter((e): e is string => Boolean(e));
+    const fallback = process.env.SMTP_USER;
+    const recipients: string[] = adminEmails.length
+      ? adminEmails
+      : fallback
+        ? [fallback]
+        : [];
 
-      const { data: userProfile } = await admin
-        .from("profiles")
-        .select("full_name")
-        .eq("id", user.id)
-        .maybeSingle();
+    const { data: userProfile } = await admin
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .maybeSingle();
 
-      const paymentUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "https://zona-elite-six.vercel.app"}/admin/ventas?tab=solicitudes`;
+    const paymentUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "https://zona-elite-six.vercel.app"}/admin/ventas?tab=solicitudes`;
 
-      for (const recipient of recipients) {
-        try {
-          await sendTransferRequestEmail({
-            to: recipient,
-            userName: userProfile?.full_name || user.email || "Usuario",
-            concept: payment.concept as string,
-            amount: Number(payment.amount) || 0,
-            reference: payment.commerce_order as string,
-            rut: rut || null,
-            voucherUrl: receiptUrl,
-            paymentUrl,
-          });
-        } catch (emailErr) {
-          console.error(ROUTE_LOG, "Email failed for", recipient, emailErr);
-        }
+    for (const recipient of recipients) {
+      try {
+        await sendTransferRequestEmail({
+          to: recipient,
+          userName: userProfile?.full_name || userEmail || "Usuario",
+          concept,
+          amount,
+          reference,
+          rut,
+          voucherUrl: receiptUrl,
+          paymentUrl,
+        });
+      } catch (emailErr) {
+        console.error(ROUTE_LOG, "Email failed for", recipient, emailErr);
       }
-    } catch (err) {
-      console.error(ROUTE_LOG, "Admin emails query failed:", err);
     }
-
-    return NextResponse.json({ ok: true, paymentId: payment.id, reference: payment.commerce_order });
-  } catch (error) {
-    console.error(ROUTE_LOG, "Unexpected error:", error);
-    return NextResponse.json(
-      { error: "Error al enviar la solicitud. Intenta de nuevo." },
-      { status: 500 }
-    );
+  } catch (err) {
+    console.error(ROUTE_LOG, "Admin emails query failed:", err);
   }
 }
