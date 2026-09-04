@@ -248,7 +248,7 @@ export default function TransferPaymentStep({
         <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">
           Comprobante de transferencia *
         </label>
-        <label className="flex flex-col items-center justify-center gap-2 border border-dashed border-on-surface/20 rounded-xl py-6 px-4 cursor-pointer hover:border-primary/40 transition-colors">
+        <label onPointerDown={(e) => e.stopPropagation()} className="flex flex-col items-center justify-center gap-2 border border-dashed border-on-surface/20 rounded-xl py-6 px-4 cursor-pointer hover:border-primary/40 transition-colors">
           {previewUrl ? (
             <div className="flex flex-col items-center gap-2">
               <img src={previewUrl} alt="Comprobante" className="max-h-40 rounded-lg object-contain" />

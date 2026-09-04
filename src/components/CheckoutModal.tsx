@@ -116,12 +116,17 @@ export default function CheckoutModal({
   }, [open, handleEsc]);
 
   useEffect(() => {
+    if (open) {
+      setShowTransfer(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
     if (!open || !user) return;
 
     setLoadingBeneficiaries(true);
     setIncludeEnrollment(false);
     setSelectedEnrollmentPlanId("");
-    setShowTransfer(false);
     const supabase = createClient();
 
     getPaymentSettings(supabase).then((settings) => {
