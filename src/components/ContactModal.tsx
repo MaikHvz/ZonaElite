@@ -7,16 +7,6 @@ export default function ContactModal() {
 
   return (
     <>
-      {/* Floating Button — hidden on mobile to avoid blocking content */}
-      <button
-        onClick={() => setOpen(true)}
-        className="hidden md:flex fixed bottom-8 right-8 z-50 w-16 h-16 rounded-full btn-primary-gradient text-white shadow-[0_10px_40px_rgba(229,57,53,0.4)] items-center justify-center hover:scale-110 transition-transform duration-300 group"
-      >
-        <span className="material-symbols-outlined text-3xl group-hover:rotate-12 transition-transform">
-          mail
-        </span>
-      </button>
-
       {/* Modal */}
       <div
         className={`fixed inset-0 z-[60] ${
