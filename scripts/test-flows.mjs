@@ -1652,7 +1652,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 9);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 11);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");

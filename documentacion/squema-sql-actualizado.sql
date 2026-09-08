@@ -1949,3 +1949,21 @@ VALUES (
   E'• Cada alumno (titular o carga) ahora tiene un perfil deportivo con su disciplina y grado/cinturón, mostrado como tarjeta en "Mis Cargas".\n• El administrador asigna disciplina y grado desde la sección Usuarios con un botón dedicado por alumno.\n• Registro de podios: torneo, fecha, disciplina, categoría y lugar obtenido (1°, 2°, 3° o participación), con foto opcional.\n• Las tarjetas muestran la disciplina, el cinturón y el resumen de logros del alumno.'
 )
 ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.6.0 — Categoría Juvenil + Horarios Multi-selección (migración 026)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.6.0',
+  'Categoría Juvenil + Horarios Multi-selección',
+  'Nueva categoría "juvenil" (10-15 años) para dependientes y planes de membresía. Los horarios ahora permiten seleccionar múltiples categorías (niños, juveniles, adultos) en vez de un solo valor. Recálculo automático de categoría según edad al cargar datos.'
+)
+ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.7.0 — Histórico de asistencias (migración 029)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.7.0',
+  'Histórico de asistencias',
+  E'• El panel de Asistencia del administrador ahora tiene una pestaña "Histórico" que muestra las clases ya pasadas a la fecha de hoy.\n• Permite acotar la búsqueda por rango de fechas (desde/hasta) y consultar el detalle de cada sesión pasada.\n• La asistencia de sesiones pasadas se puede corregir directamente (presente/ausente/justificado), reutilizando el flujo de guardado existente.'
+)
+ON CONFLICT (version) DO NOTHING;

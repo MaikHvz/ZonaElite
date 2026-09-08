@@ -3,10 +3,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "@/providers/SessionProvider";
 import { createClient } from "@/lib/supabase/client";
-import { getChileToday, chileDateToUtc, chileMonthStartDate } from "@/lib/dates";
+import { getChileToday, addDaysChile, chileDateToUtc, chileMonthStartDate } from "@/lib/dates";
 import { QRCodeSVG } from "qrcode.react";
 import {
   getUpcomingSessions,
+  getPastSessions,
   getAttendanceForSession,
   markAttendance,
   type ClassSessionData,
@@ -60,6 +61,16 @@ export default function AdminAsistenciaPage() {
   const [generating, setGenerating] = useState(false);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
 
+  const [activeTab, setActiveTab] = useState<"proximas" | "historico">(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "historico"
+      ? "historico"
+      : "proximas"
+  );
+  const [pastSessions, setPastSessions] = useState<SessionWithCount[]>([]);
+  const [loadingPast, setLoadingPast] = useState(false);
+  const [fromDate, setFromDate] = useState(() => addDaysChile(getChileToday(), -90));
+  const [toDate, setToDate] = useState(() => getChileToday());
+
   const [beneficiaries, setBeneficiaries] = useState<AttendanceBeneficiary[]>([]);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -97,6 +108,13 @@ export default function AdminAsistenciaPage() {
     const { data } = await getUpcomingSessions();
     setSessions(data || []);
     setLoading(false);
+  }, []);
+
+  const loadPastSessions = useCallback(async (from: string, to: string) => {
+    setLoadingPast(true);
+    const { data } = await getPastSessions(from, to);
+    setPastSessions(data || []);
+    setLoadingPast(false);
   }, []);
 
   useEffect(() => {
@@ -248,8 +266,10 @@ export default function AdminAsistenciaPage() {
     setShowCloseConfirm(false);
 
     const session = sessions.find((s) => s.id === sessionId);
-    if (session) {
-      session.enrolledCount = undefined;
+    const pastSession = pastSessions.find((s) => s.id === sessionId);
+    const currentSession = session || pastSession;
+    if (currentSession) {
+      currentSession.enrolledCount = undefined;
     }
 
     const { data: sessData } = await supabase
@@ -259,12 +279,13 @@ export default function AdminAsistenciaPage() {
       .single();
 
     const sessionStatus = sessData?.status || "cerrada";
-    if (session) {
-      session.status = sessionStatus;
+    if (currentSession) {
+      currentSession.status = sessionStatus;
     }
 
-    const isPersonalized = session?.schedule?.mode === "personalizado";
-    if (sessionStatus === "activa" && !isPersonalized) {
+    const isPersonalized = currentSession?.schedule?.mode === "personalizado";
+    const isPastSession = (currentSession?.session_date || "") < getChileToday();
+    if (sessionStatus === "activa" && !isPersonalized && !isPastSession) {
       setQrSessionId(sessionId);
     } else {
       setQrSessionId(null);
@@ -274,9 +295,10 @@ export default function AdminAsistenciaPage() {
     const bens = data?.beneficiaries || [];
     setBeneficiaries(bens);
 
-    if (session) {
-      session.enrolledCount = bens.length;
-      setSessions((prev) => [...prev]);
+    if (currentSession) {
+      currentSession.enrolledCount = bens.length;
+      if (session) setSessions((prev) => [...prev]);
+      if (pastSession) setPastSessions((prev) => [...prev]);
     }
 
     setLoadingAttendance(false);
@@ -816,6 +838,12 @@ export default function AdminAsistenciaPage() {
     groupedByDate[s.session_date].push(s);
   }
 
+  const pastGroupedByDate: Record<string, SessionWithCount[]> = {};
+  for (const s of pastSessions) {
+    if (!pastGroupedByDate[s.session_date]) pastGroupedByDate[s.session_date] = [];
+    pastGroupedByDate[s.session_date].push(s);
+  }
+
   return (
     <div>
       {toast && (
@@ -1017,6 +1045,240 @@ export default function AdminAsistenciaPage() {
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6">
+        <button
+          onClick={() => setActiveTab("proximas")}
+          className={`font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+            activeTab === "proximas"
+              ? "btn-primary-gradient text-white"
+              : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+          }`}
+        >
+          Próximas
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("historico");
+            if (pastSessions.length === 0) loadPastSessions(fromDate, toDate);
+          }}
+          className={`font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+            activeTab === "historico"
+              ? "btn-primary-gradient text-white"
+              : "border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+          }`}
+        >
+          Histórico
+        </button>
+      </div>
+
+      {activeTab === "historico" ? (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-end gap-3 mb-6 p-4 bg-surface-container border border-on-surface/5 rounded-xl">
+            <div>
+              <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Desde</label>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 font-[family-name:var(--font-body-md)] text-[13px] text-on-surface focus:outline-none focus:border-primary/50"
+              />
+            </div>
+            <div>
+              <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant mb-1">Hasta</label>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 font-[family-name:var(--font-body-md)] text-[13px] text-on-surface focus:outline-none focus:border-primary/50"
+              />
+            </div>
+            <button
+              onClick={() => loadPastSessions(fromDate, toDate)}
+              className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-5 py-2 rounded-lg cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[16px]">search</span>
+              Consultar
+            </button>
+          </div>
+
+          {loadingPast ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-2">
+                  <div className="h-8 bg-surface-container rounded-lg w-48 animate-pulse" />
+                  <div className="h-20 bg-surface-container rounded-xl animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : Object.keys(pastGroupedByDate).length === 0 ? (
+            <div className="bg-surface-container border border-on-surface/5 rounded-2xl p-8 text-center">
+              <span className="material-symbols-outlined text-on-surface/20 text-[48px] mb-4 block">history</span>
+              <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant">
+                No hay clases pasadas en el rango seleccionado
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(pastGroupedByDate)
+                .sort(([a], [b]) => b.localeCompare(a))
+                .map(([date, dateSessions]) => (
+                  <div key={date}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <h3 className="font-[family-name:var(--font-headline-md)] text-[15px] uppercase text-on-surface">
+                        {formatDate(date)}
+                      </h3>
+                      <div className="h-px flex-1 bg-on-surface/10" />
+                      <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">
+                        {dateSessions.length} clase{dateSessions.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {dateSessions.map((s) => {
+                        const isExpanded = expandedSession === s.id;
+                        const discName = s.schedule?.discipline?.name || "Clase";
+                        const profName = s.schedule?.professor?.full_name || "Sin instructor";
+                        const startTime = s.schedule?.start_time?.slice(0, 5) || "";
+                        const endTime = s.schedule?.end_time?.slice(0, 5) || "";
+
+                        return (
+                          <div key={s.id} className={`bg-surface-container border rounded-xl transition-all ${isExpanded ? "border-primary/30" : "border-on-surface/5 hover:border-on-surface/15"}`}>
+                            <button
+                              onClick={() => toggleSession(s.id)}
+                              className="w-full px-5 py-4 flex items-center justify-between text-left cursor-pointer"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-xl bg-primary-container/10 border border-primary-container/20 flex flex-col items-center justify-center shrink-0">
+                                  <span className="font-[family-name:var(--font-headline-md)] text-[14px] text-primary leading-none">
+                                    {new Date(s.session_date + "T12:00:00").getDate()}
+                                  </span>
+                                  <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase text-primary/70 leading-none mt-0.5">
+                                    {DAYS[new Date(s.session_date + "T12:00:00").getDay()].slice(0, 3)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-[family-name:var(--font-headline-md)] text-[15px] text-on-surface uppercase">
+                                      {discName}
+                                    </p>
+                                    {s.schedule?.mode === "personalizado" && (
+                                      <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                        Personalizada
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
+                                    {startTime} - {endTime} · {profName}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                {s.enrolledCount !== undefined && (
+                                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">
+                                    {s.enrolledCount} inscrito{s.enrolledCount !== 1 ? "s" : ""}
+                                  </span>
+                                )}
+                                <span className={`material-symbols-outlined text-on-surface/30 text-[20px] transition-transform ${isExpanded ? "rotate-180" : ""}`}>
+                                  expand_more
+                                </span>
+                              </div>
+                            </button>
+
+                            {isExpanded && (
+                              <div className="px-5 pb-5 border-t border-on-surface/5">
+                                <div className="flex items-center justify-between mt-4 mb-4">
+                                  <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                                      <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">{presentCount}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-2 h-2 rounded-full bg-red-500" />
+                                      <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">{absentCount}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                                      <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">{justifiedCount}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {loadingAttendance ? (
+                                  <div className="space-y-2">
+                                    {[1, 2, 3].map((i) => (
+                                      <div key={i} className="h-14 bg-surface-container-high/50 rounded-xl animate-pulse" />
+                                    ))}
+                                  </div>
+                                ) : beneficiaries.length === 0 ? (
+                                  <div className="bg-surface-container-high/30 rounded-xl p-6 text-center">
+                                    <span className="material-symbols-outlined text-on-surface/20 text-[36px] mb-2 block">group_off</span>
+                                    <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
+                                      No hay alumnos inscritos en esta sesión
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="space-y-2 mb-4">
+                                      {beneficiaries.map((b) => (
+                                        <div
+                                          key={b.id}
+                                          className="bg-surface-container-high/30 border border-on-surface/5 rounded-xl px-4 py-3 flex items-center justify-between gap-4"
+                                        >
+                                          <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-8 h-8 rounded-full btn-primary-gradient flex items-center justify-center shrink-0">
+                                              <span className="material-symbols-outlined text-white text-[14px]">person</span>
+                                            </div>
+                                            <div className="min-w-0">
+                                              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">{b.full_name}</p>
+                                              <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider ${b.category === "nino" ? "text-blue-400" : b.category === "juvenil" ? "text-amber-400" : "text-on-surface-variant/60"}`}>
+                                                {b.category === "nino" ? "Niño" : b.category === "juvenil" ? "Juvenil" : "Adulto"}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            {STATUS_OPTIONS.map((opt) => (
+                                              <button
+                                                key={opt.value}
+                                                onClick={() => handleMark(b.id, opt.value as "presente" | "ausente" | "justificado")}
+                                                className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider border px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                                                  b.attendance?.status === opt.value
+                                                    ? opt.color
+                                                    : "border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5"
+                                                }`}
+                                              >
+                                                {opt.label}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <div className="flex items-center justify-end">
+                                      <button
+                                        onClick={handleSaveAll}
+                                        disabled={saving}
+                                        className="btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-6 py-2.5 rounded-lg disabled:opacity-50 cursor-pointer"
+                                      >
+                                        {saving ? "Guardando..." : "Guardar asistencia"}
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      ) : (
+      <>
       <div className="mb-6">
         <button
           onClick={handleGenerateSessions}
@@ -1354,6 +1616,8 @@ export default function AdminAsistenciaPage() {
               );
             })}
         </div>
+      )}
+      </>
       )}
     </div>
   );

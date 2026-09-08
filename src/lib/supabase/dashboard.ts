@@ -635,6 +635,31 @@ export async function getUpcomingSessions() {
   });
 }
 
+export async function getPastSessions(fromDate: string, toDate: string) {
+  return safeQuery(async () => {
+    const supabase = createClient();
+
+    const { data } = await supabase
+      .from("class_sessions")
+      .select(
+        `
+        *,
+        schedule:schedules(
+          id, day_of_week, start_time, end_time, mode,
+          discipline:disciplines(name),
+          professor:profiles(full_name)
+        )
+      `
+      )
+      .gte("session_date", fromDate)
+      .lte("session_date", toDate)
+      .order("session_date", { ascending: false })
+      .limit(200);
+
+    return (data || []) as ClassSessionData[];
+  });
+}
+
 export async function getAttendanceForSession(sessionId: string) {
   return safeQuery(async () => {
     const supabase = createClient();

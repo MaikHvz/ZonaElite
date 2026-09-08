@@ -197,7 +197,7 @@ src/
 | `/admin/usuarios` | Usuarios + cargas agrupadas, cambio roles, activar/desactivar |
 | `/admin/membresias` | CRUD planes + asignación manual + editar/cancelar + PDF recibo |
 | `/admin/inscripciones` | **NUEVO** CRUD planes inscripción + inscripciones asignadas + asignación manual |
-| `/admin/asistencia` | Acordeón por sesión, "Generar sesiones", "Todos presentes", "Inscribir usuario" |
+| `/admin/asistencia` | Tabs **Próximas** (sesiones desde hoy, QR, activar/cerrar, inscribir) / **Histórico** (clases pasadas con filtro de rango de fechas, editable) |
 | `/admin/blog` | CRUD: borrador/programado/publicado |
 | `/admin/notificaciones` | CRUD: aviso/recordatorio/comunicado/correo_masivo |
 | `/admin/changelog` | **NUEVO** Changelog de desarrolladores: cambios versionados, solo lectura admin |
@@ -526,6 +526,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 | `contexto/requisitos/perfil-deportivo-alumnos.md` | Requisito + análisis de impacto (perfil deportivo: disciplina, grado/cinturón, podios) |
 | `contexto/migrations/024_sport_profiles.sql` | Migración 024: belt_grades + sport_profiles + sports_podiums + trigger + seeds + policies RLS (pendiente aplicar) |
 | `contexto/migrations/025_changelog_v1_5_0.sql` | Migración 025: entrada de changelog v1.5.0 (Perfil Deportivo de Alumnos) (pendiente aplicar) |
+| `contexto/migrations/029_changelog_v1_7_0.sql` | Migración 029: entrada de changelog v1.7.0 (Histórico de Asistencia en panel admin) (pendiente aplicar) |
 | `contexto/schema-complete.sql` | SQL completo: 26 tablas, 190 cols, 32 FKs, 59 RLS, 33 indexes |
 | `project-context/brain.md` | Contexto legacy (parcialmente obsoleto) |
 | `project-context/changelog.md` | Historial de cambios detallado |

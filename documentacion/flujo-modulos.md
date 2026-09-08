@@ -84,6 +84,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
     - Llama a `AttendanceOverview.tsx`. 
     - Genera sesiones semanales usando el endpoint `/api/admin/generate-sessions/route.ts`.
     - Sistema de Check-in público (QR) soportado por `src/app/checkin/[sessionId]/page.tsx` y el route handler `/api/checkin/route.ts`.
+    - Dos pestañas: **Próximas** (sesiones desde hoy hacia adelante vía `getUpcomingSessions`) e **Histórico** (clases pasadas a la fecha de hoy con filtro por rango de fechas desde/hasta vía `getPastSessions`, ordenadas descendente, editable — permite corregir presente/ausente/justificado con `markAttendance`).
     - **Inscripción a clases (B-006)**: `EnrollModal.tsx` ya no inserta directo a `class_enrollments`; llama a la RPC transaccional `public.enroll_class` (migración `004`) que valida acceso, membresía/inscripción activas, sesión no pasada y aforo (`CLASS_FULL`) con `SELECT ... FOR UPDATE`. El check cliente queda como UX rápida; la fuente de verdad es la RPC.
   - **Membresías (`/admin/membresias/page.tsx`)**: 
     - CRUD de Planes (tabla `membership_plans`). Permite designar un único plan como Destacado (PRO) con exclusividad garantizada en UI y base de datos.

@@ -297,3 +297,11 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Elegibilidad**: `EnrollModal.tsx` usa `schedule.category.includes(planCategory)` — cada horario puede combinar las 3 categorías.
 - **Recálculo**: la categoría de los dependientes se recalcula en `admin/usuarios/page.tsx` al cargar basándose en `birth_date` (16+ años = adulto).
 - **Estado**: Implementado. Migración `026_categoria_juvenil.sql` lista para aplicar. Espejo actualizado en `squema-sql-actualizado.sql`.
+
+## 28. Histórico de Asistencia en Panel Admin (2026-09-07)
+**Requisito**: El panel `/admin/asistencia` solo mostraba las sesiones desde hoy hacia adelante (`getUpcomingSessions` con `.gte(session_date, today)`), ocultando las clases ya pasadas. Se necesita una pestaña **"Histórico"** que muestre, de forma similar, las sesiones pasadas a la fecha de hoy y permita consultar/corregir su asistencia.
+- **Query**: nueva función `getPastSessions(fromDate, toDate)` en `src/lib/supabase/dashboard.ts` — consulta `class_sessions` con el mismo embed de `schedule` (discipline/professor/mode), filtro `.gte(session_date, fromDate).lte(session_date, toDate),`.order(desc).limit(200)`.
+- **UI** (`src/app/admin/asistencia/page.tsx`): pestañas **Próximas** / **Histórico** (patrón de `/admin/ventas`, activación opcional vía `?tab=historico`). La pestaña Histórico tiene filtro de rango de fechas (Desde/Hasta, default últimos 90 días a hoy) + botón "Consultar". Render editable: acordeón por fecha (descendente) que reutiliza `getAttendanceForSession` y los botones presente/ausente/justificado + "Guardar asistencia" (`markAttendance`). Se omiten QR/activación/inscribir/desinscribir (solo aplican a sesiones futuras).
+- **Sin cambios de esquema/RLS**: `class_sessions_select_all` ya permite leer sesiones pasadas con el browser client. No toca `squema-sql-actualizado.sql`.
+- **Changelog**: módulo de desarrolladores con entrada **v1.7.0** (`contexto/migrations/029_changelog_v1_7_0.sql`, idempotente).
+- **Verificación**: `npx eslint` sin nuevos errores (solo preexistentes), `npx tsc --noEmit` sin errores nuevos.
