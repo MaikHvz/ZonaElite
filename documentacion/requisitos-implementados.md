@@ -305,3 +305,12 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Sin cambios de esquema/RLS**: `class_sessions_select_all` ya permite leer sesiones pasadas con el browser client. No toca `squema-sql-actualizado.sql`.
 - **Changelog**: módulo de desarrolladores con entrada **v1.7.0** (`contexto/migrations/029_changelog_v1_7_0.sql`, idempotente).
 - **Verificación**: `npx eslint` sin nuevos errores (solo preexistentes), `npx tsc --noEmit` sin errores nuevos.
+
+## 29. Adjunto de Imagen en Eventos (2026-09-15)
+**Requisito**: En `/admin/eventos`, la imagen subida para el evento (sin importar el tipo: torneo, graduación, seminario o clase especial) ya se guarda como portada (`events.image`). Se pide que la **misma imagen** quede además disponible como documento/archivo adjunto en la ficha pública del evento, para que los alumnos puedan hacer clic en ella, abrir una **vista previa ampliada única** y **cerrarla o descargarla** desde un botón.
+- **Sin cambios de esquema/RLS**: portada y adjunto provienen de la misma `events.image` (bucket `public`, carpeta `events/`). No toca `squema-sql-actualizado.sql` en su estructura.
+- **`src/components/ImagePreviewModal.tsx`** (nuevo, cliente): lightbox a pantalla completa (`z-[60]`, overlay `bg-black/90`) con la imagen en `object-contain`, botones **"Cerrar"** y **"Descargar"**, cierre por ESC / clic en overlay / botón, y lock de scroll. Para URLs de Supabase Storage agrega el parámetro `?download=<archivo>` (fuerza `Content-Disposition: attachment`); para URLs externas abre en pestaña nueva con `download` nativo.
+- **`/eventos/[id]`**: nueva sección **"Adjunto"** bajo la descripción (solo si `event.image`), con la imagen como tarjeta clickeable ("Clic para ampliar y descargar") que abre el `ImagePreviewModal`.
+- **`/admin/eventos`**: label del `ImageUpload` actualizado a "Imagen del evento (será la portada y el adjunto descargable)".
+- **Changelog**: módulo de desarrolladores con entrada **v1.8.0** (`contexto/migrations/030_changelog_v1_8_0.sql`, idempotente). Se completaron además en el espejo los seeds `v1.6.0` (migración 026) y `v1.7.0` (Histórico de asistencias, migración 029, que lo referencia pero no existía).
+- **Verificación**: `npx tsc --noEmit` limpio y suite sección AC en verde.

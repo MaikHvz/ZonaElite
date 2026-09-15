@@ -1967,3 +1967,12 @@ VALUES (
   E'• El panel de Asistencia del administrador ahora tiene una pestaña "Histórico" que muestra las clases ya pasadas a la fecha de hoy.\n• Permite acotar la búsqueda por rango de fechas (desde/hasta) y consultar el detalle de cada sesión pasada.\n• La asistencia de sesiones pasadas se puede corregir directamente (presente/ausente/justificado), reutilizando el flujo de guardado existente.'
 )
 ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.8.0 — Adjunto de imagen en eventos (migración 030)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.8.0',
+  'Adjunto de imagen en eventos',
+  E'• La imagen subida en "Nuevo Evento" ahora se muestra también como documento adjunto descargable en la ficha pública del evento (/eventos/[id]).\n• Al hacer clic en el adjunto se abre una vista previa ampliada (lightbox) con botones "Cerrar" y "Descargar" la imagen.\n• La descarga usa el parámetro ?download= de Supabase Storage para forzar el guardado del archivo.\n• Los eventos sin imagen no muestran la sección de adjunto.'
+)
+ON CONFLICT (version) DO NOTHING;

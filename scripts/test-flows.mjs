@@ -1652,7 +1652,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 11);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 12);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -2245,6 +2245,43 @@ ok("AB: DependentCard muestra perfil deportivo de la carga",
   /BeltBanner/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "DependentCard.tsx"), "utf8")));
 ok("AB: /dashboard/cargas muestra la card del titular",
   /TutorSportCard/.test(readFileSync(join(ROOT, "src", "app", "dashboard", "cargas", "page.tsx"), "utf8")));
+
+// ============================================================
+// AC. ADJUNTO DE IMAGEN EN EVENTOS (migración 030, v1.8.0)
+// ============================================================
+section("AC. Adjunto de imagen en eventos");
+
+const migration030 = readFileSync(join(ROOT, "contexto", "migrations", "030_changelog_v1_8_0.sql"), "utf8");
+const schemaAc = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const imagePreviewModal = readFileSync(join(ROOT, "src", "components", "ImagePreviewModal.tsx"), "utf8");
+const eventoDetailAc = readFileSync(join(ROOT, "src", "app", "eventos", "[id]", "page.tsx"), "utf8");
+const adminEventosAc = readFileSync(join(ROOT, "src", "app", "admin", "eventos", "page.tsx"), "utf8");
+
+ok("AC: migración 030 es seed de changelog v1.8.0 idempotente",
+  /'v1\.8\.0'/.test(migration030) &&
+  /'Adjunto de imagen en eventos'/.test(migration030) &&
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration030));
+ok("AC: espejo refleja los seeds v1.6.0, v1.7.0 y v1.8.0 (1:1 con migraciones)",
+  /'v1\.6\.0'/.test(schemaAc) &&
+  /'v1\.7\.0'/.test(schemaAc) &&
+  /'Histórico de asistencias'/.test(schemaAc) &&
+  /'v1\.8\.0'/.test(schemaAc) &&
+  /'Adjunto de imagen en eventos'/.test(schemaAc));
+ok("AC: ImagePreviewModal es componente cliente con overlay, cerrar y descargar",
+  /"use client"/.test(imagePreviewModal) &&
+  /fixed inset-0 bg-black\/90/.test(imagePreviewModal) &&
+  /Cerrar/.test(imagePreviewModal) &&
+  /Descargar/.test(imagePreviewModal) &&
+  /Escape/.test(imagePreviewModal));
+ok("AC: la descarga de Storage usa el parámetro ?download=",
+  /download=\$\{encodeURIComponent\(fileName\)\}/.test(imagePreviewModal));
+ok("AC: la ficha del evento muestra la sección Adjunto con vista previa",
+  /import ImagePreviewModal/.test(eventoDetailAc) &&
+  /Adjunto/.test(eventoDetailAc) &&
+  /setPreviewOpen\(true\)/.test(eventoDetailAc) &&
+  /imageUrl=\{event\.image\}/.test(eventoDetailAc));
+ok("AC: admin/eventos aclara que la imagen es portada y adjunto descargable",
+  /portada y el adjunto descargable/.test(adminEventosAc));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

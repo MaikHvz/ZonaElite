@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import ImagePreviewModal from "@/components/ImagePreviewModal";
 
 interface Event {
   id: string;
@@ -49,6 +50,7 @@ export default function EventoDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -173,6 +175,30 @@ export default function EventoDetailPage() {
               </div>
             )}
 
+            {/* Adjunto / documento descargable */}
+            {event.image && (
+              <div>
+                <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase mb-4">
+                  Adjunto
+                </h2>
+                <button
+                  onClick={() => setPreviewOpen(true)}
+                  className="w-full flex items-center gap-4 bg-surface-container-lowest border border-on-surface/5 rounded-2xl p-4 hover:border-primary/40 transition-colors text-left cursor-pointer"
+                >
+                  <img src={event.image} alt="" className="w-24 h-24 rounded-xl object-cover flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-[family-name:var(--font-body-md)] text-[15px] text-on-surface truncate">
+                      Imagen del evento
+                    </p>
+                    <p className="font-[family-name:var(--font-body-sm)] text-[13px] text-on-surface-variant mt-1">
+                      Clic para ampliar y descargar
+                    </p>
+                  </div>
+                  <span className="material-symbols-outlined text-on-surface-variant text-[24px]">visibility</span>
+                </button>
+              </div>
+            )}
+
             {/* Google Maps */}
             {mapsEmbed && (
               <div>
@@ -249,6 +275,16 @@ export default function EventoDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Vista previa de la imagen adjunta */}
+      {event.image && (
+        <ImagePreviewModal
+          open={previewOpen}
+          imageUrl={event.image}
+          title={event.title}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
     </div>
   );
 }

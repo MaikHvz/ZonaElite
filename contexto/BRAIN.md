@@ -160,7 +160,7 @@ src/
 | `/productos` | `productos/page.tsx` | Catálogo grid con filtros |
 | `/productos/[id]` | `productos/[id]/page.tsx` | Detalle: galería thumbnails (hasta 3), precio, stock |
 | `/eventos` | `eventos/page.tsx` | Unificado (torneos/ceremonias), tabs filtro |
-| `/eventos/[id]` | `eventos/[id]/page.tsx` | Hero, info cards, Google Maps embebido |
+| `/eventos/[id]` | `eventos/[id]/page.tsx` | Hero, info cards, Google Maps embebido, adjunto de imagen con vista previa (lightbox) + descarga |
 | `/blog` | `blog/page.tsx` | Feed estilo redes sociales |
 | `/blog/[slug]` | `blog/[slug]/page.tsx` | Post individual, generateMetadata, ShareButton |
 
@@ -191,7 +191,7 @@ src/
 |------|---------|-------------|
 | `/admin` | Dashboard: stats, RevenueChart, NewStudentsChart, MembershipBreakdown, MonthlyComparison, PaymentOverview |
 | `/admin/productos` | CRUD con DataTable, ImageUpload (3 imgs), product_images |
-| `/admin/eventos` | CRUD con type filter, location_url para Google Maps |
+| `/admin/eventos` | CRUD con type filter, location_url para Google Maps. La imagen subida es portada + adjunto descargable |
 | `/admin/horarios` | CRUD: category, active, room, discipline+professor selects, class_plans |
 | `/admin/tipos-clase` | CRUD disciplinas: name, color_hex, icon, description, active |
 | `/admin/usuarios` | Usuarios + cargas agrupadas, cambio roles, activar/desactivar |
@@ -527,6 +527,8 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 | `contexto/migrations/024_sport_profiles.sql` | Migración 024: belt_grades + sport_profiles + sports_podiums + trigger + seeds + policies RLS (pendiente aplicar) |
 | `contexto/migrations/025_changelog_v1_5_0.sql` | Migración 025: entrada de changelog v1.5.0 (Perfil Deportivo de Alumnos) (pendiente aplicar) |
 | `contexto/migrations/029_changelog_v1_7_0.sql` | Migración 029: entrada de changelog v1.7.0 (Histórico de Asistencia en panel admin) (pendiente aplicar) |
+| `contexto/requisitos/adjunto-imagen-eventos.md` | Requisito + análisis de impacto (adjunto de imagen descargable en eventos) |
+| `contexto/migrations/030_changelog_v1_8_0.sql` | Migración 030: entrada de changelog v1.8.0 (Adjunto de Imagen en Eventos) (pendiente aplicar) |
 | `contexto/schema-complete.sql` | SQL completo: 26 tablas, 190 cols, 32 FKs, 59 RLS, 33 indexes |
 | `project-context/brain.md` | Contexto legacy (parcialmente obsoleto) |
 | `project-context/changelog.md` | Historial de cambios detallado |

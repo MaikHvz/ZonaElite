@@ -206,7 +206,7 @@ export default function AdminEventosPage() {
               value={form.image || null}
               onChange={(url) => setForm({ ...form, image: url || "" })}
               folder="events"
-              label="Imagen del evento"
+              label="Imagen del evento (será la portada y el adjunto descargable)"
             />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-on-surface/5">
