@@ -9,6 +9,8 @@ const TABS = [
   { key: "all", label: "Todos" },
   { key: "torneo", label: "Torneos" },
   { key: "graduacion", label: "Ceremonias" },
+  { key: "seminario", label: "Seminarios" },
+  { key: "clase_especial", label: "Clases Especiales" },
 ];
 
 export default function EventosPage() {
@@ -21,7 +23,6 @@ export default function EventosPage() {
     supabase
       .from("events")
       .select("*")
-      .in("type", ["torneo", "graduacion"])
       .order("event_date", { ascending: true })
       .then(({ data }) => {
         setEvents((data as EventData[]) || []);
@@ -66,7 +67,15 @@ export default function EventosPage() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
             <span className="material-symbols-outlined text-on-surface/20 text-7xl mb-4 block">
-              {filter === "torneo" ? "emoji_events" : filter === "graduacion" ? "military_tech" : "event"}
+              {filter === "torneo"
+                ? "emoji_events"
+                : filter === "graduacion"
+                  ? "military_tech"
+                  : filter === "seminario"
+                    ? "school"
+                    : filter === "clase_especial"
+                      ? "fitness_center"
+                      : "event"}
             </span>
             <p className="font-[family-name:var(--font-body-lg)] text-on-surface-variant">
               No hay eventos{filter !== "all" ? ` de tipo "${TABS.find((t) => t.key === filter)?.label}"` : ""} programados
