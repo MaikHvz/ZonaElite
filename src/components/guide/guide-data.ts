@@ -257,13 +257,53 @@ export const GUIDE_TOURS: Record<string, GuideTourDef> = {
         icon: "fitness_center",
         position: "top",
       },
+    ],
+  },
+
+  dashboard: {
+    id: "dashboard",
+    pageTitle: "Panel Principal",
+    icon: "dashboard",
+    steps: [
       {
-        targetSelector: "[data-guide='landing-checkout']",
-        title: "Checkout y Selección de Beneficiario",
+        targetSelector: "[data-guide='dashboard-greeting']",
+        title: "Bienvenido a tu Panel",
         description:
-          "Al presionar comprar, se abrirá el modal de checkout donde puedes elegir si la membresía es para ti o para una de tus cargas.",
-        icon: "payments",
+          "Desde aquí tienes un resumen en tiempo real de tu cuenta: estado de inscripción, membresías activas, asistencia y notificaciones.",
+        icon: "space_dashboard",
         position: "bottom",
+      },
+      {
+        targetSelector: "[data-guide='dashboard-inscripcion']",
+        title: "Estado de Inscripción",
+        description:
+          "Verifica si tu inscripción (matrícula anual) está activa. Es el requisito indispensable para adquirir membresías y reservar clases.",
+        icon: "badge",
+        position: "bottom",
+      },
+      {
+        targetSelector: "[data-guide='dashboard-stats']",
+        title: "Resumen de Métricas",
+        description:
+          "Visualiza tus clases asistidas, tokens mensuales disponibles y estado de tus pagos.",
+        icon: "monitoring",
+        position: "bottom",
+      },
+      {
+        targetSelector: "[data-guide='dashboard-membresia']",
+        title: "Tu Membresía Activa",
+        description:
+          "Acceso rápido a tu plan vigente, fecha de vencimiento y disciplinas incluidas.",
+        icon: "card_membership",
+        position: "top",
+      },
+      {
+        targetSelector: "[data-guide='dashboard-actividad']",
+        title: "Notificaciones y Actividad",
+        description:
+          "Revisa las últimas novedades, recordatorios de clases y confirmaciones de pago de la academia.",
+        icon: "notifications",
+        position: "top",
       },
     ],
   },

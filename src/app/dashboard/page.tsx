@@ -175,7 +175,7 @@ export default function DashboardPage() {
       {loading ? (
         <HeroSkeleton />
       ) : (
-        <div className="glass-card bg-gradient-to-br from-primary-container/8 via-transparent to-transparent p-5 md:p-7 relative overflow-hidden">
+        <div data-guide="dashboard-greeting" className="glass-card bg-gradient-to-br from-primary-container/8 via-transparent to-transparent p-5 md:p-7 relative overflow-hidden">
           {/* Decorative glow */}
           <div className="absolute -top-20 -right-20 w-40 h-40 bg-primary-container/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -195,14 +195,14 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-            <GuideHelpButton tourId="membresias" pill />
+            <GuideHelpButton tourId="dashboard" pill />
           </div>
         </div>
       )}
 
       {/* Enrollment Status Card */}
       {!loading && (
-        <div className={`glass-card p-4 flex items-center gap-4 ${
+        <div data-guide="dashboard-inscripcion" className={`glass-card p-4 flex items-center gap-4 ${
           enrollment.loading
             ? ""
             : enrollment.hasActive
@@ -317,16 +317,18 @@ export default function DashboardPage() {
         <>
           <AlertBanner memberships={summary.allMemberships} />
 
-          <QuickStats
-            activeCount={summary.activeMemberships.length}
-            paidThisMonth={summary.paidThisMonth}
-            dependentsCount={summary.dependentsCount}
-          />
+          <div data-guide="dashboard-stats">
+            <QuickStats
+              activeCount={summary.activeMemberships.length}
+              paidThisMonth={summary.paidThisMonth}
+              dependentsCount={summary.dependentsCount}
+            />
+          </div>
 
           <AttendanceSummary userId={user.id} />
 
           {summary.activeMemberships.length > 0 && (
-            <section>
+            <section data-guide="dashboard-membresia">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-[family-name:var(--font-headline-md)] text-[18px] md:text-[20px] text-on-surface uppercase">
                   Mis Membresías
@@ -393,7 +395,7 @@ export default function DashboardPage() {
           </section>
 
           {notifications.length > 0 && (
-            <section>
+            <section data-guide="dashboard-actividad">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-[family-name:var(--font-headline-md)] text-[18px] md:text-[20px] text-on-surface uppercase">
                   Últimas Notificaciones

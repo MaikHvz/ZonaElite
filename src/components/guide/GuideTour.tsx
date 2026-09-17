@@ -92,33 +92,33 @@ export default function GuideTour() {
   const [placement, setPlacement] = useState<"top" | "bottom" | "left" | "right">("bottom");
   const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
   const [visible, setVisible] = useState(false);
-  const rafRef = useRef<number>(0);
+  const animFrameRef = useRef<number>(0);
 
   const tour = activeTour ? GUIDE_TOURS[activeTour] : null;
   const step = tour?.steps[currentStep] ?? null;
 
-  // Compute position
+  // Compute position for spotlight & tooltip
   const updatePosition = useCallback(() => {
     if (!step) return;
 
     const rect = getElementRect(step.targetSelector);
-    if (!rect) {
-      // Element not found — still show tooltip centered
-      const viewW = window.innerWidth;
-      const viewH = window.innerHeight;
+    const viewW = window.innerWidth;
+    const viewH = window.innerHeight;
+
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+      // Element not present — show floating centered guide tooltip
       setTargetRect(null);
       setPlacement("bottom");
+      const tw = Math.min(viewW - 24, viewW < 768 ? TOOLTIP_MOBILE_WIDTH : TOOLTIP_WIDTH);
       setTooltipPos({
-        top: viewH / 2 - 90,
-        left: viewW / 2 - (viewW < 768 ? TOOLTIP_MOBILE_WIDTH : TOOLTIP_WIDTH) / 2,
+        top: Math.max(16, viewH / 2 - 90),
+        left: Math.max(12, viewW / 2 - tw / 2),
       });
       return;
     }
 
     setTargetRect(rect);
 
-    const viewW = window.innerWidth;
-    const viewH = window.innerHeight;
     const { placement: p, tooltipPos: tp } = computePlacement(
       rect,
       step.position,
@@ -129,39 +129,45 @@ export default function GuideTour() {
     setTooltipPos(tp);
   }, [step]);
 
-  // Scroll target into view and update position
+  // When step changes: scroll into view and trigger continuous position tracking
   useEffect(() => {
     if (!step) {
       setVisible(false);
       return;
     }
 
-    // Small delay so DOM updates settle before we query elements
-    const timer = setTimeout(() => {
-      const el = document.querySelector(step.targetSelector);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        // Wait for scroll to finish
-        setTimeout(() => {
-          updatePosition();
-          setVisible(true);
-        }, 400);
-      } else {
-        updatePosition();
-        setVisible(true);
-      }
-    }, 100);
+    // Immediate initial check
+    updatePosition();
+    setVisible(true);
 
-    return () => clearTimeout(timer);
+    // Scroll into view
+    const el = document.querySelector(step.targetSelector);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    // Track position continuously for 700ms during smooth scroll
+    const startTime = performance.now();
+    const track = () => {
+      updatePosition();
+      if (performance.now() - startTime < 700) {
+        animFrameRef.current = requestAnimationFrame(track);
+      }
+    };
+    animFrameRef.current = requestAnimationFrame(track);
+
+    return () => {
+      cancelAnimationFrame(animFrameRef.current);
+    };
   }, [step, updatePosition]);
 
-  // Re-compute on resize and scroll
+  // Re-compute on resize and window scroll
   useEffect(() => {
     if (!activeTour) return;
 
     const handler = () => {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(updatePosition);
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = requestAnimationFrame(updatePosition);
     };
 
     window.addEventListener("resize", handler);
@@ -170,7 +176,7 @@ export default function GuideTour() {
     return () => {
       window.removeEventListener("resize", handler);
       window.removeEventListener("scroll", handler, true);
-      cancelAnimationFrame(rafRef.current);
+      cancelAnimationFrame(animFrameRef.current);
     };
   }, [activeTour, updatePosition]);
 
@@ -184,28 +190,21 @@ export default function GuideTour() {
     return () => document.removeEventListener("keydown", handler);
   }, [activeTour, endTour]);
 
-  // Lock body scroll while tour is active (only if needed or omit to allow scrolling)
-  useEffect(() => {
-    if (!activeTour) return;
-    updatePosition();
-    setVisible(true);
-  }, [activeTour, updatePosition]);
-
   if (!activeTour || !tour || !step || !visible) return null;
 
-  // Spotlight clip: create a massive shadow with a clear window over the target
+  // Spotlight clip: create a dark backdrop with a glowing window over target
   const spotlightStyle: React.CSSProperties = targetRect
     ? {
         position: "fixed",
         top: Math.max(0, targetRect.top - PADDING),
         left: Math.max(0, targetRect.left - PADDING),
-        width: targetRect.width + PADDING * 2,
+        width: Math.min(window.innerWidth, targetRect.width + PADDING * 2),
         height: targetRect.height + PADDING * 2,
-        borderRadius: "12px",
+        borderRadius: "14px",
         boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.78)",
         zIndex: 10000,
         pointerEvents: "none" as const,
-        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        transition: "all 0.25s cubic-bezier(0.2, 0, 0.2, 1)",
       }
     : {
         position: "fixed",
@@ -220,7 +219,7 @@ export default function GuideTour() {
 
   return createPortal(
     <>
-      {/* Overlay backdrop — clicking closes the tour */}
+      {/* Overlay backdrop — clicking backdrop advances or closes */}
       <div
         className="guide-overlay"
         onClick={endTour}

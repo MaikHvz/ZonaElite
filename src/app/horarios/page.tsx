@@ -249,7 +249,7 @@ export default function HorariosPage() {
                 <div className="h-px flex-1 bg-white/20" />
               </div>
             </div>
-            <GuideHelpButton tourId="clases" pill className="mt-2" />
+            <GuideHelpButton tourId="horarios" pill className="mt-2" />
           </div>
         </section>
 
