@@ -11,6 +11,7 @@ import TutorSportCard from "@/components/dashboard/TutorSportCard";
 import AddDependentModal from "@/components/dashboard/AddDependentModal";
 import EditDependentModal from "@/components/dashboard/EditDependentModal";
 import { MembershipCardSkeleton } from "@/components/dashboard/DashboardSkeleton";
+import GuideHelpButton from "@/components/guide/GuideHelpButton";
 
 export default function CargasPage() {
   const { user } = useSession();
@@ -41,13 +42,17 @@ export default function CargasPage() {
             Personas que has inscrito como tus dependientes.
           </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="shrink-0 flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-5 py-2.5 rounded-lg transition-opacity hover:opacity-90 cursor-pointer"
-        >
-          <span className="material-symbols-outlined text-[18px]">add</span>
-          Agregar carga
-        </button>
+        <div className="flex items-center gap-3">
+          <GuideHelpButton tourId="cargas" pill />
+          <button
+            id="add-dependent-btn"
+            onClick={() => setShowModal(true)}
+            className="shrink-0 flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-5 py-2.5 rounded-lg transition-opacity hover:opacity-90 cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Agregar carga
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -57,7 +62,9 @@ export default function CargasPage() {
         </div>
       ) : (
         <>
-          <TutorSportCard />
+          <div id="tour-tutor-sport-card">
+            <TutorSportCard />
+          </div>
           {dependents.length === 0 ? (
             <div className="glass-panel rounded-xl p-8 text-center">
               <span className="material-symbols-outlined text-on-surface/20 text-[48px] mb-4 block">
@@ -77,7 +84,7 @@ export default function CargasPage() {
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div id="tour-dependents-list" className="space-y-4">
               {dependents.map((d) => (
                 <DependentCard
                   key={d.id}

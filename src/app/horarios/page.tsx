@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import PageCTA from "@/components/PageCTA";
 import EnrollModal from "@/components/EnrollModal";
 import PersonalizedEnrollModal from "@/components/PersonalizedEnrollModal";
+import GuideHelpButton from "@/components/guide/GuideHelpButton";
 
 interface Schedule {
   id: string;
@@ -235,24 +236,27 @@ export default function HorariosPage() {
 
         {/* Header */}
         <section className="pt-24 pb-8 px-5 md:px-6">
-          <div className="max-w-[1280px] mx-auto">
-            <p className="font-[family-name:var(--font-label-sm)] text-white uppercase tracking-[0.15em] mb-3 text-[14px] leading-[18px]">
-              Calendario de Entrenamientos
-            </p>
-            <h1 className="font-[family-name:var(--font-headline-lg)] text-[36px] leading-[40px] md:text-[56px] md:leading-[60px] md:tracking-[0.02em] text-white uppercase tracking-tighter mb-4">
-              Horarios
-            </h1>
-            <div className="flex items-center gap-3">
-              <span className="font-[family-name:var(--font-headline-md)] text-[22px] leading-[26px] md:text-[26px] text-white uppercase">Clases disponibles</span>
-              <div className="h-px flex-1 bg-white/20" />
+          <div className="max-w-[1280px] mx-auto flex items-start justify-between gap-4">
+            <div>
+              <p className="font-[family-name:var(--font-label-sm)] text-white uppercase tracking-[0.15em] mb-3 text-[14px] leading-[18px]">
+                Calendario de Entrenamientos
+              </p>
+              <h1 className="font-[family-name:var(--font-headline-lg)] text-[36px] leading-[40px] md:text-[56px] md:leading-[60px] md:tracking-[0.02em] text-white uppercase tracking-tighter mb-4">
+                Horarios
+              </h1>
+              <div className="flex items-center gap-3">
+                <span className="font-[family-name:var(--font-headline-md)] text-[22px] leading-[26px] md:text-[26px] text-white uppercase">Clases disponibles</span>
+                <div className="h-px flex-1 bg-white/20" />
+              </div>
             </div>
+            <GuideHelpButton tourId="clases" pill className="mt-2" />
           </div>
         </section>
 
         {/* Mode Toggle */}
         <section className="pb-4 px-5 md:px-6">
           <div className="max-w-[1280px] mx-auto">
-            <div className="inline-flex items-center gap-1 p-1 rounded-full bg-surface-container border border-on-surface/10">
+            <div id="tour-mode-toggle" className="inline-flex items-center gap-1 p-1 rounded-full bg-surface-container border border-on-surface/10">
               <button
                 onClick={() => handleModeChange("normal")}
                 className={`font-[family-name:var(--font-label-sm)] text-[13px] uppercase tracking-wider px-6 py-2.5 rounded-full transition-colors cursor-pointer ${modeFilter === "normal" ? "btn-primary-gradient text-white" : "text-white hover:bg-white/10"}`}
@@ -271,7 +275,7 @@ export default function HorariosPage() {
 
         {/* Filters */}
         <section className="pb-4 px-5 md:px-6">
-          <div className="max-w-[1280px] mx-auto flex flex-wrap gap-2">
+          <div id="tour-discipline-filters" className="max-w-[1280px] mx-auto flex flex-wrap gap-2">
             <button onClick={() => setActiveFilter("all")} className={`font-[family-name:var(--font-label-sm)] text-[13px] uppercase tracking-wider px-5 py-2 rounded-full border transition-colors cursor-pointer ${activeFilter === "all" ? "btn-primary-gradient text-white border-transparent" : "border-white/30 text-white hover:border-white"}`}>
               Todos
             </button>
@@ -286,7 +290,7 @@ export default function HorariosPage() {
 
         {/* Schedule Grid */}
         <section className="pb-16 px-2 md:px-4 lg:px-6 w-full">
-          <div className="w-full mx-auto bg-white rounded-2xl md:rounded-[32px] p-4 md:p-6 lg:p-10 shadow-[0_8px_40px_rgba(0,0,0,0.12)] border border-slate-200/60">
+          <div id="tour-schedule-grid" className="w-full mx-auto bg-white rounded-2xl md:rounded-[32px] p-4 md:p-6 lg:p-10 shadow-[0_8px_40px_rgba(0,0,0,0.12)] border border-slate-200/60">
             {loading ? (
               <div className="flex justify-center py-20">
                 <div className="animate-spin w-10 h-10 border-2 border-primary border-t-transparent rounded-full" />

@@ -20,6 +20,7 @@ import CheckoutModal from "@/components/CheckoutModal";
 import PersonalizedCheckoutModal from "@/components/PersonalizedCheckoutModal";
 import PersonalizedEnrollModal from "@/components/PersonalizedEnrollModal";
 import type { EnrollmentPlan } from "@/components/CheckoutModal";
+import GuideHelpButton from "@/components/guide/GuideHelpButton";
 
 type Filter = "all" | "activa" | "vencida" | "cancelada";
 
@@ -248,9 +249,12 @@ export default function MembresiasPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[40px] text-on-surface uppercase tracking-tighter">
-        Mis <span className="text-primary">Membresías</span>
-      </h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[40px] text-on-surface uppercase tracking-tighter">
+          Mis <span className="text-primary">Membresías</span>
+        </h1>
+        <GuideHelpButton tourId="membresias" pill />
+      </div>
 
       {/* ── BENEFICIARY CARDS GRID ────────────────────────────────────────── */}
       {loading ? (
@@ -292,7 +296,7 @@ export default function MembresiasPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div id="tour-beneficiaries-grid" className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {beneficiaryViewModels.map((b) => (
               <BeneficiaryCard
                 key={b.id}
@@ -317,7 +321,7 @@ export default function MembresiasPage() {
 
       {/* ── HISTORIAL DE MEMBRESÍAS ───────────────────────────────────────── */}
       {!loading && memberships.length > 0 && (
-        <div className="pt-2">
+        <div id="tour-membresias-history" className="pt-2">
           <div className="mb-5">
             <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase tracking-tighter">
               Historial de <span className="text-primary">Membresías</span>

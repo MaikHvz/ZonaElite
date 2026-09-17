@@ -57,6 +57,9 @@ export const metadata: Metadata = {
   },
 };
 
+import { GuideProvider } from "@/components/guide/GuideContext";
+import GuideTour from "@/components/guide/GuideTour";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -76,10 +79,13 @@ export default function RootLayout({
         <SessionProvider>
           <CartProvider>
             <ContactModalProvider>
-              <Navbar />
-              <FadeUpObserver />
-              {children}
-              <ContactModal />
+              <GuideProvider>
+                <Navbar />
+                <FadeUpObserver />
+                {children}
+                <ContactModal />
+                <GuideTour />
+              </GuideProvider>
             </ContactModalProvider>
           </CartProvider>
         </SessionProvider>

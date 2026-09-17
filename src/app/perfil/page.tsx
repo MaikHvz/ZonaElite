@@ -16,6 +16,7 @@ import {
 } from "@/lib/medidas";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import GuideHelpButton from "@/components/guide/GuideHelpButton";
 
 export default function PerfilPage() {
   const { user, loading, refreshProfile } = useSession();
@@ -149,29 +150,32 @@ export default function PerfilPage() {
         </Link>
 
         {/* Profile Header */}
-        <div className="glass-card bg-gradient-to-br from-primary-container/8 via-transparent to-transparent p-6 md:p-8 relative overflow-hidden">
+        <div id="tour-profile-header" className="glass-card bg-gradient-to-br from-primary-container/8 via-transparent to-transparent p-6 md:p-8 relative overflow-hidden">
           {/* Decorative glow */}
           <div className="absolute -top-16 -right-16 w-32 h-32 bg-primary-container/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 md:gap-5 relative z-10 text-center sm:text-left">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl btn-primary-gradient flex items-center justify-center shrink-0 shadow-[0_0_30px_rgba(255,84,76,0.3)]">
-              <span className="font-[family-name:var(--font-headline-lg)] text-white text-[28px] md:text-[32px]">
-                {initials}
-              </span>
+          <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4 relative z-10">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 md:gap-5 text-center sm:text-left">
+              <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl btn-primary-gradient flex items-center justify-center shrink-0 shadow-[0_0_30px_rgba(255,84,76,0.3)]">
+                <span className="font-[family-name:var(--font-headline-lg)] text-white text-[28px] md:text-[32px]">
+                  {initials}
+                </span>
+              </div>
+              <div className="pt-1">
+                <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] md:text-[36px] text-on-surface uppercase tracking-tighter leading-tight">
+                  {displayName}
+                </h1>
+                <p className="font-[family-name:var(--font-body-md)] text-[13px] md:text-[14px] text-on-surface-variant mt-1">
+                  {user.email}
+                </p>
+              </div>
             </div>
-            <div className="pt-1">
-              <h1 className="font-[family-name:var(--font-headline-lg)] text-[28px] md:text-[36px] text-on-surface uppercase tracking-tighter leading-tight">
-                {displayName}
-              </h1>
-              <p className="font-[family-name:var(--font-body-md)] text-[13px] md:text-[14px] text-on-surface-variant mt-1">
-                {user.email}
-              </p>
-            </div>
+            <GuideHelpButton tourId="perfil" pill />
           </div>
         </div>
 
         {/* Personal Info Card */}
-        <div className="glass-card p-5 md:p-6">
+        <div id="tour-profile-personal" className="glass-card p-5 md:p-6">
           <div className="flex items-center gap-2.5 mb-5">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-primary text-[18px]">
@@ -311,7 +315,7 @@ export default function PerfilPage() {
         </div>
 
         {/* Security Card */}
-        <div className="glass-card p-5 md:p-6">
+        <div id="tour-profile-security" className="glass-card p-5 md:p-6">
           <div className="flex items-center gap-2.5 mb-5">
             <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-blue-400 text-[18px]">

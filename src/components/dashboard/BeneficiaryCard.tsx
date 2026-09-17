@@ -177,6 +177,7 @@ export default function BeneficiaryCard({
 
   return (
     <div
+      data-tour="beneficiary-card"
       className="relative overflow-hidden rounded-2xl bg-surface-container-low border border-on-surface/5 transition-all duration-300 hover:shadow-lg hover:border-on-surface/10 flex flex-col"
       style={{ borderLeft: `3px solid ${accentColor}` }}
     >
@@ -234,7 +235,7 @@ export default function BeneficiaryCard({
       <div className="mx-5 h-px bg-on-surface/5" />
 
       {/* ── INSCRIPCIÓN ─────────────────────────────────────────────── */}
-      <div className="p-5 pb-4">
+      <div className="p-5 pb-4" data-tour="inscription-badge">
         <SectionLabel
           icon="badge"
           label="Inscripción Academia"
@@ -271,6 +272,7 @@ export default function BeneficiaryCard({
             </p>
             {hasEnrollmentPlans && (
               <button
+                data-tour="buy-inscription-btn"
                 onClick={onBuyInscription}
                 className="shrink-0 flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400 border border-amber-400/30 px-2.5 py-1 rounded-full hover:bg-amber-400/10 transition-colors cursor-pointer"
               >
@@ -285,7 +287,7 @@ export default function BeneficiaryCard({
       <div className="mx-5 h-px bg-on-surface/5" />
 
       {/* ── MEMBRESÍA ───────────────────────────────────────────────── */}
-      <div className="p-5 pb-4">
+      <div className="p-5 pb-4" data-tour="membership-badge">
         <SectionLabel
           icon="card_membership"
           label="Membresía"
@@ -397,6 +399,7 @@ export default function BeneficiaryCard({
               Sin membresía activa
             </p>
             <a
+              data-tour="buy-membership-btn"
               href="/#membresias"
               className="shrink-0 flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-primary border border-primary/30 px-2.5 py-1 rounded-full hover:bg-primary/10 transition-colors"
             >

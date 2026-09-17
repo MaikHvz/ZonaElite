@@ -22,6 +22,7 @@ import {
   HeroSkeleton,
 } from "@/components/dashboard/DashboardSkeleton";
 import { getUserNotifications, type NotificationData } from "@/lib/supabase/dashboard";
+import GuideHelpButton from "@/components/guide/GuideHelpButton";
 
 interface EnrollmentStatus {
   hasActive: boolean;
@@ -178,20 +179,23 @@ export default function DashboardPage() {
           {/* Decorative glow */}
           <div className="absolute -top-20 -right-20 w-40 h-40 bg-primary-container/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="flex items-center gap-4 md:gap-5 relative z-10">
-            <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl btn-primary-gradient flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(255,84,76,0.25)]">
-              <span className="font-[family-name:var(--font-headline-md)] text-white text-[20px] md:text-[22px]">
-                {initials}
-              </span>
+          <div className="flex items-center justify-between gap-4 relative z-10">
+            <div className="flex items-center gap-4 md:gap-5">
+              <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl btn-primary-gradient flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(255,84,76,0.25)]">
+                <span className="font-[family-name:var(--font-headline-md)] text-white text-[20px] md:text-[22px]">
+                  {initials}
+                </span>
+              </div>
+              <div>
+                <h1 className="font-[family-name:var(--font-headline-lg)] text-[26px] md:text-[34px] text-on-surface uppercase tracking-tighter leading-tight">
+                  Hola, <span className="text-primary">{firstName}</span>
+                </h1>
+                <p className="font-[family-name:var(--font-body-md)] text-[13px] md:text-[14px] text-on-surface-variant mt-0.5">
+                  Tu zona de entrenamiento
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-[family-name:var(--font-headline-lg)] text-[26px] md:text-[34px] text-on-surface uppercase tracking-tighter leading-tight">
-                Hola, <span className="text-primary">{firstName}</span>
-              </h1>
-              <p className="font-[family-name:var(--font-body-md)] text-[13px] md:text-[14px] text-on-surface-variant mt-0.5">
-                Tu zona de entrenamiento
-              </p>
-            </div>
+            <GuideHelpButton tourId="membresias" pill />
           </div>
         </div>
       )}
