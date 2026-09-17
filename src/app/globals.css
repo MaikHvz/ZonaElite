@@ -397,24 +397,25 @@ body {
   position: fixed;
   inset: 0;
   z-index: 9998;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
-  transition: opacity 0.3s ease;
+  transition: clip-path 0.25s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.3s ease;
 }
 
 @keyframes guideSpotlightPulse {
   0%, 100% {
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.78), 0 0 15px 3px rgba(255, 84, 76, 0.5);
+    box-shadow: 0 0 0 2px rgba(255, 84, 76, 0.9), 0 0 25px 4px rgba(255, 84, 76, 0.45);
   }
   50% {
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.78), 0 0 25px 6px rgba(255, 84, 76, 0.85);
+    box-shadow: 0 0 0 2.5px rgba(255, 84, 76, 1), 0 0 40px 8px rgba(255, 84, 76, 0.75);
   }
 }
 
 .guide-spotlight-box {
   animation: guideSpotlightPulse 2.5s infinite ease-in-out;
-  border: 2px solid rgba(255, 84, 76, 0.7);
+  border: 2px solid rgba(255, 84, 76, 0.85);
 }
 
 .guide-tooltip {

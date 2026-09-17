@@ -192,41 +192,53 @@ export default function GuideTour() {
 
   if (!activeTour || !tour || !step || !visible) return null;
 
-  // Spotlight clip: create a dark backdrop with a glowing window over target
+  const padLeft = targetRect ? Math.max(0, targetRect.left - PADDING) : 0;
+  const padTop = targetRect ? Math.max(0, targetRect.top - PADDING) : 0;
+  const padWidth = targetRect ? Math.min(window.innerWidth - padLeft, targetRect.width + PADDING * 2) : 0;
+  const padHeight = targetRect ? targetRect.height + PADDING * 2 : 0;
+
+  // Backdrop clip path: cuts out a 100% sharp, unblurred hole over the targeted element
+  const overlayStyle: React.CSSProperties = targetRect
+    ? {
+        clipPath: `polygon(
+          0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%,
+          ${padLeft}px ${padTop}px,
+          ${padLeft}px ${padTop + padHeight}px,
+          ${padLeft + padWidth}px ${padTop + padHeight}px,
+          ${padLeft + padWidth}px ${padTop}px,
+          ${padLeft}px ${padTop}px
+        )`,
+      }
+    : {};
+
+  // Spotlight ring: floating animated border over the clear focus area
   const spotlightStyle: React.CSSProperties = targetRect
     ? {
         position: "fixed",
-        top: Math.max(0, targetRect.top - PADDING),
-        left: Math.max(0, targetRect.left - PADDING),
-        width: Math.min(window.innerWidth, targetRect.width + PADDING * 2),
-        height: targetRect.height + PADDING * 2,
+        top: padTop,
+        left: padLeft,
+        width: padWidth,
+        height: padHeight,
         borderRadius: "14px",
-        boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.78)",
         zIndex: 10000,
         pointerEvents: "none" as const,
         transition: "all 0.25s cubic-bezier(0.2, 0, 0.2, 1)",
       }
     : {
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100vw",
-        height: "100vh",
-        background: "rgba(0, 0, 0, 0.78)",
-        zIndex: 10000,
-        pointerEvents: "none" as const,
+        display: "none",
       };
 
   return createPortal(
     <>
-      {/* Overlay backdrop — clicking backdrop advances or closes */}
+      {/* Overlay backdrop with backdrop blur & unblurred hole */}
       <div
         className="guide-overlay"
+        style={overlayStyle}
         onClick={endTour}
         aria-hidden="true"
       />
 
-      {/* Spotlight window */}
+      {/* Spotlight glowing ring */}
       <div className={targetRect ? "guide-spotlight-box" : ""} style={spotlightStyle} />
 
       {/* Tooltip */}
