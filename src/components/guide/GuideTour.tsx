@@ -184,15 +184,12 @@ export default function GuideTour() {
     return () => document.removeEventListener("keydown", handler);
   }, [activeTour, endTour]);
 
-  // Lock body scroll while tour is active
+  // Lock body scroll while tour is active (only if needed or omit to allow scrolling)
   useEffect(() => {
-    if (activeTour) {
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = "";
-      };
-    }
-  }, [activeTour]);
+    if (!activeTour) return;
+    updatePosition();
+    setVisible(true);
+  }, [activeTour, updatePosition]);
 
   if (!activeTour || !tour || !step || !visible) return null;
 
@@ -200,15 +197,15 @@ export default function GuideTour() {
   const spotlightStyle: React.CSSProperties = targetRect
     ? {
         position: "fixed",
-        top: targetRect.top - PADDING,
-        left: targetRect.left - PADDING,
+        top: Math.max(0, targetRect.top - PADDING),
+        left: Math.max(0, targetRect.left - PADDING),
         width: targetRect.width + PADDING * 2,
         height: targetRect.height + PADDING * 2,
         borderRadius: "12px",
-        boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.75)",
+        boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.78)",
         zIndex: 10000,
         pointerEvents: "none" as const,
-        transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       }
     : {
         position: "fixed",
@@ -216,7 +213,7 @@ export default function GuideTour() {
         left: 0,
         width: "100vw",
         height: "100vh",
-        background: "rgba(0, 0, 0, 0.75)",
+        background: "rgba(0, 0, 0, 0.78)",
         zIndex: 10000,
         pointerEvents: "none" as const,
       };
@@ -231,7 +228,7 @@ export default function GuideTour() {
       />
 
       {/* Spotlight window */}
-      <div style={spotlightStyle} />
+      <div className={targetRect ? "guide-spotlight-box" : ""} style={spotlightStyle} />
 
       {/* Tooltip */}
       <GuideTooltip

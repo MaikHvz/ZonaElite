@@ -150,7 +150,7 @@ export default function PerfilPage() {
         </Link>
 
         {/* Profile Header */}
-        <div id="tour-profile-header" className="glass-card bg-gradient-to-br from-primary-container/8 via-transparent to-transparent p-6 md:p-8 relative overflow-hidden">
+        <div id="tour-profile-header" data-guide="perfil-header" className="glass-card bg-gradient-to-br from-primary-container/8 via-transparent to-transparent p-6 md:p-8 relative overflow-hidden">
           {/* Decorative glow */}
           <div className="absolute -top-16 -right-16 w-32 h-32 bg-primary-container/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -175,7 +175,7 @@ export default function PerfilPage() {
         </div>
 
         {/* Personal Info Card */}
-        <div id="tour-profile-personal" className="glass-card p-5 md:p-6">
+        <div id="tour-profile-personal" data-guide="perfil-info" className="glass-card p-5 md:p-6">
           <div className="flex items-center gap-2.5 mb-5">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-primary text-[18px]">
@@ -251,7 +251,7 @@ export default function PerfilPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div data-guide="perfil-fisico" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
                   Peso (kg)
@@ -315,7 +315,7 @@ export default function PerfilPage() {
         </div>
 
         {/* Security Card */}
-        <div id="tour-profile-security" className="glass-card p-5 md:p-6">
+        <div id="tour-profile-security" data-guide="perfil-seguridad" className="glass-card p-5 md:p-6">
           <div className="flex items-center gap-2.5 mb-5">
             <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-blue-400 text-[18px]">
@@ -386,7 +386,7 @@ export default function PerfilPage() {
         </div>
 
         {/* Session Card */}
-        <div className="glass-card p-5 md:p-6">
+        <div data-guide="perfil-sesion" className="glass-card p-5 md:p-6">
           <div className="flex items-center gap-2.5 mb-4">
             <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-red-400 text-[18px]">

@@ -392,7 +392,17 @@ body {
   }
 }
 
-/* Guide Onboarding Overlay & Spotlight Animation */
+/* Guide Onboarding Overlay & Spotlight Styling */
+.guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
 @keyframes guideSpotlightPulse {
   0%, 100% {
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.78), 0 0 15px 3px rgba(255, 84, 76, 0.5);
@@ -404,5 +414,37 @@ body {
 
 .guide-spotlight-box {
   animation: guideSpotlightPulse 2.5s infinite ease-in-out;
+  border: 2px solid rgba(255, 84, 76, 0.7);
 }
+
+.guide-tooltip {
+  width: 320px;
+  background: rgba(22, 22, 26, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 84, 76, 0.25);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 20px rgba(255, 84, 76, 0.15);
+  animation: guideTooltipIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 768px) {
+  .guide-tooltip {
+    width: 290px;
+    padding: 14px;
+  }
+}
+
+@keyframes guideTooltipIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 

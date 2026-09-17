@@ -274,7 +274,7 @@ export default function MembresiasPage() {
       ) : (
         <>
           {/* Summary bar */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div data-guide="membresias-resumen" className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 text-[12px] text-on-surface-variant font-[family-name:var(--font-body-md)]">
               <div className="w-2 h-2 rounded-full bg-green-400" />
               {beneficiaryViewModels.filter((b) => b.inscription.hasActive && !!b.activeMembership).length} con cobertura completa
@@ -287,6 +287,7 @@ export default function MembresiasPage() {
             </div>
             {anyMissingInscription && enrollmentPlans.length > 0 && (
               <button
+                data-guide="membresias-comprar-inscripcion"
                 onClick={() => setEnrollCheckoutOpen(true)}
                 className="ml-auto flex items-center gap-1.5 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-amber-400 border border-amber-400/30 px-3 py-1.5 rounded-full hover:bg-amber-400/10 transition-colors cursor-pointer"
               >
@@ -296,7 +297,7 @@ export default function MembresiasPage() {
             )}
           </div>
 
-          <div id="tour-beneficiaries-grid" className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div id="tour-beneficiaries-grid" data-guide="membresias-beneficiary" className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {beneficiaryViewModels.map((b) => (
               <BeneficiaryCard
                 key={b.id}
@@ -321,7 +322,7 @@ export default function MembresiasPage() {
 
       {/* ── HISTORIAL DE MEMBRESÍAS ───────────────────────────────────────── */}
       {!loading && memberships.length > 0 && (
-        <div id="tour-membresias-history" className="pt-2">
+        <div id="tour-membresias-history" data-guide="membresias-historial" className="pt-2">
           <div className="mb-5">
             <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase tracking-tighter">
               Historial de <span className="text-primary">Membresías</span>
@@ -332,7 +333,7 @@ export default function MembresiasPage() {
           </div>
 
           {/* Filters */}
-          <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
+          <div data-guide="membresias-filtros" className="flex gap-2 overflow-x-auto pb-1 mb-4">
             {filters.map((f) => (
               <button
                 key={f.key}
@@ -375,7 +376,7 @@ export default function MembresiasPage() {
 
       {/* ── PRÓXIMAS CLASES PERSONALIZADAS ───────────────────────────────── */}
       {!loading && personalizedSchedules.length > 0 && (
-        <div className="pt-2">
+        <div data-guide="membresias-personalizadas" className="pt-2">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="font-[family-name:var(--font-headline-md)] text-[20px] text-on-surface uppercase tracking-tighter">

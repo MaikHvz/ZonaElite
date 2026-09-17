@@ -18,11 +18,15 @@ interface MembershipPlan {
   featured: boolean;
 }
 
+import { useGuide } from "@/components/guide/GuideContext";
+
 export default function Memberships() {
   const { user } = useSession();
+  const { startTour } = useGuide();
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null);
+
 
   useEffect(() => {
     const supabase = createClient();
@@ -130,9 +134,19 @@ export default function Memberships() {
       `}</style>
 
       <div className="text-center mb-16">
-        <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-5">
-          Planes de Entrenamiento
-        </span>
+        <div className="flex items-center justify-center gap-3 mb-5 flex-wrap">
+          <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5">
+            Planes de Entrenamiento
+          </span>
+          <button
+            onClick={() => startTour("landing")}
+            className="inline-flex items-center gap-1.5 font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary hover:text-primary-light bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded-full px-3.5 py-1.5 transition-all cursor-pointer shadow-[0_0_15px_rgba(255,84,76,0.15)]"
+            title="Ver guía interactiva paso a paso"
+          >
+            <span className="material-symbols-outlined text-[16px]">help</span>
+            ¿Cómo comprar?
+          </button>
+        </div>
         <h2 className="font-[family-name:var(--font-headline-lg)] text-[32px] leading-[36px] md:text-[48px] md:leading-[52px] md:tracking-[0.02em] text-on-surface uppercase tracking-tighter">
           Membresías{" "}
           <span className="text-primary">ZonaElite</span>
@@ -146,7 +160,7 @@ export default function Memberships() {
       {/* Enrollment Banner */}
       <EnrollmentBanner />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-5 items-start max-w-[960px] mx-auto">
+      <div data-guide="landing-membresias" className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-5 items-start max-w-[960px] mx-auto">
         {orderedPlans.map((plan, idx) => {
           const isPro = !!plan.featured;
           const benefits = Array.isArray(plan.benefits) ? plan.benefits : [];

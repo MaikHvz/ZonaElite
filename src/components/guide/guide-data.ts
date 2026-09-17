@@ -219,6 +219,54 @@ export const GUIDE_TOURS: Record<string, GuideTourDef> = {
       },
     ],
   },
+
+  landing: {
+    id: "landing",
+    pageTitle: "Guía de Compra y Uso",
+    icon: "help_center",
+    steps: [
+      {
+        targetSelector: "[data-guide='landing-pasos']",
+        title: "Proceso en 3 Pasos",
+        description:
+          "Para entrenar en Zona Elite solo debes: 1) Pagar la Inscripción anual. 2) Elegir y comprar tu Membresía. 3) Agendar tus clases en la grilla horaria.",
+        icon: "touch_app",
+        position: "bottom",
+      },
+      {
+        targetSelector: "[data-guide='landing-inscripcion']",
+        title: "Inscripción Anual (Matrícula)",
+        description:
+          "Es la matrícula de la academia. Es obligatoria para ti y tus cargas familiares antes o durante la compra de membresías.",
+        icon: "card_membership",
+        position: "bottom",
+      },
+      {
+        targetSelector: "[data-guide='landing-membresias']",
+        title: "Selecciona tu Membresía",
+        description:
+          "Elige entre nuestros planes. Presiona 'Comprar Plan' para ir al checkout seguro con Webpay de Transbank.",
+        icon: "shopping_cart",
+        position: "top",
+      },
+      {
+        targetSelector: "[data-guide='landing-personalizadas']",
+        title: "Clases Personalizadas",
+        description:
+          "Si buscas un entrenamiento enfocado 1 a 1, también puedes adquirir packs de clases personalizadas y coordinar con nuestros instructores.",
+        icon: "fitness_center",
+        position: "top",
+      },
+      {
+        targetSelector: "[data-guide='landing-checkout']",
+        title: "Checkout y Selección de Beneficiario",
+        description:
+          "Al presionar comprar, se abrirá el modal de checkout donde puedes elegir si la membresía es para ti o para una de tus cargas.",
+        icon: "payments",
+        position: "bottom",
+      },
+    ],
+  },
 };
 
 /** Get a tour definition by ID */
@@ -231,3 +279,4 @@ export const GUIDE_TOUR_IDS = Object.keys(GUIDE_TOURS);
 
 /** LocalStorage key prefix for tracking viewed tours */
 export const GUIDE_VIEWED_PREFIX = "ze_guide_viewed_";
+

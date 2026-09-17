@@ -256,7 +256,7 @@ export default function HorariosPage() {
         {/* Mode Toggle */}
         <section className="pb-4 px-5 md:px-6">
           <div className="max-w-[1280px] mx-auto">
-            <div id="tour-mode-toggle" className="inline-flex items-center gap-1 p-1 rounded-full bg-surface-container border border-on-surface/10">
+            <div id="tour-mode-toggle" data-guide="horarios-modo" className="inline-flex items-center gap-1 p-1 rounded-full bg-surface-container border border-on-surface/10">
               <button
                 onClick={() => handleModeChange("normal")}
                 className={`font-[family-name:var(--font-label-sm)] text-[13px] uppercase tracking-wider px-6 py-2.5 rounded-full transition-colors cursor-pointer ${modeFilter === "normal" ? "btn-primary-gradient text-white" : "text-white hover:bg-white/10"}`}
@@ -275,7 +275,7 @@ export default function HorariosPage() {
 
         {/* Filters */}
         <section className="pb-4 px-5 md:px-6">
-          <div id="tour-discipline-filters" className="max-w-[1280px] mx-auto flex flex-wrap gap-2">
+          <div id="tour-discipline-filters" data-guide="horarios-filtros" className="max-w-[1280px] mx-auto flex flex-wrap gap-2">
             <button onClick={() => setActiveFilter("all")} className={`font-[family-name:var(--font-label-sm)] text-[13px] uppercase tracking-wider px-5 py-2 rounded-full border transition-colors cursor-pointer ${activeFilter === "all" ? "btn-primary-gradient text-white border-transparent" : "border-white/30 text-white hover:border-white"}`}>
               Todos
             </button>
@@ -290,7 +290,7 @@ export default function HorariosPage() {
 
         {/* Schedule Grid */}
         <section className="pb-16 px-2 md:px-4 lg:px-6 w-full">
-          <div id="tour-schedule-grid" className="w-full mx-auto bg-white rounded-2xl md:rounded-[32px] p-4 md:p-6 lg:p-10 shadow-[0_8px_40px_rgba(0,0,0,0.12)] border border-slate-200/60">
+          <div id="tour-schedule-grid" data-guide="horarios-grilla" className="w-full mx-auto bg-white rounded-2xl md:rounded-[32px] p-4 md:p-6 lg:p-10 shadow-[0_8px_40px_rgba(0,0,0,0.12)] border border-slate-200/60">
             {loading ? (
               <div className="flex justify-center py-20">
                 <div className="animate-spin w-10 h-10 border-2 border-primary border-t-transparent rounded-full" />
@@ -347,7 +347,7 @@ export default function HorariosPage() {
                             : null;
 
                           return (
-                            <div key={day} className={`min-h-[120px] lg:min-h-[150px] flex transition-opacity duration-300 ${activeFilter === "all" || s.disciplines?.name === activeFilter ? "opacity-100" : "opacity-30"}`}>
+                            <div key={day} data-guide="horarios-celda" className={`min-h-[120px] lg:min-h-[150px] flex transition-opacity duration-300 ${activeFilter === "all" || s.disciplines?.name === activeFilter ? "opacity-100" : "opacity-30"}`}>
                               <div
                                 className={`w-full flex flex-col rounded-2xl p-4 lg:p-5 border-[1.5px] transition-all duration-300 relative overflow-hidden bg-white hover:shadow-xl hover:-translate-y-1 ${isFull ? "opacity-60 grayscale-[0.2]" : "cursor-pointer"} ${isLow ? "ring-2 ring-amber-400 ring-offset-2" : ""}`}
                                 style={{ borderColor: color, boxShadow: `0 4px 20px -10px ${color}40` }}
@@ -420,7 +420,7 @@ export default function HorariosPage() {
 
             {/* Legend inside the box */}
             {times.length > 0 && (
-              <div className="mt-10 pt-6 border-t border-slate-100 flex flex-wrap gap-8 items-center justify-center">
+              <div data-guide="horarios-leyenda" className="mt-10 pt-6 border-t border-slate-100 flex flex-wrap gap-8 items-center justify-center">
                 <div className="flex items-center gap-2.5">
                   <div className="w-4 h-4 rounded-full border-2 border-slate-200 bg-white shadow-sm" />
                   <span className="font-[family-name:var(--font-label-sm)] text-slate-500 text-[12px] lg:text-[13px] uppercase tracking-wider font-bold">Disponible</span>

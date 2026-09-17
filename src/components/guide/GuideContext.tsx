@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { GUIDE_TOURS } from "./guide-data";
 
 interface GuideState {
   /** Currently active tour ID, or null */
@@ -38,31 +39,25 @@ export function useGuide() {
 
 interface GuideProviderProps {
   children: ReactNode;
-  /** Map of tourId → number of steps (passed from parent for decoupling) */
-  tourStepCounts?: Record<string, number>;
 }
 
-export function GuideProvider({ children, tourStepCounts }: GuideProviderProps) {
+export function GuideProvider({ children }: GuideProviderProps) {
   const [activeTour, setActiveTour] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
 
-  const totalSteps = activeTour && tourStepCounts ? (tourStepCounts[activeTour] ?? 0) : 0;
+  const totalSteps = activeTour ? (GUIDE_TOURS[activeTour]?.steps.length ?? 0) : 0;
 
-  const startTour = useCallback(
-    (tourId: string) => {
-      setActiveTour(tourId);
-      setCurrentStep(0);
-    },
-    []
-  );
+  const startTour = useCallback((tourId: string) => {
+    setActiveTour(tourId);
+    setCurrentStep(0);
+  }, []);
 
   const endTour = useCallback(() => {
     if (activeTour) {
-      // Mark tour as viewed in localStorage
       try {
         localStorage.setItem(`ze_guide_viewed_${activeTour}`, "1");
       } catch {
-        // localStorage may be unavailable
+        // localStorage fallback
       }
     }
     setActiveTour(null);
@@ -71,8 +66,8 @@ export function GuideProvider({ children, tourStepCounts }: GuideProviderProps) 
 
   const nextStep = useCallback(() => {
     setCurrentStep((prev) => {
-      if (prev + 1 >= totalSteps) {
-        // Tour completed
+      const tourLength = activeTour ? (GUIDE_TOURS[activeTour]?.steps.length ?? 0) : 0;
+      if (prev + 1 >= tourLength) {
         if (activeTour) {
           try {
             localStorage.setItem(`ze_guide_viewed_${activeTour}`, "1");
@@ -85,7 +80,7 @@ export function GuideProvider({ children, tourStepCounts }: GuideProviderProps) 
       }
       return prev + 1;
     });
-  }, [totalSteps, activeTour]);
+  }, [activeTour]);
 
   const prevStep = useCallback(() => {
     setCurrentStep((prev) => Math.max(0, prev - 1));
@@ -93,9 +88,10 @@ export function GuideProvider({ children, tourStepCounts }: GuideProviderProps) 
 
   const goToStep = useCallback(
     (step: number) => {
-      setCurrentStep(Math.max(0, Math.min(step, totalSteps - 1)));
+      const tourLength = activeTour ? (GUIDE_TOURS[activeTour]?.steps.length ?? 0) : 0;
+      setCurrentStep(Math.max(0, Math.min(step, Math.max(0, tourLength - 1))));
     },
-    [totalSteps]
+    [activeTour]
   );
 
   return (
@@ -115,3 +111,4 @@ export function GuideProvider({ children, tourStepCounts }: GuideProviderProps) 
     </GuideContext.Provider>
   );
 }
+

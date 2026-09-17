@@ -57,7 +57,7 @@ export default function PersonalizedPlans() {
         </p>
       </div>
 
-      <div className={`grid ${gridColsClass} gap-6 md:gap-5 items-stretch mx-auto`}>
+      <div data-guide="landing-personalizadas" className={`grid ${gridColsClass} gap-6 md:gap-5 items-stretch mx-auto`}>
         {plans.map((plan) => {
           const features = Array.isArray(plan.features) ? plan.features : [];
           return (

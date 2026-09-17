@@ -34,7 +34,7 @@ export default function CargasPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <div>
+        <div data-guide="cargas-header">
           <h1 className="font-[family-name:var(--font-headline-lg)] text-[32px] md:text-[40px] text-on-surface uppercase tracking-tighter">
             Mis <span className="text-primary">Cargas</span>
           </h1>
@@ -46,6 +46,7 @@ export default function CargasPage() {
           <GuideHelpButton tourId="cargas" pill />
           <button
             id="add-dependent-btn"
+            data-guide="cargas-agregar"
             onClick={() => setShowModal(true)}
             className="shrink-0 flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-5 py-2.5 rounded-lg transition-opacity hover:opacity-90 cursor-pointer"
           >
@@ -62,7 +63,7 @@ export default function CargasPage() {
         </div>
       ) : (
         <>
-          <div id="tour-tutor-sport-card">
+          <div id="tour-tutor-sport-card" data-guide="cargas-tutor-sport">
             <TutorSportCard />
           </div>
           {dependents.length === 0 ? (
@@ -84,7 +85,7 @@ export default function CargasPage() {
               </button>
             </div>
           ) : (
-            <div id="tour-dependents-list" className="space-y-4">
+            <div id="tour-dependents-list" data-guide="cargas-card" className="space-y-4">
               {dependents.map((d) => (
                 <DependentCard
                   key={d.id}

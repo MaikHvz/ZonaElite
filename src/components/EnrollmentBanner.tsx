@@ -20,7 +20,7 @@ export default function EnrollmentBanner() {
 
   return (
     <>
-      <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-surface-container-lowest to-surface-container-low shadow-[0_0_60px_rgba(255,84,76,0.1)] mb-10">
+      <div data-guide="landing-inscripcion" className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-surface-container-lowest to-surface-container-low shadow-[0_0_60px_rgba(255,84,76,0.1)] mb-10">
         {/* Glow accent top-left */}
         <div
           aria-hidden="true"
