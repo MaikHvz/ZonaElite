@@ -528,22 +528,16 @@ body {
   pointer-events: none;
 }
 
-/* Entrada de la foto lateral con slide */
-@keyframes slide-in-left {
-  from { opacity: 0; transform: translateX(-40px); }
-  to   { opacity: 1; transform: translateX(0); }
+/* Entrada suave sin riesgo de desborde horizontal en móviles */
+@keyframes slide-in-up-soft {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .maestro-photo-enter {
-  animation: slide-in-left 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-/* Entrada del texto con slide derecha */
-@keyframes slide-in-right-sm {
-  from { opacity: 0; transform: translateX(30px); }
-  to   { opacity: 1; transform: translateX(0); }
+  animation: slide-in-up-soft 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .maestro-bio-enter {
-  animation: slide-in-right-sm 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  animation: slide-in-up-soft 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
 }
 
 /* Reduced motion */
