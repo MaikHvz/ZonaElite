@@ -431,47 +431,65 @@ export default function QuienesSomosPage() {
               </div>
             </div>
 
-            {/* ── HISTORIAL COMPETICIÓN ── */}
-            <div className="mb-16">
-              <div className="flex items-end gap-4 mb-6">
-                <div>
-                  <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-3">Competición Internacional</span>
-                  <h3 className="font-[family-name:var(--font-headline-md)] text-[24px] md:text-[28px] text-on-surface uppercase tracking-tighter">Presencia global <span className="text-primary">reciente</span></h3>
-                </div>
-                <div className="hidden md:flex items-center gap-1 ml-auto mb-1">
-                  <span className="w-2 h-2 rounded-full bg-primary animate-glow" />
-                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-on-surface-variant">Activo</span>
+            {/* ── HISTORIAL COMPETICIÓN (BANNER PREMIUM) ── */}
+            <div className="mb-20 relative">
+              {/* Banner Header */}
+              <div className="relative overflow-hidden rounded-t-3xl bg-surface-container border-t border-x px-6 md:px-10 py-8 md:py-12" style={{ borderColor: "rgba(255,180,172,0.15)", background: "linear-gradient(135deg, rgba(32,31,31,1) 0%, rgba(20,15,15,1) 100%)" }}>
+                {/* Background Decor */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[80px] pointer-events-none -translate-y-1/2 translate-x-1/3" />
+                <div className="absolute bottom-0 left-10 w-40 h-40 bg-primary/5 rounded-full blur-[60px] pointer-events-none translate-y-1/2" />
+                
+                <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+                  <div>
+                    <span className="inline-flex items-center gap-2 font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-[0.2em] text-primary bg-primary/10 border border-primary/30 rounded-full px-4 py-1.5 mb-4 shadow-[0_0_15px_rgba(255,84,76,0.15)]">
+                      <span className="material-symbols-outlined text-[14px]">public</span>
+                      Presencia Global
+                    </span>
+                    <h3 className="font-[family-name:var(--font-display-xl)] text-[32px] leading-[36px] md:text-[42px] md:leading-[46px] text-white uppercase tracking-tighter">
+                      Nivel <span className="text-primary text-glow-red">Internacional</span>
+                    </h3>
+                    <p className="mt-3 font-[family-name:var(--font-body-md)] text-[15px] text-on-surface-variant max-w-lg">
+                      Competimos en la élite mundial. Representando a Chile en los campeonatos más exigentes de América y Europa.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 bg-black/40 border rounded-full px-4 py-2 backdrop-blur-md w-fit" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
+                    <span className="w-2.5 h-2.5 rounded-full bg-primary animate-glow" />
+                    <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-white">Tour Activo</span>
+                  </div>
                 </div>
               </div>
-              <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: "rgba(255,180,172,0.1)" }}>
-                <table className="w-full min-w-[640px]">
-                  <thead>
-                    <tr style={{ background: "rgba(255,84,76,0.06)" }}>
-                      <th className="px-5 py-3.5 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary border-b" style={{ borderColor: "rgba(255,180,172,0.1)" }}>Fecha</th>
-                      <th className="px-5 py-3.5 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary border-b" style={{ borderColor: "rgba(255,180,172,0.1)" }}>Ubicación</th>
-                      <th className="px-5 py-3.5 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary border-b" style={{ borderColor: "rgba(255,180,172,0.1)" }}>Torneo / Campeonato</th>
-                      <th className="px-5 py-3.5 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary border-b" style={{ borderColor: "rgba(255,180,172,0.1)" }}>Categorías</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { fecha: "Jun 2026", lugar: "La Serena, Chile",           torneo: "C4 The Combat Series",           cats: "MMA" },
-                      { fecha: "Abr 2026", lugar: "Santiago, Chile",             torneo: "Campeonato Nacional Kenpo",       cats: "Formas, Light Contact, Kick Light, Point Fight" },
-                      { fecha: "Jun 2025", lugar: "Vicuña, Chile",               torneo: "Artes Marciales Vicuña 2025",     cats: "Light Contact, Kick Light, Punto Tradicional" },
-                      { fecha: "Abr 2025", lugar: "Caldas da Rainha, Portugal",  torneo: "XXI Mundial de Kempo IKF",        cats: "Full Kempo, Semi Kempo, Submission, Kata, MMA" },
-                      { fecha: "Oct 2024", lugar: "Talcahuano, Chile",           torneo: "Torneo Copa Ed Parker",           cats: "Formas, Defensa Personal, Combate y Sumisión" },
-                      { fecha: "Abr 2023", lugar: "Caldas da Rainha, Portugal",  torneo: "XIX Mundial de Kempo Karate",     cats: "Full Kempo, Semi Kempo, Submission, Kata, MMA" },
-                      { fecha: "Nov 2022", lugar: "Neuquén, Argentina",          torneo: "I Campeonato Panamericano IKF",   cats: "Formas, Defensa Personal, Full Kempo, Sumisión" },
-                    ].map((row, i) => (
-                      <tr key={i} className="border-t hover:bg-surface-container-high transition-colors" style={{ borderColor: "rgba(255,255,255,0.04)", background: i % 2 === 0 ? "rgba(32,31,31,1)" : "rgba(28,27,27,1)" }}>
-                        <td className="px-5 py-3.5 font-[family-name:var(--font-label-sm)] text-[11px] text-primary whitespace-nowrap">{row.fecha}</td>
-                        <td className="px-5 py-3.5 font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant whitespace-nowrap">{row.lugar}</td>
-                        <td className="px-5 py-3.5 font-[family-name:var(--font-body-md)] text-[13px] text-on-surface font-medium">{row.torneo}</td>
-                        <td className="px-5 py-3.5 font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">{row.cats}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+              {/* Scrolling Cards */}
+              <div className="bg-black/20 border-b border-x rounded-b-3xl p-6 md:p-10" style={{ borderColor: "rgba(255,180,172,0.15)", boxShadow: "inset 0 10px 30px rgba(0,0,0,0.5)" }}>
+                <div className="flex overflow-x-auto gap-4 md:gap-6 pb-6 pt-2 snap-x scrollbar-hide -mx-6 px-6 md:-mx-10 md:px-10">
+                  {[
+                    { fecha: "Junio 2026",     lugar: "La Serena, Chile",           flag: "🇨🇱", torneo: "C4 The Combat Series",           cats: "MMA" },
+                    { fecha: "Abril 2026",     lugar: "Santiago, Chile",             flag: "🇨🇱", torneo: "Campeonato Nacional Kenpo",       cats: "Formas, Light Contact, Kick Light" },
+                    { fecha: "Junio 2025",     lugar: "Vicuña, Chile",               flag: "🇨🇱", torneo: "Artes Marciales Vicuña",          cats: "Light Contact, Kick Light" },
+                    { fecha: "Abril 2025",     lugar: "Caldas da Rainha, Portugal",  flag: "🇵🇹", torneo: "XXI Mundial de Kempo IKF",        cats: "Full Kempo, Semi Kempo, Kata, MMA" },
+                    { fecha: "Octubre 2024",   lugar: "Talcahuano, Chile",           flag: "🇨🇱", torneo: "Torneo Copa Ed Parker",           cats: "Formas, Combate y Sumisión" },
+                    { fecha: "Abril 2023",     lugar: "Caldas da Rainha, Portugal",  flag: "🇵🇹", torneo: "XIX Mundial de Kempo",            cats: "Full Kempo, Semi Kempo, MMA" },
+                    { fecha: "Noviembre 2022", lugar: "Neuquén, Argentina",          flag: "🇦🇷", torneo: "I Panamericano IKF",              cats: "Full Kempo, Sumisión" },
+                  ].map((row, i) => (
+                    <div key={i} className="snap-center shrink-0 w-[280px] md:w-[320px] bg-surface-container-high rounded-2xl p-6 border transition-all duration-300 hover:-translate-y-2 group" style={{ borderColor: "rgba(255,255,255,0.06)", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }}>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="bg-black/40 rounded-lg px-3 py-1.5 border" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+                          <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary">{row.fecha}</span>
+                        </div>
+                        <span className="text-[24px] filter grayscale-[0.3] group-hover:grayscale-0 transition-all">{row.flag}</span>
+                      </div>
+                      <h4 className="font-[family-name:var(--font-headline-md)] text-[18px] leading-[22px] text-white uppercase mb-2">{row.torneo}</h4>
+                      <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mb-4 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[14px] text-on-surface-variant">location_on</span>
+                        {row.lugar}
+                      </p>
+                      <div className="pt-4 border-t" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+                        <p className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-widest text-on-surface-variant mb-1">Categorías</p>
+                        <p className="font-[family-name:var(--font-body-md)] text-[13px] text-white/90">{row.cats}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
