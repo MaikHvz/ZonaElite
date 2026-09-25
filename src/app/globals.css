@@ -449,3 +449,114 @@ body {
 }
 
 
+
+/* ============================================================
+   Sección Nuestro Maestro — Animaciones premium
+   ============================================================ */
+
+/* Anillo pulsante alrededor de la foto del maestro */
+@keyframes ring-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(255, 84, 76, 0.55), 0 0 0 0   rgba(255, 84, 76, 0.25); }
+  50%  { box-shadow: 0 0 0 10px rgba(255, 84, 76, 0),   0 0 0 20px rgba(255, 84, 76, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(255, 84, 76, 0.55), 0 0 0 0   rgba(255, 84, 76, 0.25); }
+}
+.maestro-ring {
+  animation: ring-pulse 2.8s ease-in-out infinite;
+}
+
+/* Entrada escalonada de stats */
+@keyframes stat-reveal {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0)  scale(1); }
+}
+.stat-card {
+  animation: stat-reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stat-card:nth-child(1) { animation-delay: 0.05s; }
+.stat-card:nth-child(2) { animation-delay: 0.15s; }
+.stat-card:nth-child(3) { animation-delay: 0.25s; }
+.stat-card:nth-child(4) { animation-delay: 0.35s; }
+
+/* Brillo deslizante en stat cards */
+@keyframes stat-shimmer {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+.stat-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(255,180,172,0.08) 50%, transparent 70%);
+  animation: stat-shimmer 3.2s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Timeline dot entrada */
+@keyframes tl-dot-in {
+  from { transform: scale(0) rotate(-90deg); opacity: 0; }
+  to   { transform: scale(1) rotate(0deg);   opacity: 1; }
+}
+.tl-dot {
+  animation: tl-dot-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.tl-item:nth-child(1) .tl-dot { animation-delay: 0.1s; }
+.tl-item:nth-child(2) .tl-dot { animation-delay: 0.2s; }
+.tl-item:nth-child(3) .tl-dot { animation-delay: 0.3s; }
+.tl-item:nth-child(4) .tl-dot { animation-delay: 0.4s; }
+.tl-item:nth-child(5) .tl-dot { animation-delay: 0.5s; }
+.tl-item:nth-child(6) .tl-dot { animation-delay: 0.6s; }
+.tl-item:nth-child(7) .tl-dot { animation-delay: 0.7s; }
+.tl-item:nth-child(8) .tl-dot { animation-delay: 0.8s; }
+.tl-item:nth-child(9) .tl-dot { animation-delay: 0.9s; }
+
+/* Scan diagonal en la foto del grupo */
+@keyframes scan-line {
+  0%   { top: -10%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 0.6; }
+  100% { top: 110%; opacity: 0; }
+}
+.group-scan::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255,84,76,0.6), transparent);
+  animation: scan-line 4s ease-in-out infinite;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Entrada de la foto lateral con slide */
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.maestro-photo-enter {
+  animation: slide-in-left 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Entrada del texto con slide derecha */
+@keyframes slide-in-right-sm {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.maestro-bio-enter {
+  animation: slide-in-right-sm 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .maestro-ring,
+  .stat-card,
+  .stat-card::after,
+  .tl-dot,
+  .group-scan::before,
+  .maestro-photo-enter,
+  .maestro-bio-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

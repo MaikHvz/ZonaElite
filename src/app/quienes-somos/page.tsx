@@ -277,6 +277,243 @@ export default function QuienesSomosPage() {
           </div>
         </section>
 
+        {/* ============ NUESTRO MAESTRO ============ */}
+        <section id="nuestro-maestro" className="relative overflow-hidden fade-up">
+          {/* Fondo con gradiente rojo dramático */}
+          <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(160deg, rgba(255,84,76,0.07) 0%, transparent 45%), linear-gradient(200deg, transparent 55%, rgba(255,84,76,0.04) 100%)" }} />
+          {/* Línea separadora superior */}
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+
+          <div className="max-w-[1280px] mx-auto px-5 md:px-6 py-[72px] md:py-[112px]">
+
+            {/* ── ENCABEZADO ── */}
+            <div className="text-center mb-14 md:mb-20">
+              <span className="inline-flex items-center gap-2 font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.18em] text-primary bg-primary/10 border border-primary/25 rounded-full px-5 py-2 mb-6">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-glow inline-block" />
+                Director Técnico &amp; Fundador
+              </span>
+              <h2 className="font-[family-name:var(--font-display-xl)] text-[38px] leading-[40px] md:text-[60px] md:leading-[64px] text-on-surface uppercase tracking-tighter">
+                El hombre detrás de{" "}
+                <span className="text-primary text-glow-red">ZONAELITE</span>
+              </h2>
+              <p className="mt-5 font-[family-name:var(--font-body-md)] text-[16px] leading-[26px] text-on-surface-variant max-w-xl mx-auto">
+                Cinturón Negro 4to Grado · Más de 30 años de trayectoria · Campeón Mundial
+              </p>
+            </div>
+
+            {/* ── STATS ANIMADAS ── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-16">
+              {[
+                { num: "+30", label: "Años en las artes marciales", icon: "military_tech" },
+                { num: "5×",  label: "Campeón Mundial / Continental", icon: "emoji_events" },
+                { num: "2014", label: "Fundación del club en La Serena", icon: "flag" },
+                { num: "3",   label: "Continentes de competencia", icon: "travel_explore" },
+              ].map((s) => (
+                <div key={s.num} className="stat-card relative overflow-hidden bg-surface-container border border-on-surface/8 rounded-2xl p-5 flex flex-col items-center text-center gap-2" style={{ borderColor: "rgba(255,180,172,0.1)" }}>
+                  <span className="material-symbols-outlined text-primary text-[28px]">{s.icon}</span>
+                  <span className="font-[family-name:var(--font-display-xl)] text-[36px] leading-none text-on-surface text-glow-red">{s.num}</span>
+                  <span className="font-[family-name:var(--font-body-md)] text-[12px] leading-[18px] text-on-surface-variant">{s.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* ── LAYOUT: FOTO + BIO ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-12 md:gap-20 items-start mb-20">
+
+              {/* Foto con anillo pulsante */}
+              <div className="maestro-photo-enter flex flex-col gap-6">
+                <div className="relative mx-auto lg:mx-0 w-full max-w-[380px]">
+                  {/* Glow ring exterior */}
+                  <div className="absolute -inset-[6px] rounded-[22px] maestro-ring" style={{ background: "linear-gradient(135deg, rgba(255,84,76,0.3), rgba(255,180,172,0.1))" }} />
+                  <div className="relative overflow-hidden rounded-2xl" style={{ boxShadow: "0 32px 80px rgba(0,0,0,0.7), 0 0 60px rgba(255,84,76,0.18)" }}>
+                    <img
+                      src="/juan_banner.jpeg"
+                      alt="Sensei Juan Valenzuela — Director Técnico ZONAELITE"
+                      className="w-full object-cover"
+                      style={{ aspectRatio: "9/13", objectFit: "cover", objectPosition: "center top" }}
+                    />
+                    {/* Overlay inferior */}
+                    <div className="absolute bottom-0 left-0 right-0 p-5" style={{ background: "linear-gradient(0deg, rgba(19,19,19,0.98) 0%, rgba(19,19,19,0.7) 55%, transparent 100%)" }}>
+                      <p className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-[0.25em] text-primary mb-1">Cinturón Negro 4to Grado (Danes)</p>
+                      <p className="font-[family-name:var(--font-headline-md)] text-[20px] leading-[24px] text-on-surface uppercase">Juan Eduardo<br/>Valenzuela Araya</p>
+                    </div>
+                    {/* Badge Campeón Mundial */}
+                    <div className="absolute top-4 right-4 btn-primary-gradient rounded-xl px-3 py-2 shadow-[0_0_20px_rgba(255,84,76,0.5)]">
+                      <span className="material-symbols-outlined text-white text-[18px] block text-center">emoji_events</span>
+                      <p className="font-[family-name:var(--font-label-sm)] text-[8px] uppercase tracking-wide text-white text-center leading-tight">Campeón<br/>Mundial</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card datos institucionales */}
+                <div className="bg-surface-container rounded-2xl p-5 border grid grid-cols-1 gap-3.5" style={{ borderColor: "rgba(255,180,172,0.1)" }}>
+                  {[
+                    { icon: "location_on", label: "Sede", val: "Av. Cruz del Molino #342, La Serena" },
+                    { icon: "phone",       label: "Contacto", val: "+56 9 3495 9924" },
+                    { icon: "mail",        label: "Email", val: "biokenpo@gmail.com" },
+                    { icon: "photo_camera",label: "Instagram", val: "@biokenpo.karate_juanvalenzuela" },
+                  ].map((d) => (
+                    <div key={d.icon} className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-primary text-[16px]">{d.icon}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-widest text-primary">{d.label}</p>
+                        <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant truncate">{d.val}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Biografía + Timeline vertical */}
+              <div className="maestro-bio-enter space-y-10">
+
+                {/* Bio */}
+                <div className="space-y-4">
+                  <p className="font-[family-name:var(--font-body-md)] text-[16px] leading-[28px] text-on-surface-variant">
+                    La historia marcial de <strong className="text-on-surface">Juan Eduardo Valenzuela Araya</strong> comenzó a forjarse a mediados de los años noventa. En una época donde las artes marciales mixtas aún abrían camino en Chile, el joven Valenzuela destacó rápidamente por su disciplina implacable y su técnica depurada en el combate Light Contact.
+                  </p>
+                  <p className="font-[family-name:var(--font-body-md)] text-[16px] leading-[28px] text-on-surface-variant">
+                    Entre 1995 y 1998 se consagró campeón en los <strong className="text-on-surface">Campeonatos Panamericanos y Sudamericanos</strong>. En noviembre de 2013 alcanzó la cima: <strong className="text-on-surface">Campeón Mundial</strong> categoría Danes Serie Adulta en Antofagasta, hito indexado públicamente por el Diario La Estrella.
+                  </p>
+                  <p className="font-[family-name:var(--font-body-md)] text-[16px] leading-[28px] text-on-surface-variant">
+                    En 2014 fundó el <strong className="text-on-surface">Club Deportivo Kenpo La Serena (BKLS Zona Élite)</strong>. Hoy este club proyecta el nombre de Chile al mundo, compitiendo en Portugal, Argentina y Chile con atletas formados bajo su tutela.
+                  </p>
+                  <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border" style={{ borderColor: "rgba(255,180,172,0.25)", background: "rgba(255,84,76,0.05)" }}>
+                    <span className="material-symbols-outlined text-primary text-[16px]">verified</span>
+                    <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-on-surface-variant">American Kenpo Mixed System Martial Arts</span>
+                  </div>
+                </div>
+
+                {/* Timeline de logros vertical */}
+                <div>
+                  <h3 className="font-[family-name:var(--font-headline-md)] text-[18px] leading-[22px] text-on-surface uppercase tracking-tight mb-6">
+                    Palmarés — <span className="text-primary">tres décadas</span>
+                  </h3>
+                  <div className="relative">
+                    {/* Línea vertical continua */}
+                    <div className="absolute left-[15px] top-2 bottom-2 w-px story-timeline" />
+
+                    <ol className="space-y-0">
+                      {[
+                        { year: "1995–1998", icon: "emoji_events",      title: "Campeón Panamericano & Sudamericano",     desc: "Múltiples títulos en combate Light Contact en Santiago de Chile." },
+                        { year: "2010",      icon: "military_tech",     title: "Deportista Destacado AKKK",               desc: "Galardón de la Asociación American Kenpo Karate." },
+                        { year: "Nov 2013",  icon: "public",            title: "Campeón Mundial — Antofagasta",           desc: "1er Lugar Danes Serie Adulta. Indexado por el Diario La Estrella." },
+                        { year: "2015",      icon: "workspace_premium", title: "Campeón Mundial — Antofagasta (2da vez)", desc: "Reafirma su dominio en Light Contact a nivel mundial." },
+                        { year: "2018",      icon: "social_leaderboard",title: "Triple Honor + Reconocimiento CIAM",      desc: "30 años de carrera + Campeón Mundial en Talcahuano." },
+                        { year: "2019",      icon: "star",              title: "Distinción Especial FNAZ",               desc: "Federación Nacional de Artes Zona Norte reconoce su espíritu marcial." },
+                        { year: "2022",      icon: "flag",              title: "🥇 Oro Sudamericano — Neuquén",            desc: "Full Kempo, Semi Kempo y Kata de Manos Vacías en Argentina." },
+                        { year: "2023–2025", icon: "travel_explore",    title: "XXI Mundial IKF — Portugal",             desc: "Caldas da Rainha: Full Kempo, Semi Kempo, Submission, Kata, MMA." },
+                        { year: "2014–Hoy",  icon: "groups",            title: "Fundador BKLS Zona Élite",               desc: "Semillero de campeones que proyecta La Serena al mundo." },
+                      ].map((item) => (
+                        <li key={item.year} className="tl-item relative flex gap-5 pb-7 last:pb-0">
+                          {/* Nodo */}
+                          <div className="flex-shrink-0 relative z-10 mt-0.5">
+                            <div className="tl-dot w-8 h-8 rounded-full btn-primary-gradient flex items-center justify-center shadow-[0_0_12px_rgba(255,84,76,0.4)]">
+                              <span className="material-symbols-outlined text-white text-[14px]">{item.icon}</span>
+                            </div>
+                          </div>
+                          {/* Contenido */}
+                          <div className="flex-1 bg-surface-container rounded-xl p-4 border hover:border-primary/30 transition-all duration-300 hover:-translate-y-0.5 hover:[box-shadow:0_6px_24px_rgba(255,84,76,0.10)]" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary">{item.year}</span>
+                            </div>
+                            <h4 className="font-[family-name:var(--font-headline-md)] text-[14px] leading-[18px] text-on-surface uppercase mb-1">{item.title}</h4>
+                            <p className="font-[family-name:var(--font-body-md)] text-[13px] leading-[20px] text-on-surface-variant">{item.desc}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* ── HISTORIAL COMPETICIÓN ── */}
+            <div className="mb-16">
+              <div className="flex items-end gap-4 mb-6">
+                <div>
+                  <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-3">Competición Internacional</span>
+                  <h3 className="font-[family-name:var(--font-headline-md)] text-[24px] md:text-[28px] text-on-surface uppercase tracking-tighter">Presencia global <span className="text-primary">reciente</span></h3>
+                </div>
+                <div className="hidden md:flex items-center gap-1 ml-auto mb-1">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-glow" />
+                  <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-on-surface-variant">Activo</span>
+                </div>
+              </div>
+              <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: "rgba(255,180,172,0.1)" }}>
+                <table className="w-full min-w-[640px]">
+                  <thead>
+                    <tr style={{ background: "rgba(255,84,76,0.06)" }}>
+                      <th className="px-5 py-3.5 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary border-b" style={{ borderColor: "rgba(255,180,172,0.1)" }}>Fecha</th>
+                      <th className="px-5 py-3.5 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary border-b" style={{ borderColor: "rgba(255,180,172,0.1)" }}>Ubicación</th>
+                      <th className="px-5 py-3.5 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary border-b" style={{ borderColor: "rgba(255,180,172,0.1)" }}>Torneo / Campeonato</th>
+                      <th className="px-5 py-3.5 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary border-b" style={{ borderColor: "rgba(255,180,172,0.1)" }}>Categorías</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { fecha: "Jun 2026", lugar: "La Serena, Chile",           torneo: "C4 The Combat Series",           cats: "MMA" },
+                      { fecha: "Abr 2026", lugar: "Santiago, Chile",             torneo: "Campeonato Nacional Kenpo",       cats: "Formas, Light Contact, Kick Light, Point Fight" },
+                      { fecha: "Jun 2025", lugar: "Vicuña, Chile",               torneo: "Artes Marciales Vicuña 2025",     cats: "Light Contact, Kick Light, Punto Tradicional" },
+                      { fecha: "Abr 2025", lugar: "Caldas da Rainha, Portugal",  torneo: "XXI Mundial de Kempo IKF",        cats: "Full Kempo, Semi Kempo, Submission, Kata, MMA" },
+                      { fecha: "Oct 2024", lugar: "Talcahuano, Chile",           torneo: "Torneo Copa Ed Parker",           cats: "Formas, Defensa Personal, Combate y Sumisión" },
+                      { fecha: "Abr 2023", lugar: "Caldas da Rainha, Portugal",  torneo: "XIX Mundial de Kempo Karate",     cats: "Full Kempo, Semi Kempo, Submission, Kata, MMA" },
+                      { fecha: "Nov 2022", lugar: "Neuquén, Argentina",          torneo: "I Campeonato Panamericano IKF",   cats: "Formas, Defensa Personal, Full Kempo, Sumisión" },
+                    ].map((row, i) => (
+                      <tr key={i} className="border-t hover:bg-surface-container-high transition-colors" style={{ borderColor: "rgba(255,255,255,0.04)", background: i % 2 === 0 ? "rgba(32,31,31,1)" : "rgba(28,27,27,1)" }}>
+                        <td className="px-5 py-3.5 font-[family-name:var(--font-label-sm)] text-[11px] text-primary whitespace-nowrap">{row.fecha}</td>
+                        <td className="px-5 py-3.5 font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant whitespace-nowrap">{row.lugar}</td>
+                        <td className="px-5 py-3.5 font-[family-name:var(--font-body-md)] text-[13px] text-on-surface font-medium">{row.torneo}</td>
+                        <td className="px-5 py-3.5 font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">{row.cats}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* ── FOTO GRUPAL ── */}
+            <div>
+              <div className="mb-6">
+                <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-3">Nuestra Familia</span>
+                <h3 className="font-[family-name:var(--font-headline-md)] text-[24px] md:text-[28px] text-on-surface uppercase tracking-tighter">Los alumnos son <span className="text-primary">el legado</span></h3>
+              </div>
+              <div className="group-scan relative overflow-hidden rounded-2xl" style={{ boxShadow: "0 32px 80px rgba(0,0,0,0.8), 0 0 60px rgba(255,84,76,0.08)" }}>
+                <img
+                  src="/kenpo_adulto.jpeg"
+                  alt="Alumnos junto al Sensei Juan Valenzuela — BKLS Zona Élite"
+                  className="w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  style={{ maxHeight: "560px", objectPosition: "center top" }}
+                />
+                {/* Overlay inferior */}
+                <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10" style={{ background: "linear-gradient(0deg, rgba(19,19,19,0.97) 0%, rgba(19,19,19,0.6) 55%, transparent 100%)" }}>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-full btn-primary-gradient flex items-center justify-center flex-shrink-0 shadow-[0_0_20px_rgba(255,84,76,0.5)]">
+                        <span className="material-symbols-outlined text-white text-[22px]">groups</span>
+                      </div>
+                      <div>
+                        <p className="font-[family-name:var(--font-headline-md)] text-[17px] leading-[22px] text-on-surface uppercase">Clase de Kenpo Adultos</p>
+                        <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">Club Deportivo Kenpo La Serena · Av. Cruz del Molino #342</p>
+                      </div>
+                    </div>
+                    <a href="/horarios" className="inline-flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-sm px-6 py-3 rounded-[0.25rem] uppercase tracking-widest hover:opacity-90 transition-opacity shadow-[0_0_20px_rgba(229,57,53,0.3)] flex-shrink-0">
+                      Reservar clase
+                      <span className="material-symbols-outlined text-[18px]">calendar_month</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          {/* Línea separadora inferior */}
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        </section>
+
         {/* ============ HISTORIA INTERACTIVA ============ */}
         <section className="relative">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -325,214 +562,7 @@ export default function QuienesSomosPage() {
           </div>
         </section>
 
-        {/* ============ NUESTRO MAESTRO ============ */}
-        <section id="nuestro-maestro" className="py-[64px] md:py-[96px] fade-up" style={{ background: "linear-gradient(180deg, #131313 0%, #1a1010 50%, #131313 100%)" }}>
-          <div className="absolute inset-x-0" style={{ height: "1px", background: "linear-gradient(to right, transparent, rgba(255,84,76,0.4), transparent)" }} />
-          <div className="max-w-[1280px] mx-auto px-5 md:px-6">
 
-            {/* Encabezado */}
-            <div className="mb-12 md:mb-16">
-              <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-5">
-                Director Técnico & Fundador
-              </span>
-              <h2 className="font-[family-name:var(--font-display-xl)] text-[36px] leading-[38px] md:text-[52px] md:leading-[56px] text-on-surface uppercase tracking-tighter max-w-3xl">
-                El hombre detrás de{" "}
-                <span className="text-primary text-glow-red">ZONAELITE</span>
-              </h2>
-            </div>
-
-            {/* Layout principal: imagen + bio */}
-            <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-10 md:gap-16 items-start mb-16">
-
-              {/* Imagen del maestro */}
-              <div className="relative">
-                <div className="relative overflow-hidden rounded-2xl" style={{ boxShadow: "0 0 60px rgba(255,84,76,0.20), 0 24px 48px rgba(0,0,0,0.6)" }}>
-                  <img
-                    src="/juan_banner.jpeg"
-                    alt="Sensei Juan Valenzuela — Director Técnico ZONAELITE"
-                    className="w-full h-auto object-cover"
-                    style={{ aspectRatio: "9/16", objectFit: "cover", objectPosition: "center top" }}
-                  />
-                  {/* Overlay con datos */}
-                  <div className="absolute bottom-0 left-0 right-0 p-6" style={{ background: "linear-gradient(0deg, rgba(19,19,19,0.97) 0%, rgba(19,19,19,0.70) 60%, transparent 100%)" }}>
-                    <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-[0.2em] text-primary mb-1">Cinturón Negro 4to Grado (Danes)</p>
-                    <h3 className="font-[family-name:var(--font-headline-md)] text-[22px] leading-[26px] text-on-surface uppercase">Juan Eduardo<br/>Valenzuela Araya</h3>
-                    <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mt-1">+30 años de trayectoria · Campeón Mundial</p>
-                  </div>
-                </div>
-                {/* Badge flotante */}
-                <div className="absolute -top-4 -right-4 w-20 h-20 rounded-full btn-primary-gradient flex flex-col items-center justify-center shadow-[0_0_24px_rgba(255,84,76,0.5)]">
-                  <span className="font-[family-name:var(--font-display-xl)] text-white text-[26px] leading-none">+30</span>
-                  <span className="font-[family-name:var(--font-label-sm)] text-white text-[8px] uppercase tracking-wide leading-tight text-center">años<br/>marciales</span>
-                </div>
-              </div>
-
-              {/* Bio y datos */}
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <p className="font-[family-name:var(--font-body-md)] text-[16px] leading-[28px] text-on-surface-variant">
-                    La historia marcial de <strong className="text-on-surface">Juan Eduardo Valenzuela Araya</strong> comenzó a forjarse a mediados de los años noventa. En una época donde las artes marciales mixtas aún abrían camino en Chile, el joven Valenzuela destacó rápidamente por su disciplina implacable y su técnica depurada en el combate Light Contact.
-                  </p>
-                  <p className="font-[family-name:var(--font-body-md)] text-[16px] leading-[28px] text-on-surface-variant">
-                    Entre 1995 y 1998, su nombre comenzó a sonar con fuerza en el circuito nacional e internacional al coronarse de manera consecutiva como Campeón en los <strong className="text-on-surface">Campeonatos Panamericanos y Sudamericanos</strong> realizados en Santiago de Chile.
-                  </p>
-                  <p className="font-[family-name:var(--font-body-md)] text-[16px] leading-[28px] text-on-surface-variant">
-                    En 2014, con décadas de experiencia acumulada, fundó el <strong className="text-on-surface">Club Deportivo Kenpo La Serena (BKLS Zona Élite)</strong>, ubicado en Av. Cruz del Molino #342, La Serena. Hoy este club es un semillero de campeones y un espacio de formación integral para niños, jóvenes y adultos de la Región de Coquimbo.
-                  </p>
-                </div>
-
-                {/* Datos de contacto institucional */}
-                <div className="bg-surface-container rounded-xl p-5 border border-on-surface/5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">location_on</span>
-                    <div>
-                      <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary mb-0.5">Sede Central</p>
-                      <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface-variant">Av. Cruz del Molino #342, La Serena</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">phone</span>
-                    <div>
-                      <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary mb-0.5">Contacto</p>
-                      <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface-variant">+56 9 3495 9924</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">mail</span>
-                    <div>
-                      <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary mb-0.5">Correo</p>
-                      <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface-variant">biokenpo@gmail.com</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">share</span>
-                    <div>
-                      <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary mb-0.5">Instagram</p>
-                      <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface-variant">@biokenpo.karate_juanvalenzuela</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Afiliación */}
-                <div className="flex items-center gap-3 px-5 py-3 rounded-full border border-primary/30 bg-primary/5 w-fit">
-                  <span className="material-symbols-outlined text-primary text-[18px]">verified</span>
-                  <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-widest text-on-surface-variant">American Kenpo Mixed System Martial Arts</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Línea de tiempo de logros */}
-            <div className="mb-16">
-              <div className="mb-8">
-                <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-4">
-                  Palmarés & Reconocimientos
-                </span>
-                <h3 className="font-[family-name:var(--font-headline-md)] text-[24px] leading-[28px] md:text-[28px] md:leading-[32px] text-on-surface uppercase tracking-tighter">
-                  Una carrera de <span className="text-primary">tres décadas</span>
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[
-                  { year: "1995–1998", icon: "emoji_events", title: "Campeón Panamericano & Sudamericano", desc: "1er Lugar en Combate Light Contact en reiterados Campeonatos Panamericanos y Sudamericanos en Santiago de Chile." },
-                  { year: "2010", icon: "military_tech", title: "Deportista Destacado", desc: "Galardonado oficialmente como \"Deportista Destacado\" por la Asociación American Kenpo Karate." },
-                  { year: "Nov 2013", icon: "public", title: "Campeón Mundial — Antofagasta", desc: "1er Lugar y Campeón Mundial categoría Danes Serie Adulta en Combate Light Contact. Certificado e indexado por el Diario La Estrella." },
-                  { year: "2015", icon: "workspace_premium", title: "Campeón Mundial — Antofagasta", desc: "1er Lugar en Combate Light Contact en el Campeonato Mundial de Antofagasta, reafirmando su dominio internacional." },
-                  { year: "2018", icon: "social_leaderboard", title: "Triple Honor", desc: "Reconocimiento oficial CIAM por 30 años de carrera + Campeón Mundial en Combate Light Contact en Talcahuano." },
-                  { year: "2019", icon: "star", title: "Distinción Especial", desc: "Federación Nacional de Artes Zona Norte le otorgó distinción especial por trayectoria, dedicación y espíritu marcial." },
-                  { year: "2022", icon: "flag", title: "Medallas de Oro Sudamericano", desc: "1er Lugar en Full Kempo, Semi Kempo y Kata de Manos Vacías en el Campeonato Sudamericano, Neuquén Argentina." },
-                  { year: "2023–2025", icon: "travel_explore", title: "Mundial IKF — Portugal", desc: "Participación en el XIX y XXI Mundial de Kempo IKF en Caldas da Rainha, Portugal en múltiples categorías." },
-                  { year: "2014–Hoy", icon: "groups", title: "Fundador Club Deportivo", desc: "Funda y dirige BKLS Zona Élite en La Serena, proyectando el nombre de Chile al mundo entero bajo valores marciales inquebrantables." },
-                ].map((item) => (
-                  <div key={item.year} className="group relative bg-surface-container rounded-xl p-5 border border-on-surface/5 hover:border-primary/30 transition-all duration-300 hover:-translate-y-1 hover:[box-shadow:0_8px_32px_rgba(255,84,76,0.12)]">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <span className="material-symbols-outlined text-primary text-[18px]">{item.icon}</span>
-                      </div>
-                      <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary">{item.year}</span>
-                    </div>
-                    <h4 className="font-[family-name:var(--font-headline-md)] text-[14px] leading-[18px] text-on-surface uppercase mb-2">{item.title}</h4>
-                    <p className="font-[family-name:var(--font-body-md)] text-[13px] leading-[20px] text-on-surface-variant">{item.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Historial de competición reciente */}
-            <div className="mb-16">
-              <div className="mb-6">
-                <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-4">
-                  Competición Internacional
-                </span>
-                <h3 className="font-[family-name:var(--font-headline-md)] text-[24px] leading-[28px] md:text-[28px] md:leading-[32px] text-on-surface uppercase tracking-tighter">
-                  Presencia global <span className="text-primary">reciente</span>
-                </h3>
-              </div>
-              <div className="overflow-x-auto rounded-xl border border-on-surface/5">
-                <table className="w-full min-w-[640px]">
-                  <thead>
-                    <tr className="bg-surface-container-high">
-                      <th className="px-5 py-3 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary">Fecha</th>
-                      <th className="px-5 py-3 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary">Ubicación</th>
-                      <th className="px-5 py-3 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary">Torneo / Campeonato</th>
-                      <th className="px-5 py-3 text-left font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-widest text-primary">Categorías</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { fecha: "Jun 2026", lugar: "La Serena, Chile", torneo: "C4 The Combat Series", cats: "MMA" },
-                      { fecha: "Abr 2026", lugar: "Santiago, Chile", torneo: "Campeonato Nacional Kenpo", cats: "Formas, Light Contact, Kick Light, Point Fight" },
-                      { fecha: "Jun 2025", lugar: "Vicuña, Chile", torneo: "Artes Marciales Vicuña 2025", cats: "Light Contact, Kick Light, Punto Tradicional" },
-                      { fecha: "Abr 2025", lugar: "Caldas da Rainha, Portugal", torneo: "XXI Mundial de Kempo IKF", cats: "Full Kempo, Semi Kempo, Submission, Kata, MMA" },
-                      { fecha: "Oct 2024", lugar: "Talcahuano, Chile", torneo: "Torneo Copa Ed Parker", cats: "Formas, Defensa Personal, Combate y Sumisión" },
-                      { fecha: "Abr 2023", lugar: "Caldas da Rainha, Portugal", torneo: "XIX Mundial de Kempo Karate", cats: "Full Kempo, Semi Kempo, Submission, Kata, MMA" },
-                      { fecha: "Nov 2022", lugar: "Neuquén, Argentina", torneo: "I Campeonato Panamericano IKF", cats: "Formas, Defensa Personal, Full Kempo, Sumisión" },
-                    ].map((row, i) => (
-                      <tr key={i} className={`border-t border-on-surface/5 ${i % 2 === 0 ? 'bg-surface-container' : 'bg-surface-container-low'} hover:bg-surface-container-high transition-colors`}>
-                        <td className="px-5 py-3.5 font-[family-name:var(--font-label-sm)] text-[11px] text-primary whitespace-nowrap">{row.fecha}</td>
-                        <td className="px-5 py-3.5 font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant whitespace-nowrap">{row.lugar}</td>
-                        <td className="px-5 py-3.5 font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{row.torneo}</td>
-                        <td className="px-5 py-3.5 font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">{row.cats}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Foto grupal — alumnos + maestro */}
-            <div>
-              <div className="mb-8">
-                <span className="inline-block font-[family-name:var(--font-label-sm)] text-[11px] leading-[16px] uppercase tracking-[0.15em] text-primary bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 mb-4">
-                  Nuestra Familia
-                </span>
-                <h3 className="font-[family-name:var(--font-headline-md)] text-[24px] leading-[28px] md:text-[28px] md:leading-[32px] text-on-surface uppercase tracking-tighter">
-                  Los alumnos son <span className="text-primary">el legado</span>
-                </h3>
-              </div>
-              <div className="relative overflow-hidden rounded-2xl" style={{ boxShadow: "0 24px 64px rgba(0,0,0,0.7), 0 0 40px rgba(255,84,76,0.10)" }}>
-                <img
-                  src="/kenpo_adulto.jpeg"
-                  alt="Alumnos junto al Sensei Juan Valenzuela — BKLS Zona Élite"
-                  className="w-full object-cover"
-                  style={{ maxHeight: "520px", objectPosition: "center top" }}
-                />
-                <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8" style={{ background: "linear-gradient(0deg, rgba(19,19,19,0.95) 0%, rgba(19,19,19,0.60) 60%, transparent 100%)" }}>
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full btn-primary-gradient flex items-center justify-center flex-shrink-0">
-                      <span className="material-symbols-outlined text-white text-[20px]">groups</span>
-                    </div>
-                    <div>
-                      <p className="font-[family-name:var(--font-headline-md)] text-[16px] leading-[20px] text-on-surface uppercase">Clase de Kenpo Adultos</p>
-                      <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">Club Deportivo Kenpo La Serena · Av. Cruz del Molino #342</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </section>
 
         {/* ============ GALERÍA ============ */}
         <GalleryCarousel />
