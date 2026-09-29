@@ -1244,8 +1244,12 @@ ok("Q: asistencia bloquea activación QR en personalizadas",
   /if \(sessionRow\?\.schedule\?\.mode === "personalizado"\)[\s\S]*?no usan check-in por QR/.test(adminAsistenciaQ));
 ok("Q: asistencia no inicia polling QR para personalizadas",
   /sessionStatus === "activa" && !isPersonalized/.test(adminAsistenciaQ));
-ok("Q: asistencia calcula ausentes desde personalized_enrollments al cerrar",
-  /if \(isPersonalized\)[\s\S]*?\.from\("personalized_enrollments"\)[\s\S]*?\.eq\("session_id", expandedSession\)/.test(adminAsistenciaQ));
+// El cálculo de ausentes al cerrar vive ahora en el servidor (POST /api/admin/close-session),
+// que es quien verifica la contraseña de la sesión QR antes de cerrar.
+const closeSessionRouteQ = readFileSync(join(ROOT, "src", "app", "api", "admin", "close-session", "route.ts"), "utf8");
+ok("Q: el cierre calcula ausentes desde personalized_enrollments (ahora en el servidor)",
+  /if \(isPersonalized\)[\s\S]*?\.from\("personalized_enrollments"\)[\s\S]*?\.eq\("session_id", sessionId\)/.test(closeSessionRouteQ) &&
+  /status: "ausente" as const/.test(closeSessionRouteQ));
 ok("Q: asistencia inscribe personalizadas vía RPC (no class_enrollments)",
   /enrollMode === "personalizado"[\s\S]*?\.rpc\("enroll_personalized_class", \{\s*p_session_id: enrollSessionId,\s*p_beneficiary_ids: \[beneficiaryId\],/.test(adminAsistenciaQ));
 ok("Q: asistencia busca packs (no membresías) para personalizadas",
@@ -1652,7 +1656,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 12);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 13);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -2282,6 +2286,108 @@ ok("AC: la ficha del evento muestra la sección Adjunto con vista previa",
   /imageUrl=\{event\.image\}/.test(eventoDetailAc));
 ok("AC: admin/eventos aclara que la imagen es portada y adjunto descargable",
   /portada y el adjunto descargable/.test(adminEventosAc));
+
+// ============================================================
+// AD. CONTRASEÑA DE PROTECCIÓN DE LA SESIÓN QR (migraciones 031/032, v1.9.0)
+// ============================================================
+section("AD. Contraseña de protección de la sesión QR");
+
+const migration031 = readFileSync(join(ROOT, "contexto", "migrations", "031_qr_session_lock.sql"), "utf8");
+const migration032 = readFileSync(join(ROOT, "contexto", "migrations", "032_changelog_v1_9_0.sql"), "utf8");
+const schemaAd = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const qrLockLib = readFileSync(join(ROOT, "src", "lib", "qr-lock.ts"), "utf8");
+const qrLockRoute = readFileSync(join(ROOT, "src", "app", "api", "admin", "qr-lock", "route.ts"), "utf8");
+const closeSessionRoute = readFileSync(join(ROOT, "src", "app", "api", "admin", "close-session", "route.ts"), "utf8");
+const adminAsistencia = readFileSync(join(ROOT, "src", "app", "admin", "asistencia", "page.tsx"), "utf8");
+const adminConfiguracion = readFileSync(join(ROOT, "src", "app", "admin", "configuracion", "page.tsx"), "utf8");
+
+ok("AD: migración 031 crea qr_session_lock singleton con hash y salt",
+  /CREATE TABLE IF NOT EXISTS public\.qr_session_lock/.test(migration031) &&
+  /password_hash text NOT NULL/.test(migration031) &&
+  /password_salt text NOT NULL/.test(migration031) &&
+  /'00000000-0000-0000-0000-000000000001'::uuid/.test(migration031));
+ok("AD: migración 031 es admin-only en RLS (no usa USING (true))",
+  /ENABLE ROW LEVEL SECURITY/.test(migration031) &&
+  /qr_session_lock_admin_all[\s\S]*?FOR ALL[\s\S]*?USING \(public\.is_admin\(\)\)[\s\S]*?WITH CHECK \(public\.is_admin\(\)\)/.test(migration031) &&
+  !/CREATE POLICY "qr_session_lock[^"]*"[\s\S]*?USING \(true\)/.test(migration031));
+ok("AD: migración 031 no siembra la fila (fail-open si no hay contraseña)",
+  !/INSERT INTO public\.qr_session_lock/.test(migration031));
+ok("AD: migración 032 es seed de changelog v1.9.0 idempotente",
+  /'v1\.9\.0'/.test(migration032) &&
+  /'Contraseña de protección para la sesión QR'/.test(migration032) &&
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration032));
+ok("AD: espejo SQL refleja tabla, policy admin-only y el seed v1.9.0 (1:1 con migraciones)",
+  /CREATE TABLE IF NOT EXISTS public\.qr_session_lock/.test(schemaAd) &&
+  /ALTER TABLE public\.qr_session_lock ENABLE ROW LEVEL SECURITY/.test(schemaAd) &&
+  /CREATE POLICY "qr_session_lock_admin_all" ON public\.qr_session_lock FOR ALL USING \(public\.is_admin\(\)\) WITH CHECK \(public\.is_admin\(\)\)/.test(schemaAd) &&
+  /'v1\.9\.0'/.test(schemaAd) &&
+  /'Contraseña de protección para la sesión QR'/.test(schemaAd));
+ok("AD: el hash se calcula con scrypt y se compara en tiempo constante",
+  /scryptSync/.test(qrLockLib) &&
+  /randomBytes/.test(qrLockLib) &&
+  /timingSafeEqual/.test(qrLockLib));
+ok("AD: la librería del QR aplica rate limit a los intentos fallidos",
+  /isQrLockRateLimited/.test(qrLockLib) &&
+  /registerQrLockFailure/.test(qrLockLib) &&
+  /MAX_ATTEMPTS = 8/.test(qrLockLib) &&
+  /BLOCK_MS = 15 \* 60 \* 1000/.test(qrLockLib));
+ok("AD: /api/admin/qr-lock exige role_id 1 y nunca devuelve el hash",
+  /role_id !== 1/.test(qrLockRoute) &&
+  /password_hash, password_salt/.test(qrLockRoute) &&
+  /\{ configured: Boolean\(lock\), min_length: QR_LOCK_MIN_PASSWORD_LENGTH \}/.test(qrLockRoute) &&
+  !/NextResponse\.json\([^)]*password_hash/.test(qrLockRoute));
+ok("AD: /api/admin/qr-lock soporta set/clear/verify y exige la contraseña actual para cambiar o quitar",
+  /action === "set"/.test(qrLockRoute) &&
+  /action === "clear"/.test(qrLockRoute) &&
+  /action === "verify"/.test(qrLockRoute) &&
+  /currentPassword \|\| ""/.test(qrLockRoute) &&
+  /La contraseña actual no es correcta/.test(qrLockRoute));
+ok("AD: /api/admin/close-session verifica la contraseña ANTES de cerrar y es fail-open sin fila",
+  /from\("qr_session_lock"\)/.test(closeSessionRoute) &&
+  /verifyQrLockPassword/.test(closeSessionRoute) &&
+  /warning = "No hay contraseña de sesión QR configurada/.test(closeSessionRoute) &&
+  /status: 401/.test(closeSessionRoute) &&
+  /close_session_denied/.test(closeSessionRoute));
+ok("AD: el cierre de sesión se ejecuta en el servidor (marca ausentes y cierra la sesión)",
+  /from\("attendance"\)[\s\S]*?\.insert\(absentInserts\)/.test(closeSessionRoute) &&
+  /from\("class_sessions"\)[\s\S]*?\.update\(\{ status: "cerrada" \}\)/.test(closeSessionRoute) &&
+  /status: "ausente" as const/.test(closeSessionRoute) &&
+  /close_session"/.test(closeSessionRoute));
+ok("AD: /admin/asistencia ya no cierra la sesión desde el browser client",
+  !/from\("class_sessions"\)[\s\S]*?\.update\(\{ status: "cerrada" \}\)/.test(adminAsistencia));
+ok("AD: /admin/asistencia llama al endpoint de cierre con contraseña",
+  /\/api\/admin\/close-session/.test(adminAsistencia) &&
+  /password: closePassword/.test(adminAsistencia));
+ok("AD: /admin/asistencia bloquea el panel QR y pide contraseña para volver a verlo",
+  /Pantalla QR bloqueada/.test(adminAsistencia) &&
+  /handleUnlock/.test(adminAsistencia) &&
+  /action: "verify", password: unlockPassword/.test(adminAsistencia) &&
+  /Desbloquear/.test(adminAsistencia));
+ok("AD: colapsar la sesión y el botón Bloquear ocultan el QR sin contraseña",
+  /const lockPanel = useCallback/.test(adminAsistencia) &&
+  /onClick=\{lockPanel\}/.test(adminAsistencia) &&
+  /Bloquear/.test(adminAsistencia) &&
+  /lockPanel\(\);\s*setShowSummary\(false\)/.test(adminAsistencia));
+ok("AD: finalizar asistencia exige la contraseña en el modal",
+  /Contraseña de la sesión/.test(adminAsistencia) &&
+  /lockConfigured === true && closePassword\.length === 0/.test(adminAsistencia));
+ok("AD: el desbloqueo no se persiste (solo vive en el estado de la página)",
+  !/localStorage|sessionStorage/.test(adminAsistencia));
+ok("AD: /admin/configuracion ofrece la sección de seguridad de la sesión QR",
+  /Seguridad de la sesión QR/.test(adminConfiguracion) &&
+  /Guardar contraseña/.test(adminConfiguracion) &&
+  /Quitar protección/.test(adminConfiguracion) &&
+  /\/api\/admin\/qr-lock/.test(adminConfiguracion) &&
+  /Contraseña actual/.test(adminConfiguracion));
+ok("AD: sin contraseña configurada ambas pantallas avisan que la protección está inactiva",
+  /La pantalla QR no está protegida/.test(adminAsistencia) &&
+  /Sin protección/.test(adminConfiguracion));
+ok("AD: el cliente de la UI no importa la librería server-only del hash",
+  !/from "@\/lib\/qr-lock"/.test(adminAsistencia) &&
+  !/from "@\/lib\/qr-lock"/.test(adminConfiguracion));
+ok("AD: la página del alumno /checkin no se modifica (sigue validando status en el servidor)",
+  /status === "activa"/.test(readFileSync(join(ROOT, "src", "app", "checkin", "[sessionId]", "page.tsx"), "utf8")) &&
+  /Esta clase ya no está recibiendo asistencia/.test(readFileSync(join(ROOT, "src", "app", "api", "checkin", "route.ts"), "utf8")));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

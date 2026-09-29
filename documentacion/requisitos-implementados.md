@@ -313,4 +313,14 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **`/eventos/[id]`**: nueva sección **"Adjunto"** bajo la descripción (solo si `event.image`), con la imagen como tarjeta clickeable ("Clic para ampliar y descargar") que abre el `ImagePreviewModal`.
 - **`/admin/eventos`**: label del `ImageUpload` actualizado a "Imagen del evento (será la portada y el adjunto descargable)".
 - **Changelog**: módulo de desarrolladores con entrada **v1.8.0** (`contexto/migrations/030_changelog_v1_8_0.sql`, idempotente). Se completaron además en el espejo los seeds `v1.6.0` (migración 026) y `v1.7.0` (Histórico de asistencias, migración 029, que lo referencia pero no existía).
-- **Verificación**: `npx tsc --noEmit` limpio y suite sección AC en verde.
+- **Verificación**: `npx tsc --noEmit` limpio y suite
+
+## 30. Contraseña de protección para la pantalla de sesión QR (2026-09-28)
+**Requisito**: el celular/tablet del profesor queda al alcance de los alumnos mientras se muestra el QR de asistencia. Se necesita que **ver el QR, volver atrás/expandir la sesión y finalizar la asistencia** exijan una contraseña segura, configurable desde el panel de administración.
+- **Requisito + análisis de impacto**: `contexto/requisitos/bloqueo-sesion-qr.md`.
+- **BD**: migración `031_qr_session_lock.sql` — tabla singleton `qr_session_lock` (`password_hash`, `password_salt`, `updated_at`, `updated_by`) con RLS admin-only. **No** se guarda en `academy_settings` porque su policy `academy_settings_select_all ... USING (true)` es legible por cualquiera. La existencia de la fila activa la protección (sin fila = fail-open).
+- **Hashing**: `src/lib/qr-lock.ts` con `node:crypto` (scrypt N=16384/r=8/p=1, salt de 16 bytes, `timingSafeEqual`) y rate limit en memoria (8 intentos → bloqueo de 15 min).
+- **APIs**: `GET /api/admin/qr-lock` (estado, nunca el hash), `POST /api/admin/qr-lock` (`set`/`clear`/`verify`; exige la contraseña actual para cambiarla o quitarla) y `POST /api/admin/close-session` (verifica la contraseña y recién ahí marca los ausentes y cierra la sesión; devuelve el resumen de check-ins por QR). Todas exigen `role_id=1` y registran `audit_logs`.
+- **Frontend**: `/admin/asistencia` muestra el panel QR bloqueado al expandir una sesión activa, con desbloqueo solo en memoria, botón "Bloquear" y modal de contraseña para finalizar; `/admin/configuracion` agrega la sección "Seguridad de la sesión QR".
+- **Changelog**: entrada **v1.9.0** (`contexto/migrations/032_changelog_v1_9_0.sql`, idempotente).
+- **Verificación**: suite sección AD (20 asserts) + `npx tsc --noEmit` limpio y sin errores de lint nuevos. sección AC en verde.

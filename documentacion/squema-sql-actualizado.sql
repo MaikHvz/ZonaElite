@@ -203,6 +203,22 @@ UPDATE public.academy_settings
 SET payment_settings = '{"memberships":"online","personalized":"online","enrollment":"online","bank":null}'::jsonb
 WHERE payment_settings IS NULL;
 
+-- Contraseña (hash scrypt) que protege la pantalla de sesión QR en /admin/asistencia.
+-- Singleton: la existencia de la fila indica que la protección está activa (si no hay
+-- fila, el panel funciona sin bloqueo = fail-open). No puede vivir en academy_settings
+-- porque esa tabla tiene el policy academy_settings_select_all USING (true).
+CREATE TABLE IF NOT EXISTS public.qr_session_lock (
+  id uuid DEFAULT '00000000-0000-0000-0000-000000000001'::uuid NOT NULL,
+  password_hash text NOT NULL,
+  password_salt text NOT NULL,
+  updated_at timestamptz DEFAULT now() NOT NULL,
+  updated_by uuid,
+  CONSTRAINT qr_session_lock_pkey PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE public.qr_session_lock IS
+  'Contraseña (hash scrypt) que protege la pantalla de sesión QR en /admin/asistencia. Singleton: la existencia de la fila indica que la protección está activa.';
+
 CREATE TABLE IF NOT EXISTS public.disciplines (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   name text NOT NULL,
@@ -755,6 +771,8 @@ CREATE POLICY "roles_admin_all" ON public.roles FOR ALL USING (public.is_admin()
 ALTER TABLE public.academy_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "academy_settings_select_all" ON public.academy_settings FOR SELECT USING (true);
 CREATE POLICY "academy_settings_admin_write" ON public.academy_settings FOR ALL USING (public.is_admin());
+ALTER TABLE public.qr_session_lock ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "qr_session_lock_admin_all" ON public.qr_session_lock FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 ALTER TABLE public.disciplines ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "disciplines_select_all" ON public.disciplines FOR SELECT USING (true);
 CREATE POLICY "disciplines_admin_write" ON public.disciplines FOR ALL USING (public.is_admin());
@@ -1974,5 +1992,14 @@ VALUES (
   'v1.8.0',
   'Adjunto de imagen en eventos',
   E'• La imagen subida en "Nuevo Evento" ahora se muestra también como documento adjunto descargable en la ficha pública del evento (/eventos/[id]).\n• Al hacer clic en el adjunto se abre una vista previa ampliada (lightbox) con botones "Cerrar" y "Descargar" la imagen.\n• La descarga usa el parámetro ?download= de Supabase Storage para forzar el guardado del archivo.\n• Los eventos sin imagen no muestran la sección de adjunto.'
+)
+ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.9.0 — Contraseña de protección para la sesión QR (migración 032)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.9.0',
+  'Contraseña de protección para la sesión QR',
+  E'• La pantalla de la sesión QR en /admin/asistencia ahora está protegida por una contraseña: al expandir una sesión activa hay que ingresarla para volver a ver el QR.\n• Al colapsar la sesión, cambiar de pestaña o pulsar "Bloquear", el QR se oculta y queda bloqueado (el desbloqueo no se guarda en el navegador, solo dura mientras la pantalla siga abierta).\n• "Finalizar asistencia" se valida en el servidor a través de /api/admin/close-session: sin la contraseña correcta la sesión no se cierra.\n• La contraseña se configura en Configuración → "Seguridad de la sesión QR" y se guarda con hash scrypt en la tabla qr_session_lock, que solo el administrador puede leer. Cambiarla o quitar la protección exige la contraseña actual.\n• Si no hay contraseña configurada, el panel sigue funcionando sin bloqueo y muestra un aviso para configurarla.'
 )
 ON CONFLICT (version) DO NOTHING;

@@ -47,6 +47,25 @@ export default function AdminConfiguracionPage() {
   });
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
+  const [lockConfigured, setLockConfigured] = useState<boolean | null>(null);
+  const [lockMinLength, setLockMinLength] = useState(4);
+  const [lockPassword, setLockPassword] = useState("");
+  const [lockConfirm, setLockConfirm] = useState("");
+  const [lockCurrent, setLockCurrent] = useState("");
+  const [lockSaving, setLockSaving] = useState(false);
+  const [lockClearing, setLockClearing] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/qr-lock", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        setLockConfigured(Boolean(data.configured));
+        if (typeof data.min_length === "number") setLockMinLength(data.min_length);
+      })
+      .catch(() => setLockConfigured(null));
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
     supabase.from("academy_settings").select("*").limit(1).single().then(({ data }) => {
@@ -89,6 +108,79 @@ export default function AdminConfiguracionPage() {
       setToast({ msg: getSupabaseErrorMessage(err, "Guardar configuración"), type: "error" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const showLockToast = (msg: string, type: "success" | "error") =>
+    setToast({ msg, type });
+
+  const handleSaveLockPassword = async () => {
+    if (lockPassword !== lockConfirm) {
+      showLockToast("Las contraseñas no coinciden", "error");
+      return;
+    }
+    if (lockPassword.trim().length < lockMinLength) {
+      showLockToast(`La contraseña debe tener al menos ${lockMinLength} caracteres`, "error");
+      return;
+    }
+
+    setLockSaving(true);
+    try {
+      const res = await fetch("/api/admin/qr-lock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set",
+          password: lockPassword,
+          current_password: lockCurrent,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        showLockToast(data.error || "No se pudo guardar la contraseña", "error");
+        return;
+      }
+
+      setLockConfigured(true);
+      setLockPassword("");
+      setLockConfirm("");
+      setLockCurrent("");
+      showLockToast(
+        lockConfigured
+          ? "Contraseña de sesión QR actualizada"
+          : "Contraseña de sesión QR configurada",
+        "success"
+      );
+    } catch {
+      showLockToast("Error de conexión", "error");
+    } finally {
+      setLockSaving(false);
+    }
+  };
+
+  const handleClearLockPassword = async () => {
+    setLockClearing(true);
+    try {
+      const res = await fetch("/api/admin/qr-lock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "clear", current_password: lockCurrent }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        showLockToast(data.error || "No se pudo quitar la protección", "error");
+        return;
+      }
+
+      setLockConfigured(false);
+      setLockCurrent("");
+      showLockToast("Protección de sesión QR desactivada", "success");
+    } catch {
+      showLockToast("Error de conexión", "error");
+    } finally {
+      setLockClearing(false);
     }
   };
 
@@ -356,6 +448,108 @@ export default function AdminConfiguracionPage() {
                   className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] text-on-surface focus:outline-none focus:border-primary/50"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Seguridad de la sesión QR */}
+        <div className="border-t border-on-surface/5 pt-5">
+          <div className="flex items-center justify-between gap-4 mb-1">
+            <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase">
+              Seguridad de la sesión QR
+            </h3>
+            {lockConfigured ? (
+              <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-green-400 bg-green-500/10 border border-green-500/20 rounded-full px-2.5 py-1">
+                Protegida
+              </span>
+            ) : (
+              <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-full px-2.5 py-1">
+                Sin protección
+              </span>
+            )}
+          </div>
+          <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant mb-4">
+            Protege la pantalla de la sesión QR en Asistencia. Con la contraseña activa, un alumno que
+            tome el celular del profesor no puede ver el QR de nuevo ni finalizar la sesión. La
+            contraseña se guarda cifrada (scrypt) y nunca se muestra.
+          </p>
+
+          {lockConfigured === false && (
+            <div className="mb-4 flex items-start gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+              <span className="material-symbols-outlined text-yellow-400 text-[18px]">warning</span>
+              <p className="font-[family-name:var(--font-body-md)] text-[12px] text-yellow-200">
+                Mientras no configures una contraseña, la pantalla QR se muestra sin bloquear en
+                /admin/asistencia.
+              </p>
+            </div>
+          )}
+
+          <div className="bg-surface-container-high/30 rounded-xl p-4 space-y-3">
+            {lockConfigured && (
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1">
+                  Contraseña actual
+                </label>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={lockCurrent}
+                  onChange={(e) => setLockCurrent(e.target.value)}
+                  placeholder="Necesaria para cambiar o quitar la protección"
+                  className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1">
+                  {lockConfigured ? "Nueva contraseña" : "Contraseña"}
+                </label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={lockPassword}
+                  onChange={(e) => setLockPassword(e.target.value)}
+                  placeholder={`Mínimo ${lockMinLength} caracteres`}
+                  className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/70 mb-1">
+                  Repetir contraseña
+                </label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={lockConfirm}
+                  onChange={(e) => setLockConfirm(e.target.value)}
+                  placeholder="Repite la contraseña"
+                  className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-3 py-2 text-[13px] text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <button
+                onClick={handleSaveLockPassword}
+                disabled={lockSaving || lockPassword.length === 0}
+                className="flex items-center gap-2 px-4 py-2 btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider rounded-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">key</span>
+                {lockSaving ? "Guardando..." : lockConfigured ? "Cambiar contraseña" : "Guardar contraseña"}
+              </button>
+
+              {lockConfigured && (
+                <button
+                  onClick={handleClearLockPassword}
+                  disabled={lockClearing || lockCurrent.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 border border-red-500/30 text-red-400 font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">key_off</span>
+                  {lockClearing ? "Quitando..." : "Quitar protección"}
+                </button>
+              )}
             </div>
           </div>
         </div>

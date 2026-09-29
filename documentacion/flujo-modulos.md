@@ -234,4 +234,23 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **`/admin/eventos`**: el label de `ImageUpload` ahora indica "Imagen del evento (ser� la portada y el adjunto descargable)".
 - **Verificaci�n**: suite secci�n AC (migraci�n 030 idempotente, espejo 1:1 con seeds v1.6.0/v1.7.0/v1.8.0, componentes y wiring de UI) + `tsc`.
 
+## 14. Contraseña de Protección de la Sesión QR (IMPLEMENTADO - v1.9.0)
+
+> Estado: **implementado (2026-09-28)**, suite secciones A-AD en verde (594 tests), `npx tsc --noEmit` limpio, sin errores de lint nuevos. Migraciones `031_qr_session_lock.sql` y `032_changelog_v1_9_0.sql` (**pendientes de aplicar en Supabase (SQL Editor)**). Requisito + análisis de impacto en `contexto/requisitos/bloqueo-sesion-qr.md`.
+
+**Problema**: el celular/tablet del profesor queda a la vista de los alumnos mientras se muestra el QR. Colapsar el acordeón solo escondía el QR (cualquiera podía volver a expandirlo) y cerrar/reabrir la sesión se hacía con el *browser client* usando el RLS de admin, es decir con los mismos permisos que el profesor.
+
+**Solución**: la pantalla de la sesión QR requiere una contraseña, verificada **en el servidor**.
+
+- **BD (`031`)**: tabla singleton `qr_session_lock` (`password_hash`, `password_salt`, `updated_at`, `updated_by`) con `id` fijo `00000000-0000-0000-0000-000000000001`. RLS con **una sola** policy `qr_session_lock_admin_all FOR ALL USING (is_admin()) WITH CHECK (is_admin())`. No puede vivir en `academy_settings` porque esa tabla tiene `academy_settings_select_all ... USING (true)` (cualquiera leería el hash). **La existencia de la fila es el interruptor**: sin fila el panel funciona sin bloqueo (fail-open) y la UI lo avisa.
+- **Hashing (`src/lib/qr-lock.ts`, server-only)**: `node:crypto` sin dependencias nuevas — `scryptSync` (N=16384, r=8, p=1, keylen=64) con salt de 16 bytes, comparación con `timingSafeEqual`, mínimo 4 caracteres y **rate limit en memoria** (8 fallos → 429 por 15 min).
+- **APIs**:
+  - `GET /api/admin/qr-lock` → `{ configured, min_length }` (nunca el hash), `Cache-Control: no-store`.
+  - `POST /api/admin/qr-lock` → `set` (exige la contraseña actual si ya existe), `clear` (exige la actual), `verify`.
+  - `POST /api/admin/close-session` → `{ session_id, password }`: verifica la contraseña y **recién ahí** marca `ausente` a los inscritos sin registro y pone `class_sessions.status = 'cerrada'`. Devuelve el resumen de check-ins por QR. Fail-open si no hay fila (con `warning` en la respuesta).
+  - Todas exigen `role_id === 1`, usan `getAdminClient()` para el hash y registran `audit_logs` (`set/clear/verify/close_session` y sus `*_denied`).
+- **UI `/admin/asistencia`**: `qrUnlocked` vive **solo en el estado de la página** (nunca en `localStorage`). Expandir una sesión activa muestra el panel **bloqueado**; "Finalizar asistencia" abre un modal con campo de contraseña; el botón **"Bloquear"** y **colapsar** el acordeón ocultan el QR de inmediato. Sin contraseña configurada se muestra el QR con un aviso amarillo enlazado a Configuración. "Reabrir sesión" queda cubierta (activar no muestra el QR hasta desbloquear).
+- **UI `/admin/configuracion`**: sección **"Seguridad de la sesión QR"** con chip Protegida/Sin protección, contraseña + repetición, "Guardar/Cambiar contraseña" y "Quitar protección" (ambos exigen la contraseña actual).
+- **Sin impacto** en `/api/checkin`, tokens/deudas, `CheckoutModal`, Flow ni los policies de `class_sessions`/`attendance`. Reversión: `DROP TABLE public.qr_session_lock;` (vuelve al fail-open actual).
+
 ---

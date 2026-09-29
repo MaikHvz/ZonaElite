@@ -91,10 +91,18 @@ export default function AdminAsistenciaPage() {
   const alertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const alertDurationRef = useRef(4000);
 
+  const [lockConfigured, setLockConfigured] = useState<boolean | null>(null);
+  const [qrUnlocked, setQrUnlocked] = useState(false);
+  const [unlockPassword, setUnlockPassword] = useState("");
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [unlockLoading, setUnlockLoading] = useState(false);
+
   const [showSummary, setShowSummary] = useState(false);
   const [summaryAttendees, setSummaryAttendees] = useState<SummaryAttendee[]>([]);
   const [closingSession, setClosingSession] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [closePassword, setClosePassword] = useState("");
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   const [removeTarget, setRemoveTarget] = useState<{ beneficiary_id: string; full_name: string } | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -102,6 +110,59 @@ export default function AdminAsistenciaPage() {
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const lockPanel = useCallback(() => {
+    setQrUnlocked(false);
+    setQrSessionId(null);
+    setUnlockPassword("");
+    setUnlockError(null);
+    setClosePassword("");
+    setCloseError(null);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/qr-lock", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setLockConfigured(Boolean(data?.configured));
+      })
+      .catch(() => {
+        if (!cancelled) setLockConfigured(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleUnlock = async (sessionId: string) => {
+    setUnlockLoading(true);
+    setUnlockError(null);
+    try {
+      const res = await fetch("/api/admin/qr-lock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verify", password: unlockPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setUnlockError(data.error || "Contraseña incorrecta");
+        setUnlockPassword("");
+        return;
+      }
+
+      setLockConfigured(Boolean(data.configured));
+      setQrUnlocked(true);
+      setQrSessionId(sessionId);
+      setUnlockPassword("");
+      setUnlockError(null);
+    } catch {
+      setUnlockError("Error de conexión");
+    } finally {
+      setUnlockLoading(false);
+    }
   };
 
   const loadSessions = useCallback(async () => {
@@ -251,7 +312,7 @@ export default function AdminAsistenciaPage() {
     if (expandedSession === sessionId) {
       setExpandedSession(null);
       setBeneficiaries([]);
-      setQrSessionId(null);
+      lockPanel();
       setShowSummary(false);
       setSummaryAttendees([]);
       setShowCloseConfirm(false);
@@ -264,6 +325,10 @@ export default function AdminAsistenciaPage() {
     setShowSummary(false);
     setSummaryAttendees([]);
     setShowCloseConfirm(false);
+    setQrUnlocked(false);
+    setUnlockPassword("");
+    setUnlockError(null);
+    setQrSessionId(null);
 
     const session = sessions.find((s) => s.id === sessionId);
     const pastSession = pastSessions.find((s) => s.id === sessionId);
@@ -286,9 +351,10 @@ export default function AdminAsistenciaPage() {
     const isPersonalized = currentSession?.schedule?.mode === "personalizado";
     const isPastSession = (currentSession?.session_date || "") < getChileToday();
     if (sessionStatus === "activa" && !isPersonalized && !isPastSession) {
-      setQrSessionId(sessionId);
-    } else {
-      setQrSessionId(null);
+      if (lockConfigured === false) {
+        setQrUnlocked(true);
+        setQrSessionId(sessionId);
+      }
     }
 
     const { data } = await getAttendanceForSession(sessionId);
@@ -324,120 +390,65 @@ export default function AdminAsistenciaPage() {
     setSessions((prev) =>
       prev.map((s) => (s.id === sessionId ? { ...s, status: "activa" } : s))
     );
-    setQrSessionId(sessionId);
-    showToast("Sesión activada — QR listo", "success");
+    setShowSummary(false);
+    setSummaryAttendees([]);
+    setQrUnlocked(false);
+    setUnlockPassword("");
+    setUnlockError(null);
+
+    if (lockConfigured === false) {
+      setQrUnlocked(true);
+      setQrSessionId(sessionId);
+      showToast("Sesión activada — QR listo", "success");
+    } else {
+      showToast("Sesión activada — ingresa la contraseña para ver el QR", "success");
+    }
   };
 
   const handleCloseSession = async () => {
     if (!expandedSession) return;
     setClosingSession(true);
+    setCloseError(null);
 
-    const sessionRow = sessions.find((s) => s.id === expandedSession);
-    const scheduleId = sessionRow?.schedule_id;
-    const isPersonalized = sessionRow?.schedule?.mode === "personalizado";
-
-    let uniqueEnrollments: { beneficiary_id: string; source?: string }[] = [];
-
-    if (isPersonalized) {
-      const { data: pEnrollments } = await supabase
-        .from("personalized_enrollments")
-        .select("beneficiary_id")
-        .eq("session_id", expandedSession);
-      uniqueEnrollments = (pEnrollments || []).map((e) => ({
-        beneficiary_id: e.beneficiary_id,
-        source: "personalizado",
-      }));
-    } else {
-      const { data: sessionEnrollments } = await supabase
-        .from("class_enrollments")
-        .select("beneficiary_id, source")
-        .eq("session_id", expandedSession);
-
-      const { data: scheduleEnrollments } = scheduleId
-        ? await supabase
-            .from("class_enrollments")
-            .select("beneficiary_id, source")
-            .eq("schedule_id", scheduleId)
-            .is("session_id", null)
-        : { data: null };
-
-      const allEnrollments = [...(sessionEnrollments || []), ...(scheduleEnrollments || [])];
-      uniqueEnrollments = Array.from(
-        new Map(allEnrollments.map((e) => [e.beneficiary_id, e])).values()
-      );
-    }
-
-    const { data: existingAttendance } = await supabase
-      .from("attendance")
-      .select("beneficiary_id, status")
-      .eq("session_id", expandedSession);
-
-    const attendedIds = new Set((existingAttendance || []).map((a) => a.beneficiary_id));
-
-    const notAttended = uniqueEnrollments.filter(
-      (e) => !attendedIds.has(e.beneficiary_id)
-    );
-
-    if (notAttended.length > 0) {
-      const absentInserts = notAttended.map((e) => ({
-        session_id: expandedSession,
-        beneficiary_id: e.beneficiary_id,
-        status: "ausente" as const,
-        marked_by: user?.id || null,
-        marked_at: new Date().toISOString(),
-      }));
-      await supabase.from("attendance").insert(absentInserts);
-    }
-
-    const { data: allAttendance } = await supabase
-      .from("attendance")
-      .select("beneficiary_id, marked_at, beneficiaries(id, profile:profiles(full_name), dependent:dependents(full_name))")
-      .eq("session_id", expandedSession)
-      .eq("status", "presente");
-
-    const qrBenIds = new Set(
-      isPersonalized
-        ? (allAttendance || []).map((a) => a.beneficiary_id)
-        : uniqueEnrollments.filter((e) => e.source === "qr").map((e) => e.beneficiary_id)
-    );
-
-    const attendees: SummaryAttendee[] = (allAttendance || [])
-      .filter((a) => qrBenIds.has(a.beneficiary_id))
-      .map((a) => {
-        const b = a.beneficiaries as unknown as {
-          profile?: { full_name: string };
-          dependent?: { full_name: string };
-        } | null;
-        return {
-          beneficiary_id: a.beneficiary_id,
-          full_name:
-            b?.dependent?.full_name || b?.profile?.full_name || "Alumno",
-          marked_at: a.marked_at,
-        };
+    try {
+      const res = await fetch("/api/admin/close-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: expandedSession, password: closePassword }),
       });
 
-    const { error } = await supabase
-      .from("class_sessions")
-      .update({ status: "cerrada" })
-      .eq("id", expandedSession);
+      const data = await res.json().catch(() => ({}));
 
-    if (error) {
-      showToast("Error al cerrar sesión", "error");
+      if (!res.ok) {
+        setCloseError(data.error || "Error al cerrar sesión");
+        setClosePassword("");
+        return;
+      }
+
+      const attendees: SummaryAttendee[] = (data.summary || []).map(
+        (a: SummaryAttendee) => ({
+          beneficiary_id: a.beneficiary_id,
+          full_name: a.full_name,
+          marked_at: a.marked_at,
+        })
+      );
+
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === expandedSession ? { ...s, status: "cerrada" } : s
+        )
+      );
+      lockPanel();
+      setSummaryAttendees(attendees);
+      setShowSummary(true);
+      setShowCloseConfirm(false);
+      setClosePassword("");
+      showToast("Sesión finalizada", "success");
+    } catch {
+      setCloseError("Error de conexión");
+    } finally {
       setClosingSession(false);
-      return;
     }
-
-    setSessions((prev) =>
-      prev.map((s) =>
-        s.id === expandedSession ? { ...s, status: "cerrada" } : s
-      )
-    );
-    setQrSessionId(null);
-    setSummaryAttendees(attendees);
-    setShowSummary(true);
-    setShowCloseConfirm(false);
-    setClosingSession(false);
-    showToast("Sesión finalizada", "success");
   };
 
   const handleMark = (beneficiaryId: string, status: "presente" | "ausente" | "justificado") => {
@@ -976,9 +987,45 @@ export default function AdminAsistenciaPage() {
             <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase mb-2">
               Finalizar asistencia
             </h3>
-            <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mb-6">
+            <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mb-5">
               No se podrán recibir más check-ins por QR para esta sesión.
             </p>
+
+            {lockConfigured && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleCloseSession();
+                }}
+                className="space-y-3 mb-5"
+              >
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  autoFocus
+                  value={closePassword}
+                  onChange={(e) => {
+                    setClosePassword(e.target.value);
+                    setCloseError(null);
+                  }}
+                  placeholder="Contraseña de la sesión"
+                  className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+                />
+                {closeError && (
+                  <p className="font-[family-name:var(--font-body-md)] text-[12px] text-red-400">
+                    {closeError}
+                  </p>
+                )}
+                <input type="submit" className="hidden" />
+              </form>
+            )}
+
+            {closeError && !lockConfigured && (
+              <p className="font-[family-name:var(--font-body-md)] text-[12px] text-red-400 mb-5">
+                {closeError}
+              </p>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCloseConfirm(false)}
@@ -988,8 +1035,8 @@ export default function AdminAsistenciaPage() {
               </button>
               <button
                 onClick={handleCloseSession}
-                disabled={closingSession}
-                className="flex-1 py-2.5 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg shadow-[0_0_16px_rgba(229,57,53,0.3)] disabled:opacity-50 cursor-pointer"
+                disabled={closingSession || (lockConfigured === true && closePassword.length === 0)}
+                className="flex-1 py-2.5 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg shadow-[0_0_16px_rgba(229,57,53,0.3)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {closingSession ? "Cerrando..." : "Finalizar"}
               </button>
@@ -1048,7 +1095,10 @@ export default function AdminAsistenciaPage() {
       {/* Tabs */}
       <div className="flex gap-1 mb-6">
         <button
-          onClick={() => setActiveTab("proximas")}
+          onClick={() => {
+            setActiveTab("proximas");
+            lockPanel();
+          }}
           className={`font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider px-4 py-2 rounded-lg transition-colors cursor-pointer ${
             activeTab === "proximas"
               ? "btn-primary-gradient text-white"
@@ -1060,6 +1110,7 @@ export default function AdminAsistenciaPage() {
         <button
           onClick={() => {
             setActiveTab("historico");
+            lockPanel();
             if (pastSessions.length === 0) loadPastSessions(fromDate, toDate);
           }}
           className={`font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider px-4 py-2 rounded-lg transition-colors cursor-pointer ${
@@ -1392,48 +1443,135 @@ export default function AdminAsistenciaPage() {
                               {/* QR Section */}
                               {isActive && (
                                 <div className="mt-4 mb-4 p-5 bg-surface-container-lowest rounded-xl border border-on-surface/5">
-                                  <div className="flex flex-col items-center gap-4">
-                                    <div className="bg-white p-4 rounded-xl">
-                                      <QRCodeSVG
-                                        value={`${typeof window !== "undefined" ? window.location.origin : ""}/checkin/${s.id}`}
-                                        size={200}
-                                        level="M"
-                                        includeMargin={false}
-                                      />
-                                    </div>
-                                    <div className="text-center">
-                                      <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">
-                                        Escanear para check-in
-                                      </p>
-                                      <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant/60 mt-1 break-all">
-                                        {`${typeof window !== "undefined" ? window.location.origin : ""}/checkin/${s.id}`}
+                                  {lockConfigured === false && (
+                                    <div className="w-full mb-4 flex items-start gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                      <span className="material-symbols-outlined text-yellow-400 text-[18px]">warning</span>
+                                      <p className="font-[family-name:var(--font-body-md)] text-[12px] text-yellow-200">
+                                        La pantalla QR no está protegida. Configura una contraseña en{" "}
+                                        <a href="/admin/configuracion" className="underline font-semibold">
+                                          Configuración
+                                        </a>{" "}
+                                        para que un alumno no pueda ver el QR ni cerrar la sesión.
                                       </p>
                                     </div>
+                                  )}
 
-                                    {qrAlerts.length > 0 && (
-                                      <div className="w-full space-y-2">
-                                        {qrAlerts.map((alert) => (
-                                          <div
-                                            key={alert.id}
-                                            className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-slide-in-right"
-                                          >
-                                            <span className="material-symbols-outlined text-red-400 text-[18px]">warning</span>
-                                            <span className="font-[family-name:var(--font-body-md)] text-[13px] text-red-300">
-                                              <strong>{alert.name}</strong> — Membresía vencida
-                                            </span>
-                                          </div>
-                                        ))}
+                                  {qrUnlocked && qrSessionId === s.id ? (
+                                    <div className="flex flex-col items-center gap-4">
+                                      <div className="bg-white p-4 rounded-xl">
+                                        <QRCodeSVG
+                                          value={`${typeof window !== "undefined" ? window.location.origin : ""}/checkin/${s.id}`}
+                                          size={200}
+                                          level="M"
+                                          includeMargin={false}
+                                        />
                                       </div>
-                                    )}
+                                      <div className="text-center">
+                                        <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">
+                                          Escanear para check-in
+                                        </p>
+                                        <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant/60 mt-1 break-all">
+                                          {`${typeof window !== "undefined" ? window.location.origin : ""}/checkin/${s.id}`}
+                                        </p>
+                                      </div>
 
-                                    <button
-                                      onClick={() => setShowCloseConfirm(true)}
-                                      className="flex items-center gap-2 py-2.5 px-6 border border-red-500/30 text-red-400 font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
-                                    >
-                                      <span className="material-symbols-outlined text-[16px]">stop_circle</span>
-                                      Finalizar asistencia
-                                    </button>
-                                  </div>
+                                      {qrAlerts.length > 0 && (
+                                        <div className="w-full space-y-2">
+                                          {qrAlerts.map((alert) => (
+                                            <div
+                                              key={alert.id}
+                                              className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-slide-in-right"
+                                            >
+                                              <span className="material-symbols-outlined text-red-400 text-[18px]">warning</span>
+                                              <span className="font-[family-name:var(--font-body-md)] text-[13px] text-red-300">
+                                                <strong>{alert.name}</strong> — Membresía vencida
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      <div className="flex flex-wrap items-center justify-center gap-3">
+                                        <button
+                                          onClick={lockPanel}
+                                          className="flex items-center gap-2 py-2.5 px-5 border border-on-surface/20 text-on-surface-variant font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg hover:bg-on-surface/5 transition-colors cursor-pointer"
+                                        >
+                                          <span className="material-symbols-outlined text-[16px]">lock</span>
+                                          Bloquear
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setShowCloseConfirm(true);
+                                            setCloseError(null);
+                                          }}
+                                          className="flex items-center gap-2 py-2.5 px-6 border border-red-500/30 text-red-400 font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
+                                        >
+                                          <span className="material-symbols-outlined text-[16px]">stop_circle</span>
+                                          Finalizar asistencia
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col items-center gap-4 py-4">
+                                      <div className="w-[200px] h-[200px] rounded-xl bg-on-surface/5 border border-dashed border-on-surface/15 flex items-center justify-center">
+                                        <span className="material-symbols-outlined text-on-surface/30 text-[56px]">
+                                          lock
+                                        </span>
+                                      </div>
+                                      <p className="font-[family-name:var(--font-headline-md)] text-[14px] text-on-surface uppercase text-center">
+                                        Pantalla QR bloqueada
+                                      </p>
+                                      <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant text-center max-w-sm">
+                                        Ingresa la contraseña de la sesión QR para mostrar el código y finalizar la asistencia.
+                                      </p>
+
+                                      {lockConfigured ? (
+                                        <form
+                                          onSubmit={(e) => {
+                                            e.preventDefault();
+                                            if (expandedSession) handleUnlock(expandedSession);
+                                          }}
+                                          className="w-full max-w-xs space-y-3"
+                                        >
+                                          <input
+                                            type="password"
+                                            autoComplete="current-password"
+                                            value={unlockPassword}
+                                            onChange={(e) => {
+                                              setUnlockPassword(e.target.value);
+                                              setUnlockError(null);
+                                            }}
+                                            placeholder="Contraseña"
+                                            className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
+                                          />
+                                          {unlockError && (
+                                            <p className="font-[family-name:var(--font-body-md)] text-[12px] text-red-400 text-center">
+                                              {unlockError}
+                                            </p>
+                                          )}
+                                          <button
+                                            type="submit"
+                                            disabled={unlockLoading || unlockPassword.length === 0}
+                                            className="w-full flex items-center justify-center gap-2 py-2.5 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                                          >
+                                            <span className="material-symbols-outlined text-[16px]">lock_open</span>
+                                            {unlockLoading ? "Verificando..." : "Desbloquear"}
+                                          </button>
+                                        </form>
+                                      ) : (
+                                        <button
+                                          onClick={() => {
+                                            setQrUnlocked(true);
+                                            setQrSessionId(s.id);
+                                          }}
+                                          className="flex items-center gap-2 py-2.5 px-6 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[12px] uppercase rounded-lg cursor-pointer"
+                                        >
+                                          <span className="material-symbols-outlined text-[16px]">qr_code_scanner</span>
+                                          Ver QR
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               )}
 

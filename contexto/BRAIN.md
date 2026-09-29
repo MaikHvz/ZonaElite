@@ -197,11 +197,11 @@ src/
 | `/admin/usuarios` | Usuarios + cargas agrupadas, cambio roles, activar/desactivar |
 | `/admin/membresias` | CRUD planes + asignación manual + editar/cancelar + PDF recibo |
 | `/admin/inscripciones` | **NUEVO** CRUD planes inscripción + inscripciones asignadas + asignación manual |
-| `/admin/asistencia` | Tabs **Próximas** (sesiones desde hoy, QR, activar/cerrar, inscribir) / **Histórico** (clases pasadas con filtro de rango de fechas, editable) |
+| `/admin/asistencia` | Tabs **Próximas** (sesiones desde hoy, QR protegido por contraseña, activar/cerrar, inscribir) / **Histórico** (clases pasadas con filtro de rango de fechas, editable) |
+| `/admin/configuracion` | Settings academia + CRUD galería + **contraseña de la sesión QR** (v1.9.0) |
 | `/admin/blog` | CRUD: borrador/programado/publicado |
 | `/admin/notificaciones` | CRUD: aviso/recordatorio/comunicado/correo_masivo |
 | `/admin/changelog` | **NUEVO** Changelog de desarrolladores: cambios versionados, solo lectura admin |
-| `/admin/configuracion` | Settings academia + CRUD galería (add/remove/reorder/visibility) |
 
 ### API Routes
 
@@ -213,6 +213,8 @@ src/
 | `/api/flow/force-confirm` | POST | `api/flow/force-confirm/route.ts` | Admin manual recovery |
 | `/api/flow/debug` | GET | `api/flow/debug/route.ts` | Diagnóstico pagos |
 | `/api/admin/generate-sessions` | POST | `api/admin/generate-sessions/route.ts` | Genera class_sessions próximas 4 semanas. Idempotente |
+| `/api/admin/qr-lock` | GET/POST | `api/admin/qr-lock/route.ts` | Estado de la contraseña de la sesión QR / `set`·`clear`·`verify` (solo role_id=1, nunca devuelve el hash) |
+| `/api/admin/close-session` | POST | `api/admin/close-session/route.ts` | Finaliza la asistencia QR: verifica la contraseña, marca ausentes y cierra la sesión |
 
 ### Redirects
 
@@ -303,6 +305,7 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 4. "Todos presentes" → marca todos de una vez
 5. Botones individuales: presente/ausente/justificado
 6. "Inscribir usuario" → modal búsqueda por nombre → inscribe en horario
+7. Sesión con QR activa → el panel del QR está **bloqueado con contraseña** (migración 031): expandir/finalizar la pide y "Bloquear"/colapsar lo oculta. "Finalizar asistencia" va por `POST /api/admin/close-session` (verifica la contraseña en servidor). Configurable en `/admin/configuracion` → "Seguridad de la sesión QR"
 
 **Usuario** (`/dashboard/asistencia`): Histórico agrupado por fecha, disciplina, horario, beneficiario, iconos estado.
 
@@ -337,6 +340,7 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 | `disciplines` | Kenpo, Kickboxing, Funcional, MMA | — |
 | `schedules` | Horarios semanales (`mode`: normal/personalizado) | FK → disciplines, profiles (professor) |
 | `class_sessions` | Sesiones generadas desde schedules | FK → schedules |
+| `qr_session_lock` | **NUEVO** Contraseña (hash scrypt) que protege la pantalla de sesión QR. Singleton admin-only | — |
 | `class_plans` | Restricción de plan por horario | FK → schedules, membership_plans |
 | `class_enrollments` | Inscripciones en horarios | FK → schedules, beneficiaries |
 | `personalized_schedule_plans` | **NUEVO** Planes permitidos por horario personalizado (vacío = todos) | FK → schedules, personalized_plans (CASCADE) |
@@ -501,6 +505,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 - **Feedback usuario**: espejo en el dashboard — `UserPendingTransferProvider` cuenta las transferencias pendientes **propias** (`user_id` + `method='transferencia'` + `status='pendiente'`) y alimenta un badge en la tab "Pagos" de `DashboardNav` (desktop y mobile) + banner `UserPendingTransferBanner` en `/dashboard/pagos`. El panel `TransferRequestsPanel` muestra las solicitudes con su estado ("En revisión"/"Aprobada"/"Rechazada"), la referencia `REF-ZE`, el monto, el comprobante y la **nota del admin** (`admin_note`): caja verde "Nota del administrador" en aprobaciones con nota y caja roja "Motivo del rechazo" en rechazos. La fila de pago `PaymentRow` en `/dashboard/pagos` también muestra la nota (roja en rechazados, verde "Nota:" en aprobados). Datos vía `getUserTransferRequests` en `dashboard.ts`.
 - **Feedback admin en revisión**: `/admin/ventas` muestra la nota en **aprobadas y rechazadas** (verde/rojo) dentro de `SolicitudesSection`, y tras revisar muestra un **toast de confirmación** ("Solicitud aprobada y pago registrado…" / "Solicitud rechazada…") usando el componente `Toast`. El label del modal aclara que la nota es "visible para el usuario" (aplica tanto a aprobación como a rechazo).
 - **Perfil deportivo de alumnos (migración 024, v1.5.0)**: tablas `belt_grades` (grados por disciplina con color, UNIQUE `(discipline_id, position)`, seed Blanco→Negro por disciplina activa), `sport_profiles` (1 perfil por beneficiario, UNIQUE `beneficiary_id`, trigger `sport_profile_validate_grade()` que impide guardar un cinturón de otra disciplina) y `sports_podiums` (historial, `position CHECK IN ('1','2','3','participacion')`). RLS: **escritura SOLO admin** (`belt_grades_admin_write`, `sport_profiles_admin_write`, `sports_podiums_admin_write`); lectura `owns_beneficiary(beneficiary_id) OR is_admin()`. Se anclan a `beneficiaries.id` (NO columnas nuevas en `profiles`/`dependents`) para que el tutor no se autoconceda grados vía `dependents_update_own_or_admin`. El color del cinturón viene de la BD (`belt_grades.color`), nunca hardcodeado. Helpers en `src/lib/sport-profile.ts` (tipos, `PODIUM_POSITIONS`, `computePodiumStats`, `formatPodiumDate`, `sortPodiumsByDateAsc/Desc`); embeds `sport_profiles`+`sports_podiums` en `DependentData` con `getUserSportProfile`/`getDependentSportProfile`. UI: `TutorSportCard` en `/dashboard/cargas`, `BeltBanner`+`SportProfileInfo` en `DependentCard`, gestión admin vía `SportProfileModal`+`PodiumFormModal` en `/admin/usuarios` (botón `sports_martial_arts` en `DataTable`, resuelve beneficiario por `profile_id` o `dependent_id`). Detalle en `contexto/requisitos/perfil-deportivo-alumnos.md`.
+- **Contraseña de la sesión QR (migración 031, v1.9.0)**: la pantalla QR de `/admin/asistencia` está protegida por una contraseña global de la academia (hash scrypt, nunca se envía al cliente). Tabla **singleton** `qr_session_lock` (`id` fijo `00000000-0000-0000-0000-000000000001`, `password_hash`, `password_salt`, `updated_at`, `updated_by`) con RLS **admin-only** (`qr_session_lock_admin_all`): no puede vivir en `academy_settings` porque ese tiene `academy_settings_select_all ... USING (true)`. **La existencia de la fila es el interruptor**: sin fila el panel funciona sin bloqueo (fail-open) y muestra aviso. Hashing en `src/lib/qr-lock.ts` (server-only, `node:crypto` scrypt N=16384/r=8/p=1 + `timingSafeEqual` + rate limit en memoria 8 intentos/15 min). APIs: `GET /api/admin/qr-lock` (estado, nunca el hash), `POST /api/admin/qr-lock` (`set`/`clear`/`verify`; `set` y `clear` exigen la contraseña actual) y `POST /api/admin/close-session` (verifica la contraseña y recién ahí marca `ausente` + `status='cerrada'`, devuelve el resumen QR; **el cierre ya NO se hace desde el browser client**). Todas exigen `role_id=1` y loguean `audit_logs`. UI: expandir una sesión activa muestra el panel bloqueado (`qrUnlocked` vive solo en el estado, nunca en `localStorage`), botón "Bloquear", colapsar oculta el QR, y el modal "Finalizar asistencia" pide la contraseña; la contraseña se configura en `/admin/configuracion` → "Seguridad de la sesión QR". `/api/checkin` no cambia. Detalle en `contexto/requisitos/bloqueo-sesion-qr.md`.
 
 ---
 
@@ -529,6 +534,9 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 | `contexto/migrations/029_changelog_v1_7_0.sql` | Migración 029: entrada de changelog v1.7.0 (Histórico de Asistencia en panel admin) (pendiente aplicar) |
 | `contexto/requisitos/adjunto-imagen-eventos.md` | Requisito + análisis de impacto (adjunto de imagen descargable en eventos) |
 | `contexto/migrations/030_changelog_v1_8_0.sql` | Migración 030: entrada de changelog v1.8.0 (Adjunto de Imagen en Eventos) (pendiente aplicar) |
+| `contexto/requisitos/bloqueo-sesion-qr.md` | Requisito + análisis de impacto (contraseña de protección de la pantalla de sesión QR) |
+| `contexto/migrations/031_qr_session_lock.sql` | Migración 031: tabla singleton `qr_session_lock` (hash scrypt, RLS admin-only) (pendiente aplicar) |
+| `contexto/migrations/032_changelog_v1_9_0.sql` | Migración 032: entrada de changelog v1.9.0 (Contraseña de protección para la sesión QR) (pendiente aplicar) |
 | `contexto/schema-complete.sql` | SQL completo: 26 tablas, 190 cols, 32 FKs, 59 RLS, 33 indexes |
 | `project-context/brain.md` | Contexto legacy (parcialmente obsoleto) |
 | `project-context/changelog.md` | Historial de cambios detallado |
