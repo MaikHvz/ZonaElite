@@ -253,4 +253,22 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **UI `/admin/configuracion`**: sección **"Seguridad de la sesión QR"** con chip Protegida/Sin protección, contraseña + repetición, "Guardar/Cambiar contraseña" y "Quitar protección" (ambos exigen la contraseña actual).
 - **Sin impacto** en `/api/checkin`, tokens/deudas, `CheckoutModal`, Flow ni los policies de `class_sessions`/`attendance`. Reversión: `DROP TABLE public.qr_session_lock;` (vuelve al fail-open actual).
 
+## 15. Lista de Asistencia a Eventos (IMPLEMENTADO - v1.10.0)
+
+> Estado: **implementado (2026-10-03)**, suite secciones A-AE en verde (612 tests; queda 1 fallo preexistente y dependiente de la fecha en `extend: membresía vigente se extiende desde current_end`), `npx tsc --noEmit` limpio. Migraciones `033_event_attendees.sql` y `034_changelog_v1_10_0.sql` (**pendientes de aplicar en Supabase (SQL Editor)**). Requisito + análisis de impacto en `contexto/requisitos/lista-asistencia-eventos.md`.
+
+**Problema**: el CTA "Inscribirse" de `/eventos/[id]` era un `<Link href="/auth">`: no inscribía a nadie y no había forma de saber quién iba a cada evento. El admin tampoco tenía ninguna visibilidad.
+
+**Solución**: lista de asistencia por evento, anclada a `beneficiaries` (titular **y** cargas), escrita solo por RPC.
+
+- **Alcance acordado**: **sin aforo** (`events` no tiene columna de capacidad), **sin** tokens, **sin** exigir membresía ni inscripción a la academia, y **sin** tocar `class_enrollments`, `personalized_enrollments`, `attendance`, `debts` ni `memberships`. El admin solo **ve y quita** asistentes; no hay check-in ni conteo por QR.
+- **BD (`033`)**: tabla `event_attendees` (`event_id`, `beneficiary_id`, `created_at`, UNIQUE `(event_id, beneficiary_id)`, FK `events` **ON DELETE CASCADE** para que borrar el evento limpie su lista, FK `beneficiaries`, índices por ambos lados). RLS con **una sola** policy `event_attendees_select_own_or_staff` (`is_staff() OR owns_beneficiary(beneficiary_id)`) y **sin** policy INSERT/UPDATE/DELETE → el *browser client* no puede escribir ni manipulando el front.
+  - `enroll_event(p_event_id uuid, p_beneficiary_ids uuid[])` (SECURITY DEFINER): exige sesión, valida que el evento exista y **no haya pasado** (`event_date < chile_today()`), es **idempotente** (ya inscrito devuelve `success` sin error), autoriza `is_admin() OR owns_beneficiary()` por beneficiario y usa guard `FOR UPDATE` sobre el evento (mismo patrón B-006 que `enroll_class`). Devuelve una fila por beneficiario.
+  - `cancel_event_attendance(p_event_id uuid, p_beneficiary_id uuid)` (SECURITY DEFINER): autorizada para `is_admin()` (panel) **o** `owns_beneficiary()` (el usuario saca su participación), **idempotente** (`removed=false` + mensaje si no estaba) y **bloqueada para eventos pasados** porque su lista es histórica.
+  - Ambas: `REVOKE ALL … FROM PUBLIC` + `GRANT EXECUTE … TO authenticated`.
+- **Usuario (`/eventos/[id]` → `EventEnrollButton`)**: sin sesión mantiene el link a `/auth`; con evento ya ocurrido muestra **"Evento finalizado"** (comparación con `getChileToday()`, no `toISOString()`). ConROW muestra el botón verde **Inscrito** y, al pasar el mouse, el aviso **"Eliminar asistencia"** (`group-hover`) que abre una confirmación antes de dar de baja. El alta pide confirmación ("¿Deseas inscribirte al evento…?") en `EventEnrollModal`, con selector múltiple de titular y cargas (los ya inscritos aparecen bloqueados con su insignia) y, al confirmar, el modal **"Confirmación exitosa"**. Ambas acciones van por RPC, nunca por escritura directa.
+- **Admin (`/admin/eventos` → `EventAttendeesModal`)**: nueva columna **Asistencia** con el contador; si hay inscritos es un botón "N inscritos" que abre la lista (nombre, categoría, fecha y hora de inscripción) y desde ahí se quita a alguien con confirmación. `load()` se reejecuta al quitar para refrescar el contador.
+- **Espejo SQL**: `documentacion/squema-sql-actualizado.sql` queda 1:1 con las migraciones (tabla, índices, policy, ambas RPC con sus grants y el seed v1.10.0); el test `T: esquema documentado refleja el seed v1.1.0` pasó de 13 a 14 seeds.
+- **Reversión**: `DROP TABLE public.event_attendees;` (deja el CTA como estaba) y revertir los tres archivos de UI.
+
 ---

@@ -191,7 +191,7 @@ src/
 |------|---------|-------------|
 | `/admin` | Dashboard: stats, RevenueChart, NewStudentsChart, MembershipBreakdown, MonthlyComparison, PaymentOverview |
 | `/admin/productos` | CRUD con DataTable, ImageUpload (3 imgs), product_images |
-| `/admin/eventos` | CRUD con type filter, location_url para Google Maps. La imagen subida es portada + adjunto descargable |
+| `/admin/eventos` | CRUD con type filter, location_url para Google Maps. La imagen subida es portada + adjunto descargable. **Columna Asistencia**: contador de inscritos + lista por evento (v1.10.0) |
 | `/admin/horarios` | CRUD: category, active, room, discipline+professor selects, class_plans |
 | `/admin/tipos-clase` | CRUD disciplinas: name, color_hex, icon, description, active |
 | `/admin/usuarios` | Usuarios + cargas agrupadas, cambio roles, activar/desactivar |
@@ -329,7 +329,7 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 
 ## 6. Base de datos
 
-### 32 Tablas
+### 33 Tablas
 
 | Tabla | Descripción | FKs principales |
 |-------|-------------|----------------|
@@ -358,6 +358,7 @@ Nuevo vencimiento: 2027-10-25 (14 meses total)
 | `order_items` | Items de órdenes | FK → product_orders, products |
 | `payments` | Pagos (Flow, transferencia, efectivo; solicitudes manuales = `method='transferencia'` + `status='pendiente'`, con `membership_plan_id`/`personalized_plan_id`/`reviewed_by`/`reviewed_at`/`admin_note`) | FK → profiles, memberships |
 | `events` | Torneos, ceremonias, seminarios | — |
+| `event_attendees` | **NUEVO** Lista de asistencia por evento (beneficiario inscrito). Escritura solo por RPC | FK → events (CASCADE), beneficiaries |
 | `blog_posts` | Publicaciones blog | — |
 | `notifications` | Notificaciones | — |
 | `audit_logs` | Logs auditoría | — |
@@ -506,6 +507,7 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 - **Feedback admin en revisión**: `/admin/ventas` muestra la nota en **aprobadas y rechazadas** (verde/rojo) dentro de `SolicitudesSection`, y tras revisar muestra un **toast de confirmación** ("Solicitud aprobada y pago registrado…" / "Solicitud rechazada…") usando el componente `Toast`. El label del modal aclara que la nota es "visible para el usuario" (aplica tanto a aprobación como a rechazo).
 - **Perfil deportivo de alumnos (migración 024, v1.5.0)**: tablas `belt_grades` (grados por disciplina con color, UNIQUE `(discipline_id, position)`, seed Blanco→Negro por disciplina activa), `sport_profiles` (1 perfil por beneficiario, UNIQUE `beneficiary_id`, trigger `sport_profile_validate_grade()` que impide guardar un cinturón de otra disciplina) y `sports_podiums` (historial, `position CHECK IN ('1','2','3','participacion')`). RLS: **escritura SOLO admin** (`belt_grades_admin_write`, `sport_profiles_admin_write`, `sports_podiums_admin_write`); lectura `owns_beneficiary(beneficiary_id) OR is_admin()`. Se anclan a `beneficiaries.id` (NO columnas nuevas en `profiles`/`dependents`) para que el tutor no se autoconceda grados vía `dependents_update_own_or_admin`. El color del cinturón viene de la BD (`belt_grades.color`), nunca hardcodeado. Helpers en `src/lib/sport-profile.ts` (tipos, `PODIUM_POSITIONS`, `computePodiumStats`, `formatPodiumDate`, `sortPodiumsByDateAsc/Desc`); embeds `sport_profiles`+`sports_podiums` en `DependentData` con `getUserSportProfile`/`getDependentSportProfile`. UI: `TutorSportCard` en `/dashboard/cargas`, `BeltBanner`+`SportProfileInfo` en `DependentCard`, gestión admin vía `SportProfileModal`+`PodiumFormModal` en `/admin/usuarios` (botón `sports_martial_arts` en `DataTable`, resuelve beneficiario por `profile_id` o `dependent_id`). Detalle en `contexto/requisitos/perfil-deportivo-alumnos.md`.
 - **Contraseña de la sesión QR (migración 031, v1.9.0)**: la pantalla QR de `/admin/asistencia` está protegida por una contraseña global de la academia (hash scrypt, nunca se envía al cliente). Tabla **singleton** `qr_session_lock` (`id` fijo `00000000-0000-0000-0000-000000000001`, `password_hash`, `password_salt`, `updated_at`, `updated_by`) con RLS **admin-only** (`qr_session_lock_admin_all`): no puede vivir en `academy_settings` porque ese tiene `academy_settings_select_all ... USING (true)`. **La existencia de la fila es el interruptor**: sin fila el panel funciona sin bloqueo (fail-open) y muestra aviso. Hashing en `src/lib/qr-lock.ts` (server-only, `node:crypto` scrypt N=16384/r=8/p=1 + `timingSafeEqual` + rate limit en memoria 8 intentos/15 min). APIs: `GET /api/admin/qr-lock` (estado, nunca el hash), `POST /api/admin/qr-lock` (`set`/`clear`/`verify`; `set` y `clear` exigen la contraseña actual) y `POST /api/admin/close-session` (verifica la contraseña y recién ahí marca `ausente` + `status='cerrada'`, devuelve el resumen QR; **el cierre ya NO se hace desde el browser client**). Todas exigen `role_id=1` y loguean `audit_logs`. UI: expandir una sesión activa muestra el panel bloqueado (`qrUnlocked` vive solo en el estado, nunca en `localStorage`), botón "Bloquear", colapsar oculta el QR, y el modal "Finalizar asistencia" pide la contraseña; la contraseña se configura en `/admin/configuracion` → "Seguridad de la sesión QR". `/api/checkin` no cambia. Detalle en `contexto/requisitos/bloqueo-sesion-qr.md`.
+- **Lista de asistencia a eventos (migración 033, v1.10.0)**: tabla `event_attendees` (`event_id`, `beneficiary_id`, `created_at`, UNIQUE `(event_id, beneficiary_id)`, FK `events` **ON DELETE CASCADE** + FK `beneficiaries`). RLS con **una sola** policy de lectura `event_attendees_select_own_or_staff` (`is_staff() OR owns_beneficiary(beneficiary_id)`): **no hay policy INSERT/UPDATE/DELETE**, la escritura es exclusiva de dos RPC `SECURITY DEFINER` con `REVOKE ALL … FROM PUBLIC` + `GRANT … TO authenticated`: `enroll_event(p_event_id uuid, p_beneficiary_ids uuid[])` (idempotente: ya inscrito devuelve `success` sin error; bloquea eventos con `event_date < chile_today()`; autoriza `is_admin() OR owns_beneficiary()`; guard `FOR UPDATE` sobre el evento) y `cancel_event_attendance(p_event_id uuid, p_beneficiary_id uuid)` (admin o dueño, idempotente con `removed=false` + mensaje, también bloquea eventos pasados porque su lista es histórica). El ancla es `beneficiaries` (titular **y** cargas), **sin** aforo, **sin** tokens, **sin** exigir membresía ni inscripción a la academia, y **no toca** `class_enrollments`, `personalized_enrollments`, `attendance`, `debts` ni `memberships`. UI: `EventEnrollButton` en `/eventos/[id]` (anónimo → link a `/auth`; evento pasado → "Evento finalizado"; usando `getChileToday()`; con ROW → botón verde **Inscrito** que al hacer `group-hover` muestra el aviso **"Eliminar asistencia"** y abre confirmación de baja; alta → `EventEnrollModal` con "¿Deseas inscribirte al evento…?" + selector multi de titular/cargas + modal **"Confirmación exitosa"**), `fetchOwnBeneficiaries`/`fetchMyEventAttendees` en `EventEnrollModal.tsx`, y `EventAttendeesModal` en `/admin/eventos` (columna **Asistencia** con contador clicable "N inscritos" → lista con nombre, categoría y fecha de inscripción; puede quitar a alguien con confirmación). Detalle en `contexto/requisitos/lista-asistencia-eventos.md`.
 
 ---
 
@@ -537,6 +539,9 @@ Todas las tablas tienen RLS habilitado. Patrón típico:
 | `contexto/requisitos/bloqueo-sesion-qr.md` | Requisito + análisis de impacto (contraseña de protección de la pantalla de sesión QR) |
 | `contexto/migrations/031_qr_session_lock.sql` | Migración 031: tabla singleton `qr_session_lock` (hash scrypt, RLS admin-only) (pendiente aplicar) |
 | `contexto/migrations/032_changelog_v1_9_0.sql` | Migración 032: entrada de changelog v1.9.0 (Contraseña de protección para la sesión QR) (pendiente aplicar) |
+| `contexto/requisitos/lista-asistencia-eventos.md` | Requisito + análisis de impacto (lista de asistencia por evento, usuario + admin) |
+| `contexto/migrations/033_event_attendees.sql` | Migración 033: tabla `event_attendees` (RLS solo lectura) + RPC `enroll_event` / `cancel_event_attendance` (pendiente aplicar) |
+| `contexto/migrations/034_changelog_v1_10_0.sql` | Migración 034: entrada de changelog v1.10.0 (Lista de asistencia a eventos) (pendiente aplicar) |
 | `contexto/schema-complete.sql` | SQL completo: 26 tablas, 190 cols, 32 FKs, 59 RLS, 33 indexes |
 | `project-context/brain.md` | Contexto legacy (parcialmente obsoleto) |
 | `project-context/changelog.md` | Historial de cambios detallado |

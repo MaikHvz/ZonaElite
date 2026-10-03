@@ -520,6 +520,23 @@ CREATE TABLE IF NOT EXISTS public.events (
   CONSTRAINT events_pkey PRIMARY KEY (id)
 );
 
+-- Migración 033: lista de asistencia por evento (titular + cargas).
+-- Escritura SOLO por las RPC enroll_event / cancel_event_attendance
+-- (SECURITY DEFINER); sin policies INSERT/UPDATE/DELETE.
+-- ON DELETE CASCADE en event_id: borrar el evento limpia su lista.
+CREATE TABLE IF NOT EXISTS public.event_attendees (
+  id uuid DEFAULT gen_random_uuid() NOT NULL,
+  event_id uuid NOT NULL,
+  beneficiary_id uuid NOT NULL,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  CONSTRAINT event_attendees_pkey PRIMARY KEY (id),
+  CONSTRAINT event_attendees_event_beneficiary_key UNIQUE (event_id, beneficiary_id),
+  CONSTRAINT event_attendees_event_id_fkey
+    FOREIGN KEY (event_id) REFERENCES public.events(id) ON DELETE CASCADE,
+  CONSTRAINT event_attendees_beneficiary_id_fkey
+    FOREIGN KEY (beneficiary_id) REFERENCES public.beneficiaries(id)
+);
+
 CREATE TABLE IF NOT EXISTS public.blog_posts (
   id uuid DEFAULT gen_random_uuid() NOT NULL,
   title text NOT NULL,
@@ -722,6 +739,8 @@ CREATE INDEX IF NOT EXISTS idx_medical_records_beneficiary_id ON public.medical_
 CREATE INDEX IF NOT EXISTS idx_gallery_images_position ON public.gallery_images(position);
 CREATE INDEX IF NOT EXISTS idx_gallery_images_active ON public.gallery_images(active);
 CREATE INDEX IF NOT EXISTS idx_consent_forms_beneficiary_id ON public.consent_forms(beneficiary_id);
+CREATE INDEX IF NOT EXISTS idx_event_attendees_event_id ON public.event_attendees(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_attendees_beneficiary_id ON public.event_attendees(beneficiary_id);
 
 -- =====================================================
 -- TRIGGERS
@@ -841,6 +860,10 @@ CREATE POLICY "payments_update_admin" ON public.payments FOR UPDATE USING (publi
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "events_select_all" ON public.events FOR SELECT USING (true);
 CREATE POLICY "events_admin_write" ON public.events FOR ALL USING (public.is_admin());
+-- Migración 033: la lista de asistentes NO es pública. Solo el titular/carga
+-- y el staff la leen; la escritura va por RPC SECURITY DEFINER.
+ALTER TABLE public.event_attendees ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "event_attendees_select_own_or_staff" ON public.event_attendees FOR SELECT USING (public.is_staff() OR public.owns_beneficiary(beneficiary_id));
 ALTER TABLE public.blog_posts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "blog_posts_select_public" ON public.blog_posts FOR SELECT USING (status = 'publicado' OR public.is_admin());
 CREATE POLICY "blog_posts_admin_write" ON public.blog_posts FOR ALL USING (public.is_admin());
@@ -1780,7 +1803,153 @@ REVOKE ALL ON FUNCTION public.cancel_class_enrollment(UUID, UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.cancel_class_enrollment(UUID, UUID) TO authenticated;
 
 COMMENT ON FUNCTION public.cancel_class_enrollment(UUID, UUID) IS
-'Desinscribe a un beneficiario de una sesión (solo admin). En modalidad normal borra class_enrollments (por sesión u horario recurrente) y la deuda pendiente de la sesión, devolviendo el token automáticamente vía get_remaining_tokens; en modalidad personalizada restaura 1 clase al pack. Limpia attendance y notifica al titular.';
+  'Desinscribe a un beneficiario de una sesión (solo admin). En modalidad normal borra class_enrollments (por sesión u horario recurrente) y la deuda pendiente de la sesión, devolviendo el token automáticamente vía get_remaining_tokens; en modalidad personalizada restaura 1 clase al pack. Limpia attendance y notifica al titular.';
+
+-- ============================================================
+-- RPC DE EVENTOS: lista de asistencia (migración 033, v1.10.0)
+-- Módulo DESACOPLADO de la asistencia de clases: no toca
+-- class_enrollments, personalized_enrollments, attendance, debts
+-- ni memberships. NO consume tokens y NO exige membresía o
+-- inscripción a la academia (un evento es actividad de
+-- comunidad); el administrador filtra la lista.
+-- Sin aforo: events no tiene columna de capacidad.
+-- Espejo de enroll_class (idempotencia + autorización por
+-- beneficiario), con lock FOR UPDATE sobre el evento.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.enroll_event(
+  p_event_id uuid,
+  p_beneficiary_ids uuid[]
+)
+RETURNS TABLE (
+  beneficiary_id uuid,
+  success boolean,
+  error_code text,
+  error_message text
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+VOLATILE
+AS $$
+DECLARE
+  v_is_admin boolean;
+  v_event_date date;
+  v_bid uuid;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Debes iniciar sesión para inscribirte a un evento' USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT e.event_date
+    INTO v_event_date
+    FROM public.events e
+    WHERE e.id = p_event_id;
+
+  IF v_event_date IS NULL THEN
+    RAISE EXCEPTION 'Evento no encontrado' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- No se puede pasar lista de un evento que ya ocurrió.
+  IF v_event_date < public.chile_today() THEN
+    RAISE EXCEPTION 'Este evento ya fue' USING ERRCODE = 'P0001';
+  END IF;
+
+  v_is_admin := public.is_admin();
+
+  -- Guard de concurrencia (mismo patrón B-006 que enroll_class).
+  PERFORM 1 FROM public.events WHERE id = p_event_id FOR UPDATE;
+
+  FOREACH v_bid IN ARRAY p_beneficiary_ids LOOP
+    -- Idempotencia: doble clic o reintento no duplica ni falla.
+    IF EXISTS (
+      SELECT 1 FROM public.event_attendees
+      WHERE event_id = p_event_id AND beneficiary_id = v_bid
+    ) THEN
+      RETURN QUERY SELECT v_bid, true, NULL, 'Ya inscrito';
+      CONTINUE;
+    END IF;
+
+    -- Autorización: admin, o el propio titular/carga del beneficiario.
+    IF NOT (v_is_admin OR public.owns_beneficiary(v_bid)) THEN
+      RETURN QUERY SELECT v_bid, false, 'UNAUTHORIZED',
+        'No tienes acceso a este beneficiario';
+      CONTINUE;
+    END IF;
+
+    INSERT INTO public.event_attendees (event_id, beneficiary_id)
+      VALUES (p_event_id, v_bid);
+
+    RETURN QUERY SELECT v_bid, true, NULL, 'Inscrito';
+  END LOOP;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.enroll_event(UUID, UUID[]) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.enroll_event(UUID, UUID[]) TO authenticated;
+
+COMMENT ON FUNCTION public.enroll_event(UUID, UUID[]) IS
+  'Inscribe uno o varios beneficiarios en la lista de asistencia de un evento. Idempotente (ya inscrito devuelve success sin error), valida que el evento exista y no haya pasado, y exige is_admin() u owns_beneficiary(). No consume tokens ni exige membresía.';
+
+-- Dos autores: el admin (panel /admin/eventos) y el propio titular/carga
+-- (quien pasa el mouse sobre "Inscrito" y pulsa "Eliminar asistencia").
+CREATE OR REPLACE FUNCTION public.cancel_event_attendance(
+  p_event_id uuid,
+  p_beneficiary_id uuid
+)
+RETURNS TABLE (
+  removed boolean,
+  message text
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+VOLATILE
+AS $$
+DECLARE
+  v_event_date date;
+  v_deleted integer;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Debes iniciar sesión para modificar tu asistencia' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- Autorización: admin (panel) o el dueño del beneficiario (usuario).
+  IF NOT (public.is_admin() OR public.owns_beneficiary(p_beneficiary_id)) THEN
+    RAISE EXCEPTION 'No tienes acceso a este beneficiario' USING ERRCODE = 'P0001';
+  END IF;
+
+  SELECT e.event_date
+    INTO v_event_date
+    FROM public.events e
+    WHERE e.id = p_event_id;
+
+  IF v_event_date IS NULL THEN
+    RAISE EXCEPTION 'Evento no encontrado' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- La lista de un evento que ya ocurrió es histórica: no se toca.
+  IF v_event_date < public.chile_today() THEN
+    RAISE EXCEPTION 'Este evento ya fue y su lista es histórica' USING ERRCODE = 'P0001';
+  END IF;
+
+  DELETE FROM public.event_attendees
+    WHERE event_id = p_event_id
+      AND beneficiary_id = p_beneficiary_id;
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+
+  IF v_deleted = 0 THEN
+    RETURN QUERY SELECT false, 'Ese beneficiario no estaba en la lista de asistencia';
+    RETURN;
+  END IF;
+
+  RETURN QUERY SELECT true, 'Participación eliminada de la lista de asistencia';
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.cancel_event_attendance(UUID, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cancel_event_attendance(UUID, UUID) TO authenticated;
+
+COMMENT ON FUNCTION public.cancel_event_attendance(UUID, UUID) IS
+  'Elimina a un beneficiario de la lista de asistencia de un evento. Autorizado para is_admin() (panel admin) y para owns_beneficiary() (el usuario saca su propia participación). Idempotente y bloqueado para eventos ya ocurridos.';
 
 -- ============================================================
 -- RPC DE STOCK (checkout de tienda v1.4.0, migración 020)
@@ -2001,5 +2170,14 @@ VALUES (
   'v1.9.0',
   'Contraseña de protección para la sesión QR',
   E'• La pantalla de la sesión QR en /admin/asistencia ahora está protegida por una contraseña: al expandir una sesión activa hay que ingresarla para volver a ver el QR.\n• Al colapsar la sesión, cambiar de pestaña o pulsar "Bloquear", el QR se oculta y queda bloqueado (el desbloqueo no se guarda en el navegador, solo dura mientras la pantalla siga abierta).\n• "Finalizar asistencia" se valida en el servidor a través de /api/admin/close-session: sin la contraseña correcta la sesión no se cierra.\n• La contraseña se configura en Configuración → "Seguridad de la sesión QR" y se guarda con hash scrypt en la tabla qr_session_lock, que solo el administrador puede leer. Cambiarla o quitar la protección exige la contraseña actual.\n• Si no hay contraseña configurada, el panel sigue funcionando sin bloqueo y muestra un aviso para configurarla.'
+)
+ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.10.0 — Lista de asistencia a eventos (migración 034)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.10.0',
+  'Lista de asistencia a eventos',
+  E'• Ahora puedes inscribirte a un evento desde su ficha (/eventos/[id]): el botón "Inscribirse" abre una confirmación con el nombre del evento y, al confirmar, se agrega tu nombre (y el de tus cargas) a la lista de asistencia del evento.\n• Al inscribirte verás un mensaje de "Confirmación exitosa" y el botón principal cambia a "Inscrito".\n• Si te registraste por error, pasa el mouse sobre "Inscrito" y haz clic: aparecerá el aviso "Eliminar asistencia" y una confirmación para borrar tu participación de la lista.\n• El administrador ve cuántos inscritos tiene cada evento en Eventos, y con el botón de la lista de asistencia puede ver quién se anotó (nombre, categoría y fecha) y quitar a alguien si corresponde.\n• Las inscripciones a eventos son independientes de las clases: no consumen tokens ni requieren membresía activa.'
 )
 ON CONFLICT (version) DO NOTHING;

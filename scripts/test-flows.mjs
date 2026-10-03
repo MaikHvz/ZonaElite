@@ -1656,7 +1656,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 13);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 14);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -2388,6 +2388,134 @@ ok("AD: el cliente de la UI no importa la librería server-only del hash",
 ok("AD: la página del alumno /checkin no se modifica (sigue validando status en el servidor)",
   /status === "activa"/.test(readFileSync(join(ROOT, "src", "app", "checkin", "[sessionId]", "page.tsx"), "utf8")) &&
   /Esta clase ya no está recibiendo asistencia/.test(readFileSync(join(ROOT, "src", "app", "api", "checkin", "route.ts"), "utf8")));
+
+// ============================================================
+// AE. LISTA DE ASISTENCIA A EVENTOS (migraciones 033/034, v1.10.0)
+// ============================================================
+section("AE. Lista de asistencia a eventos");
+
+const migration033 = readFileSync(join(ROOT, "contexto", "migrations", "033_event_attendees.sql"), "utf8");
+const migration034 = readFileSync(join(ROOT, "contexto", "migrations", "034_changelog_v1_10_0.sql"), "utf8");
+const schemaAe = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const evEnrollButtonAe = readFileSync(join(ROOT, "src", "components", "EventEnrollButton.tsx"), "utf8");
+const evEnrollModalAe = readFileSync(join(ROOT, "src", "components", "EventEnrollModal.tsx"), "utf8");
+const evAttendeesModalAe = readFileSync(join(ROOT, "src", "components", "admin", "EventAttendeesModal.tsx"), "utf8");
+const eventoDetailAe = readFileSync(join(ROOT, "src", "app", "eventos", "[id]", "page.tsx"), "utf8");
+const adminEventosAe = readFileSync(join(ROOT, "src", "app", "admin", "eventos", "page.tsx"), "utf8");
+// El módulo debe quedar desacoplado: se evalúa el SQL sin comentarios.
+const migration033Code = migration033.replace(/--.*$/gm, "");
+
+ok("AE: 033 crea event_attendees con UNIQUE(event_id, beneficiary_id)",
+  /CREATE TABLE IF NOT EXISTS public\.event_attendees/.test(migration033) &&
+  /event_id uuid NOT NULL/.test(migration033) &&
+  /beneficiary_id uuid NOT NULL/.test(migration033) &&
+  /UNIQUE \(event_id, beneficiary_id\)/.test(migration033));
+ok("AE: 033 borra la lista al borrar el evento (ON DELETE CASCADE) e indexa ambos lados",
+  /FOREIGN KEY \(event_id\) REFERENCES public\.events\(id\) ON DELETE CASCADE/.test(migration033) &&
+  /CREATE INDEX IF NOT EXISTS idx_event_attendees_event_id/.test(migration033) &&
+  /CREATE INDEX IF NOT EXISTS idx_event_attendees_beneficiary_id/.test(migration033));
+ok("AE: 033 deja RLS solo para lectura (dueño o staff), sin policy de escritura",
+  /ALTER TABLE public\.event_attendees ENABLE ROW LEVEL SECURITY/.test(migration033) &&
+  /CREATE POLICY "event_attendees_select_own_or_staff"[\s\S]*?FOR SELECT[\s\S]*?USING \(public\.is_staff\(\) OR public\.owns_beneficiary\(beneficiary_id\)\)/.test(migration033) &&
+  !/CREATE POLICY "event_attendees[^"]*"\s+ON public\.event_attendees\s+FOR (INSERT|UPDATE|DELETE)/.test(migration033) &&
+  (migration033.match(/CREATE POLICY "event_attendees/g) || []).length === 1 &&
+  !/CREATE POLICY "event_attendees[^"]*"[\s\S]*?USING \(true\)/.test(migration033));
+ok("AE: enroll_event es SECURITY DEFINER, idempotente y bloquea eventos ya pasados",
+  /CREATE OR REPLACE FUNCTION public\.enroll_event\(/.test(migration033) &&
+  /SECURITY DEFINER/.test(migration033) &&
+  /'Ya inscrito'/.test(migration033) &&
+  /v_event_date < public\.chile_today\(\)/.test(migration033) &&
+  /public\.owns_beneficiary\(v_bid\)/.test(migration033) &&
+  /FOR UPDATE/.test(migration033));
+ok("AE: cancel_event_attendance acepta admin o dueño, es idempotente y bloquea eventos pasados",
+  /CREATE OR REPLACE FUNCTION public\.cancel_event_attendance\(/.test(migration033) &&
+  /public\.is_admin\(\) OR public\.owns_beneficiary\(p_beneficiary_id\)/.test(migration033) &&
+  /v_deleted = 0/.test(migration033) &&
+  /no estaba en la lista de asistencia/.test(migration033) &&
+  /v_event_date < public\.chile_today\(\)/.test(migration033));
+ok("AE: ambas RPC se revocan a PUBLIC y se ganan solo por authenticated",
+  /REVOKE ALL ON FUNCTION public\.enroll_event\(UUID, UUID\[\]\) FROM PUBLIC/.test(migration033) &&
+  /GRANT EXECUTE ON FUNCTION public\.enroll_event\(UUID, UUID\[\]\) TO authenticated/.test(migration033) &&
+  /REVOKE ALL ON FUNCTION public\.cancel_event_attendance\(UUID, UUID\) FROM PUBLIC/.test(migration033) &&
+  /GRANT EXECUTE ON FUNCTION public\.cancel_event_attendance\(UUID, UUID\) TO authenticated/.test(migration033));
+ok("AE: 033 no toca tokens, deudas, membresías ni la asistencia de clases",
+  !/\bclass_enrollments\b/.test(migration033Code) &&
+  !/\bpersonalized_enrollments\b/.test(migration033Code) &&
+  !/\bdebts\b/.test(migration033Code) &&
+  !/\bmemberships\b/.test(migration033Code) &&
+  !/\battendance\b/.test(migration033Code) &&
+  !/get_remaining_tokens/.test(migration033Code));
+ok("AE: 034 es seed de changelog v1.10.0 idempotente",
+  /'v1\.10\.0'/.test(migration034) &&
+  /'Lista de asistencia a eventos'/.test(migration034) &&
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration034));
+ok("AE: el espejo SQL refleja tabla, índices, RLS, ambas RPC y el seed v1.10.0",
+  /CREATE TABLE IF NOT EXISTS public\.event_attendees/.test(schemaAe) &&
+  /CREATE INDEX IF NOT EXISTS idx_event_attendees_event_id/.test(schemaAe) &&
+  /CREATE INDEX IF NOT EXISTS idx_event_attendees_beneficiary_id/.test(schemaAe) &&
+  /CREATE POLICY "event_attendees_select_own_or_staff"/.test(schemaAe) &&
+  /CREATE OR REPLACE FUNCTION public\.enroll_event\(/.test(schemaAe) &&
+  /CREATE OR REPLACE FUNCTION public\.cancel_event_attendance\(/.test(schemaAe) &&
+  /GRANT EXECUTE ON FUNCTION public\.enroll_event\(UUID, UUID\[\]\) TO authenticated/.test(schemaAe) &&
+  /GRANT EXECUTE ON FUNCTION public\.cancel_event_attendance\(UUID, UUID\) TO authenticated/.test(schemaAe) &&
+  /'Lista de asistencia a eventos'/.test(schemaAe));
+ok("AE: el espejo no duplica tabla, policy ni RPC",
+  (schemaAe.match(/CREATE TABLE IF NOT EXISTS public\.event_attendees/g) || []).length === 1 &&
+  (schemaAe.match(/CREATE OR REPLACE FUNCTION public\.enroll_event\(/g) || []).length === 1 &&
+  (schemaAe.match(/CREATE OR REPLACE FUNCTION public\.cancel_event_attendance\(/g) || []).length === 1 &&
+  (schemaAe.match(/CREATE POLICY "event_attendees_select_own_or_staff"/g) || []).length === 1);
+ok("AE: la ficha pública monta el CTA de inscripción (el link a /auth queda para anónimos)",
+  /import EventEnrollButton from "@\/components\/EventEnrollButton"/.test(eventoDetailAe) &&
+  /<EventEnrollButton[\s\S]*?eventId=\{event\.id\}/.test(eventoDetailAe) &&
+  !/href="\/auth"[\s\S]{0,400}?Inscribirse/.test(eventoDetailAe) &&
+  /<Link\s+href="\/auth"[\s\S]*?Inscribirse/.test(evEnrollButtonAe));
+ok("AE: el CTA alterna Inscribirse / Inscrito y usa getChileToday para el bloqueo",
+  /enrolledIds\.size > 0/.test(evEnrollButtonAe) &&
+  /loading \? "Cargando\.\.\." : "Inscribirse"/.test(evEnrollButtonAe) &&
+  /check_circle[\s\S]*?Inscrito/.test(evEnrollButtonAe) &&
+  /const isPast = eventDate < getChileToday\(\)/.test(evEnrollButtonAe) &&
+  /Evento finalizado/.test(evEnrollButtonAe) &&
+!/toISOString\(\)\.split\("T"\)\[0\]/.test(evEnrollButtonAe + evEnrollModalAe + evAttendeesModalAe + eventoDetailAe
+    + adminEventosAe));
+ok("AE: al hacer hover sobre Inscrito aparece el aviso Eliminar asistencia",
+  /group relative/.test(evEnrollButtonAe) &&
+  /group-hover:opacity-100/.test(evEnrollButtonAe) &&
+  /Eliminar asistencia/.test(evEnrollButtonAe));
+ok("AE: el alta y la baja piden confirmación y el alta muestra Confirmación exitosa",
+  /setEnrollOpen\(true\)/.test(evEnrollButtonAe) &&
+  /¿Deseas inscribirte al evento/.test(evEnrollModalAe) &&
+  /¿Deseas eliminar tu participación del evento/.test(evEnrollButtonAe) &&
+  /Confirmación exitosa/.test(evEnrollButtonAe) &&
+  /Te agregaste a la lista de asistencia del evento/.test(evEnrollButtonAe));
+ok("AE: alta y baja viajan por RPC, nunca por escritura directa del browser",
+  /rpc\("enroll_event"/.test(evEnrollModalAe) &&
+  /rpc\("cancel_event_attendance"/.test(evEnrollButtonAe) &&
+  /rpc\("cancel_event_attendance"/.test(evAttendeesModalAe) &&
+  !/\.from\("event_attendees"\)[\s\S]{0,120}?\.(insert|upsert|delete)\(/.test(evEnrollModalAe + evEnrollButtonAe + evAttendeesModalAe));
+ok("AE: el modal de inscripción ofrece titular y cargas, y marca a los ya inscritos",
+  /from\("beneficiaries"\)[\s\S]*?\.eq\("profile_id", userId\)/.test(evEnrollModalAe) &&
+  /from\("dependents"\)[\s\S]*?\.eq\("tutor_id", userId\)/.test(evEnrollModalAe) &&
+  /\.in\("dependent_id"/.test(evEnrollModalAe) &&
+  /Selecciona quiénes asistirán/.test(evEnrollModalAe) &&
+  /alreadyEnrolled\.has\(b\.beneficiaryId\)/.test(evEnrollModalAe) &&
+  /export async function fetchMyEventAttendees/.test(evEnrollModalAe));
+ok("AE: /admin/eventos muestra el contador de inscritos y abre la lista por evento",
+  /attendeesCount/.test(adminEventosAe) &&
+  /event_attendees\(beneficiary_id\)/.test(adminEventosAe) &&
+  /Ver lista de asistencia/.test(adminEventosAe) &&
+  /<EventAttendeesModal[\s\S]*?attendeesTarget\?\.id \?\? null/.test(adminEventosAe) &&
+  /onChanged=\{load\}/.test(adminEventosAe));
+ok("AE: la lista del admin resuelve nombre y categoría (titular o carga) y permite quitar",
+  /from\("event_attendees"\)[\s\S]*?beneficiaries\(id, profile_id, dependent_id\)/.test(evAttendeesModalAe) &&
+  /from\("profiles"\)[\s\S]*?full_name/.test(evAttendeesModalAe) &&
+  /from\("dependents"\)[\s\S]*?full_name, category/.test(evAttendeesModalAe) &&
+  /localesort|localeCompare/.test(evAttendeesModalAe) &&
+  /¿Deseas eliminar a/.test(evAttendeesModalAe));
+ok("AE: el módulo no altera el CRUD de eventos ni la asistencia de clases",
+  !/class_enrollments/.test(adminEventosAe + eventoDetailAe + evEnrollButtonAe + evEnrollModalAe + evAttendeesModalAe) &&
+  !/get_remaining_tokens/.test(adminEventosAe + eventoDetailAe + evEnrollButtonAe + evEnrollModalAe + evAttendeesModalAe) &&
+  /onDelete=\{setDeleteTarget\}/.test(adminEventosAe) &&
+  /onEdit=\{openEdit\}/.test(adminEventosAe));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import ImagePreviewModal from "@/components/ImagePreviewModal";
+import EventEnrollButton from "@/components/EventEnrollButton";
 
 interface Event {
   id: string;
@@ -255,12 +256,12 @@ export default function EventoDetailPage() {
                 )}
               </div>
 
-              <Link
-                href="/auth"
-                className="block w-full text-center px-6 py-3 rounded-xl btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-[14px] uppercase tracking-wider hover:opacity-90 transition-opacity"
-              >
-                Inscribirse
-              </Link>
+              <EventEnrollButton
+                eventId={event.id}
+                eventTitle={event.title}
+                eventType={event.type}
+                eventDate={event.event_date}
+              />
 
               <div className="border-t border-on-surface/5 mt-4 pt-4">
                 <Link

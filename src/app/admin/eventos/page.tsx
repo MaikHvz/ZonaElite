@@ -8,6 +8,7 @@ import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
 import ImageUpload from "@/components/admin/ImageUpload";
 import Toast from "@/components/admin/Toast";
+import EventAttendeesModal from "@/components/admin/EventAttendeesModal";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 
 interface Event {
@@ -21,6 +22,7 @@ interface Event {
   event_date: string;
   extra: Record<string, unknown>;
   created_at: string;
+  attendeesCount: number;
 }
 
 const emptyForm = { type: "torneo", title: "", description: "", image: "", location_name: "", location_url: "", event_date: "" };
@@ -48,12 +50,27 @@ export default function AdminEventosPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Event | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [attendeesTarget, setAttendeesTarget] = useState<Event | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   const load = async () => {
     const supabase = createClient();
-    const { data } = await supabase.from("events").select("*").order("event_date", { ascending: false });
-    setEvents((data as Event[]) || []);
+    const { data, error } = await supabase
+      .from("events")
+      .select("*, event_attendees(beneficiary_id)")
+      .order("event_date", { ascending: false });
+    if (error) {
+      setToast({ msg: getSupabaseErrorMessage(error, "cargar eventos"), type: "error" });
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+    setEvents(
+      ((data || []) as (Event & { event_attendees: { beneficiary_id: string }[] | null })[]).map((e) => ({
+        ...e,
+        attendeesCount: e.event_attendees?.length || 0,
+      }))
+    );
     setLoading(false);
   };
 
@@ -140,6 +157,22 @@ export default function AdminEventosPage() {
           { key: "type", label: "Tipo", render: (e) => typeLabel(e.type) },
           { key: "event_date", label: "Fecha", render: (e) => new Date(e.event_date + "T12:00:00").toLocaleDateString("es-CL") },
           { key: "location_name", label: "Lugar", render: (e) => e.location_name || "—" },
+          {
+            key: "attendeesCount",
+            label: "Asistencia",
+            render: (e) => e.attendeesCount > 0 ? (
+              <button
+                onClick={() => setAttendeesTarget(e)}
+                title="Ver lista de asistencia"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 transition-colors font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">group</span>
+                {e.attendeesCount} inscrito{e.attendeesCount === 1 ? "" : "s"}
+              </button>
+            ) : (
+              <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant/40">Sin inscritos</span>
+            ),
+          },
         ]}
         data={events}
         loading={loading}
@@ -215,6 +248,16 @@ export default function AdminEventosPage() {
           </div>
         </div>
       </FormModal>
+
+      <EventAttendeesModal
+        open={!!attendeesTarget}
+        eventId={attendeesTarget?.id ?? null}
+        eventTitle={attendeesTarget?.title || ""}
+        eventType={attendeesTarget?.type || "otro"}
+        eventDate={attendeesTarget?.event_date || ""}
+        onClose={() => setAttendeesTarget(null)}
+        onChanged={load}
+      />
 
       <DeleteConfirm open={!!deleteTarget} title="Eliminar Evento" message={`¿Estás seguro de eliminar "${deleteTarget?.title}"? Esta acción no se puede deshacer.`} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} loading={deleting} />
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
