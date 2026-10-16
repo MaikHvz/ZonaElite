@@ -3,6 +3,21 @@ import crypto from "crypto";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { sendWelcomeEmail } from "@/lib/email";
+import { isValidRut, formatRut } from "@/lib/rut";
+
+interface AccountConflict {
+  profile_id: string;
+  full_name: string;
+  email: string;
+  match: "rut" | "email" | "name_birth";
+}
+
+// El admin ve a quién corresponde la coincidencia, sin exponer el correo completo.
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return email;
+  return `${local.slice(0, 2)}${"*".repeat(Math.max(local.length - 2, 1))}@${domain}`;
+}
 
 function generatePassword(length = 12): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -34,14 +49,70 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, full_name, role_id = 4, birth_date, phone, rut } = body;
+    const { email, full_name, role_id = 4, birth_date, phone, force = false } = body;
+    let { rut } = body;
 
     if (!email || !full_name) {
       return NextResponse.json({ error: "Email y nombre son obligatorios" }, { status: 400 });
     }
 
-    const password = generatePassword();
+    if (rut) {
+      if (!isValidRut(rut)) {
+        return NextResponse.json({ error: "RUT inválido" }, { status: 400 });
+      }
+      rut = formatRut(rut);
+    }
+
     const admin = getAdminClient();
+
+    // Una cuenta por persona (migración 037): mismo RUT o correo
+    // equivalente (Gmail ignora puntos y "+etiqueta") bloquean; mismo
+    // nombre y fecha de nacimiento es advertencia que el admin puede forzar.
+    const { data: conflictRows, error: conflictError } = await admin.rpc("find_account_conflicts", {
+      p_rut: rut || null,
+      p_email: email,
+      p_full_name: full_name,
+      p_birth_date: birth_date || null,
+    });
+
+    if (conflictError) {
+      console.error("[CREATE-USER] Conflict check failed:", conflictError);
+      return NextResponse.json({ error: "No se pudo verificar si la cuenta ya existe" }, { status: 500 });
+    }
+
+    const conflicts = ((conflictRows || []) as AccountConflict[]).map((c) => ({
+      profileId: c.profile_id,
+      fullName: c.full_name,
+      email: maskEmail(c.email),
+      match: c.match,
+    }));
+    const blocking = conflicts.filter((c) => c.match === "rut" || c.match === "email");
+
+    if (blocking.length > 0) {
+      const byRut = blocking.some((c) => c.match === "rut");
+      return NextResponse.json(
+        {
+          error: byRut
+            ? "Ya existe una cuenta con este RUT"
+            : "Ya existe una cuenta con este correo (o uno equivalente)",
+          conflicts: blocking,
+        },
+        { status: 409 }
+      );
+    }
+
+    if (conflicts.length > 0 && !force) {
+      return NextResponse.json(
+        {
+          error: "Hay una cuenta con el mismo nombre y fecha de nacimiento",
+          warning: true,
+          conflicts,
+        },
+        { status: 409 }
+      );
+    }
+
+    const password = generatePassword();
 
     const { data: authUser, error: createError } = await admin.auth.admin.createUser({
       email,

@@ -272,3 +272,35 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Reversión**: `DROP TABLE public.event_attendees;` (deja el CTA como estaba) y revertir los tres archivos de UI.
 
 ---
+
+## 16. Endurecimiento de Seguridad de la BD (IMPLEMENTADO - v1.10.1)
+
+> Estado: **implementado en código (2026-10-16)**, suite A-AF en verde (626 tests; se mantiene el fallo preexistente dependiente de la fecha). Migraciones `035_security_hardening.sql` y `036_changelog_v1_10_1.sql` (**aplicadas en producción el 2026-10-16 y verificadas contra la BD**). Requisito + impacto en `contexto/requisitos/hardening-seguridad-bd.md`; origen en `contexto/auditoria-esquema-real.md`.
+
+**Contexto**: la academia obtiene beneficios por **dos canales**: (1) **transferencia validada por el admin** (`/api/payments/transfer` → `/api/payments/review`) más la asignación directa desde el panel, y (2) **Flow** (`/api/flow/create-order` → callback). Hoy `payment_settings` tiene los tres productos en **`manual`** por temas legales; Flow queda para la tienda y para cuando se reactive.
+
+**Problema**: la auditoría de la BD real mostró que sus policies RLS no son las del espejo: un usuario podía cambiar su propio `role_id` (volverse admin), escribir sus pagos Flow (concepto/beneficiario/monto/estado), inscribirse o desinscribirse a clases sin validaciones, borrar o reemplazar cualquier archivo del bucket e insertar notificaciones para cualquier usuario; `roles` no tenía RLS. Además los CHECK rechazaban las alertas de sistema (`type='sistema'`, `target='staff'`) y el método `cortesia`.
+
+**Solución**:
+- **BD (`035`)**: trigger `trg_profiles_protect_privileged` → `protect_profile_privileged_columns()` (rechaza cambios de `id`/`role_id`/`active`/`email` si `auth.uid()` no es admin; el service role pasa). Se eliminan `payments_user_insert_own`, `payments_owner_update_flow`, `payments_flow_update`, `enrollments_own_insert`, `enrollments_own_delete`, `class_enrollments_insert_admin_or_self`, `"Service role inserts notifications"` y las 5 policies de escritura de `storage.objects` (reemplazadas por `public_bucket_admin_insert/update/delete` con `is_admin()`). `roles` con RLS + `roles_public_read`. CHECK de `notifications` (+`sistema`, +`staff`) y de `payments.method` (+`cortesia`). Índice `idx_payments_flow_token`.
+- **Código**: `create-order` escribe `payments` con `getAdminClient()`; `confirmation` y `verify` llaman `isVerificationAmountMatch(payments.amount, verification.amount)` (nuevo en `flow-helpers.ts`, CLP redondeados) antes de marcar `pagado`. Si no coincide, el pago queda `pendiente` y `confirmation` alerta al staff.
+- **Sin cambios** en el canal manual, la asignación admin (sigue `payments_staff_write`), `enroll_class`, `/api/checkin` ni `/perfil`.
+- **Fuera de alcance**: escritura amplia del staff (S-7), bucket privado para vouchers.
+- **Reversión**: recrear las policies eliminadas (definiciones en la auditoría §4) y `DROP TRIGGER trg_profiles_protect_privileged ON public.profiles`.
+
+---
+
+## 17. Una Cuenta por Persona: Anti-duplicados (IMPLEMENTADO - v1.11.0)
+
+> Estado: **implementado en código (2026-10-16)**, suite A-AG en verde (638 tests; se mantiene el fallo preexistente dependiente de la fecha). Migraciones `037_unique_accounts.sql` y `038_changelog_v1_11_0.sql` (**pendientes de aplicar**). Es la fase 1 del plan `contexto/requisitos/cuenta-unica-por-alumno.md` (eliminación del sistema de cargas).
+
+**Problema**: Supabase Auth exige correo exacto único, pero una misma persona podía tener dos cuentas con correos equivalentes (Gmail ignora los puntos) y el mismo RUT. Así pasó en `/admin/usuarios`: el admin creó un segundo perfil de un alumno que ya existía. El registro público no pedía RUT.
+
+**Solución**:
+- **BD (`037`)**: `normalize_rut()` y `canonical_email()` (IMMUTABLE); índices únicos `profiles_rut_unique_idx` (parcial, ignora RUT vacío) y `profiles_email_canonical_unique_idx`, creados **solo si no hay duplicados** (si los hay, emite WARNING; se re-ejecuta tras resolverlos). `handle_new_user()` guarda `rut` y `birth_date` del registro (una fecha inválida se ignora). RPC `check_registration_conflict(rut, email)` → `'RUT_TAKEN' | 'EMAIL_TAKEN' | null` (anon + authenticated, sin datos de la otra cuenta) y `find_account_conflicts(rut, email, full_name, birth_date)` (solo service role, con `match` `rut | email | name_birth`).
+- **Registro (`/auth`)**: RUT (validado y formateado) y fecha de nacimiento obligatorios; pre-chequeo antes de `signUp`; `friendlyError` traduce el fallo del índice ("Ya existe una cuenta con este RUT o correo…").
+- **Admin (`/api/admin/create-user` + `/admin/usuarios`)**: valida el RUT y consulta `find_account_conflicts` antes de crear. RUT o correo → 409 que bloquea; nombre + fecha de nacimiento → 409 de advertencia, y el modal permite "Crear de todas formas" (`force`). El correo de la cuenta existente se muestra enmascarado.
+- **Perfil**: `/perfil` valida el RUT; `updateProfile` traduce la violación del índice ("Ese RUT ya está registrado en otra cuenta").
+- **Dashboard**: `CompleteProfileBanner` pide completar el RUT y la fecha de nacimiento a los perfiles antiguos.
+
+---

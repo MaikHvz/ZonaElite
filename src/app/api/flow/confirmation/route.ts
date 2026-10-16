@@ -9,6 +9,7 @@ import {
   confirmPersonalizedPack,
   extendEnrollment,
   isVerificationOrderMatch,
+  isVerificationAmountMatch,
   notifyPaymentWithoutMembership,
   notifyUserPaymentStatus,
 } from "@/lib/flow-helpers";
@@ -75,7 +76,7 @@ async function processInBackground(token: string) {
   try {
     const result = await supabase
       .from("payments")
-      .select("id, user_id, commerce_order, status, concept, flow_token, flow_order, beneficiary_id, membership_id, include_enrollment, enrollment_plan_id, order_id")
+      .select("id, user_id, commerce_order, amount, status, concept, flow_token, flow_order, beneficiary_id, membership_id, include_enrollment, enrollment_plan_id, order_id")
       .eq("flow_token", token)
       .maybeSingle();
     payment = result.data;
@@ -145,6 +146,16 @@ async function processInBackground(token: string) {
       paymentOrder: payment.commerce_order,
       token,
     });
+    return;
+  }
+
+  if (!isVerificationAmountMatch(payment.amount, verification.amount)) {
+    console.error(L, "amount mismatch — pago queda pendiente:", {
+      paymentId: payment.id,
+      expected: payment.amount,
+      charged: verification.amount,
+    });
+    await notifyPaymentWithoutMembership(supabase, payment, "El monto cobrado por Flow no coincide con el pago registrado");
     return;
   }
 

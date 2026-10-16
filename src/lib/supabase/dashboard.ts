@@ -511,7 +511,7 @@ export async function updateProfile(
     dominant_hand?: string | null;
   }
 ) {
-  return safeQuery(async () => {
+  const result = await safeQuery(async () => {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("profiles")
@@ -519,9 +519,20 @@ export async function updateProfile(
       .eq("id", userId)
       .select()
       .single();
+    // Índice único de RUT (migración 037): una cuenta por persona.
+    if (error?.code === "23505" && error.message.includes("profiles_rut_unique_idx")) {
+      return { rutTaken: true as const };
+    }
     if (error) throw error;
     return data;
   });
+  if (result.data && "rutTaken" in result.data) {
+    return {
+      data: null,
+      error: "Ese RUT ya está registrado en otra cuenta. Contacta a la academia si es un error.",
+    };
+  }
+  return result;
 }
 
 // ─── Medical Records ──────────────────────────────────────────────────────────

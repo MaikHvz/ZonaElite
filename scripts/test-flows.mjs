@@ -1639,7 +1639,7 @@ ok("T: admin/configuracion guarda payment_settings y datos bancarios en handleSa
   /payment_settings: paymentSettings,/.test(adminConfigT) &&
   /handleBankChange\("account_number"/.test(adminConfigT));
 ok("T: perfil agrega campo RUT (state, load, save)",
-  /const \[rut, setRut\] = useState\(""\);[\s\S]*?setRut\(data\.rut \|\| ""\);[\s\S]*?rut: rut \|\| undefined,/.test(perfilT));
+  /const \[rut, setRut\] = useState\(""\);[\s\S]*?setRut\(data\.rut \|\| ""\);[\s\S]*?rut: rut\.trim\(\) \? formatRut\(rut\) : undefined,/.test(perfilT));
 
 // T13. Changelog v1.1.0 (migración 014: entrada de release para el pago manual)
 const migration014 = readFileSync(join(ROOT, "contexto", "migrations", "014_changelog_v1_1_0.sql"), "utf8");
@@ -1656,7 +1656,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 14);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 16);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -2516,6 +2516,184 @@ ok("AE: el módulo no altera el CRUD de eventos ni la asistencia de clases",
   !/get_remaining_tokens/.test(adminEventosAe + eventoDetailAe + evEnrollButtonAe + evEnrollModalAe + evAttendeesModalAe) &&
   /onDelete=\{setDeleteTarget\}/.test(adminEventosAe) &&
   /onEdit=\{openEdit\}/.test(adminEventosAe));
+
+// ============================================================
+// AF. Endurecimiento de seguridad de la BD (migración 035, v1.10.1)
+// ============================================================
+section("AF. Endurecimiento de seguridad (RLS, storage, CHECK, monto Flow)");
+
+const migration035 = readFileSync(join(ROOT, "contexto", "migrations", "035_security_hardening.sql"), "utf8");
+const migration036 = readFileSync(join(ROOT, "contexto", "migrations", "036_changelog_v1_10_1.sql"), "utf8");
+const schemaAf = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const createOrderAf = readFileSync(join(ROOT, "src", "app", "api", "flow", "create-order", "route.ts"), "utf8");
+const confirmationAf = readFileSync(join(ROOT, "src", "app", "api", "flow", "confirmation", "route.ts"), "utf8");
+const verifyAf = readFileSync(join(ROOT, "src", "app", "api", "flow", "verify", "route.ts"), "utf8");
+const flowHelpersAf = readFileSync(join(ROOT, "src", "lib", "flow-helpers.ts"), "utf8");
+const inscripcionesAf = readFileSync(join(ROOT, "src", "app", "admin", "inscripciones", "page.tsx"), "utf8");
+const migration035Code = migration035.replace(/--.*$/gm, "");
+const { isVerificationAmountMatch } = await import("../src/lib/flow-helpers.ts");
+
+ok("AF: S-1 trigger bloquea cambios de id/role_id/active/email a usuarios no admin",
+  /CREATE OR REPLACE FUNCTION public\.protect_profile_privileged_columns\(\)/.test(migration035) &&
+  /auth\.uid\(\) IS NOT NULL AND NOT public\.is_admin\(\)/.test(migration035) &&
+  /NEW\.role_id IS DISTINCT FROM OLD\.role_id/.test(migration035) &&
+  /NEW\.active IS DISTINCT FROM OLD\.active/.test(migration035) &&
+  /NEW\.email IS DISTINCT FROM OLD\.email/.test(migration035) &&
+  /NEW\.id IS DISTINCT FROM OLD\.id/.test(migration035) &&
+  /CREATE TRIGGER trg_profiles_protect_privileged\s+BEFORE UPDATE ON public\.profiles/.test(migration035));
+ok("AF: S-2 elimina las policies de escritura de usuario sobre payments",
+  /DROP POLICY IF EXISTS "payments_user_insert_own" ON public\.payments/.test(migration035) &&
+  /DROP POLICY IF EXISTS "payments_owner_update_flow" ON public\.payments/.test(migration035) &&
+  /DROP POLICY IF EXISTS "payments_flow_update" ON public\.payments/.test(migration035) &&
+  /CREATE INDEX IF NOT EXISTS idx_payments_flow_token ON public\.payments\(flow_token\)/.test(migration035));
+ok("AF: S-3 elimina inserción/borrado directo de class_enrollments por el alumno",
+  /DROP POLICY IF EXISTS "enrollments_own_insert" ON public\.class_enrollments/.test(migration035) &&
+  /DROP POLICY IF EXISTS "enrollments_own_delete" ON public\.class_enrollments/.test(migration035) &&
+  /DROP POLICY IF EXISTS "class_enrollments_insert_admin_or_self" ON public\.class_enrollments/.test(migration035));
+ok("AF: S-4 la escritura del bucket public queda solo para el admin",
+  (migration035Code.match(/DROP POLICY IF EXISTS "Authenticated users can [a-z ]+" ON storage\.objects/g) || []).length === 5 &&
+  /CREATE POLICY "public_bucket_admin_insert" ON storage\.objects\s+FOR INSERT TO authenticated\s+WITH CHECK \(bucket_id = 'public' AND public\.is_admin\(\)\)/.test(migration035) &&
+  /CREATE POLICY "public_bucket_admin_update" ON storage\.objects/.test(migration035) &&
+  /CREATE POLICY "public_bucket_admin_delete" ON storage\.objects\s+FOR DELETE TO authenticated\s+USING \(bucket_id = 'public' AND public\.is_admin\(\)\)/.test(migration035));
+ok("AF: S-5/S-6 sin INSERT abierto en user_notifications y roles con RLS de solo lectura",
+  /DROP POLICY IF EXISTS "Service role inserts notifications" ON public\.user_notifications/.test(migration035) &&
+  /ALTER TABLE public\.roles ENABLE ROW LEVEL SECURITY/.test(migration035) &&
+  /CREATE POLICY "roles_public_read" ON public\.roles FOR SELECT USING \(true\)/.test(migration035));
+ok("AF: 035 no toca las policies que usan el admin y el canal manual",
+  !/DROP POLICY IF EXISTS "payments_staff_write"/.test(migration035Code) &&
+  !/DROP POLICY IF EXISTS "enrollments_admin_all"/.test(migration035Code) &&
+  !/DROP POLICY IF EXISTS "Service role full access"/.test(migration035Code) &&
+  !/DROP POLICY IF EXISTS "Public read access"/.test(migration035Code));
+ok("AF: F-1/F-2 los CHECK aceptan los valores que inserta el código",
+  /CHECK \(type IN \([^)]*'sistema'[^)]*\)\)/.test(migration035) &&
+  /CHECK \(target IN \([^)]*'staff'[^)]*\)\)/.test(migration035) &&
+  /CHECK \(method IN \([^)]*'cortesia'[^)]*\)\)/.test(migration035) &&
+  /type: "sistema"/.test(flowHelpersAf) && /target: "staff"/.test(flowHelpersAf) &&
+  /value="cortesia"/.test(inscripcionesAf));
+ok("AF: 036 es seed de changelog v1.10.1 idempotente",
+  /'v1\.10\.1'/.test(migration036) &&
+  /'Mejoras de seguridad y correcciones'/.test(migration036) &&
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration036));
+ok("AF: el espejo SQL refleja 035 y el seed v1.10.1 sin duplicarlos",
+  (schemaAf.match(/CREATE OR REPLACE FUNCTION public\.protect_profile_privileged_columns\(\)/g) || []).length === 1 &&
+  (schemaAf.match(/CREATE TRIGGER trg_profiles_protect_privileged/g) || []).length === 1 &&
+  /DROP POLICY IF EXISTS "payments_owner_update_flow" ON public\.payments/.test(schemaAf) &&
+  /DROP POLICY IF EXISTS "enrollments_own_insert" ON public\.class_enrollments/.test(schemaAf) &&
+  /CREATE POLICY "public_bucket_admin_delete" ON storage\.objects/.test(schemaAf) &&
+  /CREATE POLICY "roles_public_read" ON public\.roles/.test(schemaAf) &&
+  /'cortesia'\)\)/.test(schemaAf) &&
+  (schemaAf.match(/'v1\.10\.1'/g) || []).length === 1);
+ok("AF: create-order escribe payments con el admin client (sin RLS de usuario)",
+  /import \{ getAdminClient \} from "@\/lib\/supabase\/admin"/.test(createOrderAf) &&
+  /const admin = getAdminClient\(\)/.test(createOrderAf) &&
+  /await admin\s*\.from\("payments"\)\s*\.insert\(insertPayload\)/.test(createOrderAf) &&
+  !/supabase\s*\.from\("payments"\)/.test(createOrderAf));
+ok("AF: confirmation valida el monto antes de marcar el pago como pagado",
+  /amount, status, concept/.test(confirmationAf) &&
+  confirmationAf.indexOf("isVerificationAmountMatch(payment.amount, verification.amount)") > 0 &&
+  confirmationAf.indexOf("isVerificationAmountMatch(payment.amount, verification.amount)") <
+    confirmationAf.indexOf('status: "pagado"'));
+ok("AF: verify valida el monto antes de markPaymentAsPaid",
+  verifyAf.indexOf("isVerificationAmountMatch(fullPayment.amount, verification.amount)") > 0 &&
+  verifyAf.indexOf("isVerificationAmountMatch(fullPayment.amount, verification.amount)") <
+    verifyAf.indexOf("await markPaymentAsPaid("));
+ok("AF: isVerificationAmountMatch compara CLP redondeados y rechaza nulos/NaN",
+  isVerificationAmountMatch(15000, 15000) &&
+  isVerificationAmountMatch("15000", 15000) &&
+  isVerificationAmountMatch(15000.4, "15000") &&
+  !isVerificationAmountMatch(15000, 1000) &&
+  !isVerificationAmountMatch(null, 15000) &&
+  !isVerificationAmountMatch(15000, undefined) &&
+  !isVerificationAmountMatch("abc", 15000));
+const browserSrcAf = [
+  ...listFiles(join(ROOT, "src", "components")),
+  ...listFiles(join(ROOT, "src", "app", "dashboard")),
+  ...listFiles(join(ROOT, "src", "app", "horarios")),
+  ...listFiles(join(ROOT, "src", "app", "perfil")),
+].filter((f) => !/[\\/]admin[\\/]/.test(f))
+  .map((f) => readFileSync(f, "utf8")).join("\n");
+ok("AF: el código de usuario no escribe payments, class_enrollments ni user_notifications directo",
+  !/\.from\("payments"\)[\s\S]{0,80}?\.(insert|update|upsert|delete)\(/.test(browserSrcAf) &&
+  !/\.from\("class_enrollments"\)[\s\S]{0,80}?\.(insert|update|upsert|delete)\(/.test(browserSrcAf) &&
+  !/\.from\("user_notifications"\)[\s\S]{0,80}?\.(insert|upsert)\(/.test(browserSrcAf));
+
+// ============================================================
+// AG. Una cuenta por persona: anti-duplicados (migración 037, v1.11.0)
+// ============================================================
+section("AG. Una cuenta por persona (RUT único, correo canónico)");
+
+const migration037 = readFileSync(join(ROOT, "contexto", "migrations", "037_unique_accounts.sql"), "utf8");
+const migration038 = readFileSync(join(ROOT, "contexto", "migrations", "038_changelog_v1_11_0.sql"), "utf8");
+const schemaAg = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const authPageAg = readFileSync(join(ROOT, "src", "app", "auth", "page.tsx"), "utf8");
+const authLibAg = readFileSync(join(ROOT, "src", "lib", "supabase", "auth.ts"), "utf8");
+const createUserAg = readFileSync(join(ROOT, "src", "app", "api", "admin", "create-user", "route.ts"), "utf8");
+const usuariosAg = readFileSync(join(ROOT, "src", "app", "admin", "usuarios", "page.tsx"), "utf8");
+const perfilAg = readFileSync(join(ROOT, "src", "app", "perfil", "page.tsx"), "utf8");
+const dashboardLibAg = readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8");
+const dashboardPageAg = readFileSync(join(ROOT, "src", "app", "dashboard", "page.tsx"), "utf8");
+
+ok("AG: normalize_rut y canonical_email son IMMUTABLE (usables en índices)",
+  /CREATE OR REPLACE FUNCTION public\.normalize_rut\(p_rut text\)[\s\S]*?IMMUTABLE/.test(migration037) &&
+  /regexp_replace\(upper\(coalesce\(p_rut, ''\)\), '\[\^0-9K\]', '', 'g'\)/.test(migration037) &&
+  /CREATE OR REPLACE FUNCTION public\.canonical_email\(p_email text\)[\s\S]*?IMMUTABLE/.test(migration037) &&
+  /IN \('gmail\.com', 'googlemail\.com'\)/.test(migration037) &&
+  /split_part\(split_part\(lower\(trim\(p_email\)\), '@', 1\), '\+', 1\)/.test(migration037));
+ok("AG: los índices únicos se crean solo si no hay duplicados (WARNING si los hay)",
+  /IF EXISTS \([\s\S]*?GROUP BY public\.normalize_rut\(rut\)[\s\S]*?HAVING count\(\*\) > 1[\s\S]*?RAISE WARNING[\s\S]*?CREATE UNIQUE INDEX IF NOT EXISTS profiles_rut_unique_idx/.test(migration037) &&
+  /WHERE public\.normalize_rut\(rut\) <> ''/.test(migration037) &&
+  /GROUP BY public\.canonical_email\(email\)[\s\S]*?RAISE WARNING[\s\S]*?CREATE UNIQUE INDEX IF NOT EXISTS profiles_email_canonical_unique_idx/.test(migration037));
+ok("AG: handle_new_user guarda rut y birth_date del registro sin bloquear por fecha inválida",
+  /CREATE OR REPLACE FUNCTION public\.handle_new_user\(\)/.test(migration037) &&
+  /raw_user_meta_data->>'rut'/.test(migration037) &&
+  /raw_user_meta_data->>'birth_date'/.test(migration037) &&
+  /EXCEPTION WHEN others THEN\s+v_birth := NULL/.test(migration037) &&
+  /INSERT INTO public\.profiles \(id, full_name, email, rut, birth_date\)/.test(migration037) &&
+  !/role_id/.test(migration037.match(/CREATE OR REPLACE FUNCTION public\.handle_new_user[\s\S]*?\$\$;/)[0]));
+ok("AG: check_registration_conflict solo devuelve un código y es accesible al registro anónimo",
+  /RETURNS text[\s\S]*?'RUT_TAKEN'[\s\S]*?'EMAIL_TAKEN'/.test(migration037) &&
+  /GRANT EXECUTE ON FUNCTION public\.check_registration_conflict\(text, text\) TO anon, authenticated/.test(migration037));
+ok("AG: find_account_conflicts (con datos de la otra cuenta) es solo para service_role",
+  /REVOKE ALL ON FUNCTION public\.find_account_conflicts\(text, text, text, date\) FROM PUBLIC/.test(migration037) &&
+  /GRANT EXECUTE ON FUNCTION public\.find_account_conflicts\(text, text, text, date\) TO service_role/.test(migration037) &&
+  !/find_account_conflicts[^;]*TO (anon|authenticated)/.test(migration037) &&
+  /'name_birth'/.test(migration037));
+ok("AG: 038 es seed de changelog v1.11.0 idempotente",
+  /'v1\.11\.0'/.test(migration038) &&
+  /'Una cuenta por persona'/.test(migration038) &&
+  /ON CONFLICT \(version\) DO NOTHING/.test(migration038));
+ok("AG: el espejo refleja 037/038 con una sola definición de handle_new_user",
+  (schemaAg.match(/CREATE OR REPLACE FUNCTION public\.handle_new_user\(\)/g) || []).length === 1 &&
+  /INSERT INTO public\.profiles \(id, full_name, email, rut, birth_date\)/.test(schemaAg) &&
+  /CREATE UNIQUE INDEX IF NOT EXISTS profiles_rut_unique_idx/.test(schemaAg) &&
+  /CREATE UNIQUE INDEX IF NOT EXISTS profiles_email_canonical_unique_idx/.test(schemaAg) &&
+  (schemaAg.match(/CREATE OR REPLACE FUNCTION public\.find_account_conflicts\(/g) || []).length === 1 &&
+  (schemaAg.match(/'v1\.11\.0'/g) || []).length === 1);
+ok("AG: el registro pide RUT válido y fecha de nacimiento, pre-chequea y los envía",
+  /isValidRut\(rut\)/.test(authPageAg) &&
+  /La fecha de nacimiento es obligatoria/.test(authPageAg) &&
+  /birthDate > getChileToday\(\)/.test(authPageAg) &&
+  /await checkRegistrationConflict\(rut, email\)/.test(authPageAg) &&
+  /signUp\(email, password, name, \{ rut: formatRut\(rut\), birthDate \}\)/.test(authPageAg) &&
+  /data: \{ full_name: name, rut: extra\.rut, birth_date: extra\.birthDate \}/.test(authLibAg) &&
+  /rpc\("check_registration_conflict"/.test(authLibAg) &&
+  /Database error saving new user/.test(authLibAg));
+ok("AG: create-user bloquea por RUT/correo, advierte por nombre+nacimiento y enmascara el correo",
+  /rpc\("find_account_conflicts"/.test(createUserAg) &&
+  /c\.match === "rut" \|\| c\.match === "email"/.test(createUserAg) &&
+  /status: 409/.test(createUserAg) &&
+  /conflicts\.length > 0 && !force/.test(createUserAg) &&
+  /maskEmail\(c\.email\)/.test(createUserAg) &&
+  createUserAg.indexOf('rpc("find_account_conflicts"') < createUserAg.indexOf("auth.admin.createUser"));
+ok("AG: /admin/usuarios muestra la cuenta que coincide y permite forzar solo advertencias",
+  /setCreateConflict\(\{ message: data\.error, warning: Boolean\(data\.warning\), conflicts: data\.conflicts \}\)/.test(usuariosAg) &&
+  /createConflict\?\.warning &&[\s\S]*?handleCreateUser\(true\)[\s\S]*?Crear de todas formas/.test(usuariosAg));
+ok("AG: el perfil valida el RUT y traduce el índice único",
+  /isValidRut\(rut\)/.test(perfilAg) &&
+  /error\?\.code === "23505" && error\.message\.includes\("profiles_rut_unique_idx"\)/.test(dashboardLibAg) &&
+  /Ese RUT ya está registrado en otra cuenta/.test(dashboardLibAg));
+ok("AG: el dashboard avisa a perfiles sin RUT o fecha de nacimiento",
+  /<CompleteProfileBanner \/>/.test(dashboardPageAg));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

@@ -9,6 +9,7 @@ import {
   markPaymentAsPaid,
   findPaymentByTokenAndUser,
   isVerificationOrderMatch,
+  isVerificationAmountMatch,
   notifyPaymentWithoutMembership,
   notifyUserPaymentStatus,
 } from "@/lib/flow-helpers";
@@ -95,6 +96,17 @@ export async function GET(request: Request) {
             flowOrder: verification.commerceOrder,
             paymentOrder: fullPayment.commerce_order,
             token,
+          });
+          return NextResponse.json({ status: fullPayment.status });
+        }
+
+        // El callback de confirmation es quien alerta al staff; aquí solo
+        // se evita marcar como pagado un cobro de otro monto.
+        if (!isVerificationAmountMatch(fullPayment.amount, verification.amount)) {
+          console.error(VERIFY_LOG, "amount mismatch — pago queda pendiente:", {
+            paymentId: fullPayment.id,
+            expected: fullPayment.amount,
+            charged: verification.amount,
           });
           return NextResponse.json({ status: fullPayment.status });
         }

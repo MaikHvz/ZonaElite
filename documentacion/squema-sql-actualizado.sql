@@ -2,6 +2,12 @@
 -- SCHEMA COMPLETO DE LA BASE DE DATOS: ZonaElite
 -- Proyecto: sfkkfcticgqdqvzthimz
 -- Generado automaticamente desde PostgREST OpenAPI + contexto SQL
+--
+-- ADVERTENCIA (auditoría 2026-10-16, contexto/auditoria-esquema-real.md):
+-- tablas y columnas coinciden con la BD real, pero las POLICIES RLS,
+-- TRIGGERS, CHECK e índices de este archivo NO reflejan producción
+-- (allí tienen otros nombres/definiciones). Para RLS consultar la BD
+-- real. La migración 035 (al final) sí está escrita contra la BD real.
 -- =====================================================================
 
 -- =====================================================
@@ -15,11 +21,13 @@
 --   attendance.status: 'presente' | 'ausente' | 'justificado'
 --   blog_posts.status: 'borrador' | 'publicado' | 'programado'
 --   product_orders.status: 'borrador' | 'pendiente' | 'pagado' | 'enviado' | 'entregado' | 'cancelado'
---   payments.status: 'pendiente' | 'pagado' | 'rechazado' | 'cancelado' | 'fallido' | 'reembolsado'
---   memberships.status: 'activa' | 'vencida' | 'cancelada' | 'suspendida'
---   notifications.type: 'info' | 'alerta' | 'sistema'
---   notifications.target: 'todos' | 'adultos' | 'ninos' | 'staff'
---   events.type: 'clase' | 'torneo' | 'seminario' | 'otro'
+--   (valores siguientes verificados contra los CHECK de la BD real, 2026-10-16)
+--   payments.status: 'pendiente' | 'pagado' | 'rechazado' | 'expirado' | 'cancelado'
+--   payments.method: 'efectivo' | 'transferencia' | 'flow' | 'otro' | 'cortesia' (cortesia desde 035)
+--   memberships.status: 'activa' | 'vencida' | 'cancelada'
+--   notifications.type: 'correo_masivo' | 'aviso' | 'recordatorio' | 'comunicado' | 'sistema' (sistema desde 035)
+--   notifications.target: 'todos' | 'segmento' | 'staff' (staff desde 035)
+--   events.type: 'torneo' | 'graduacion' | 'seminario' | 'clase_especial'
 --   academy_enrollments.status: 'activa' | 'vencida' | 'cancelada'
 
 -- =====================================================
@@ -123,24 +131,9 @@ $$;
 REVOKE ALL ON FUNCTION public.expire_benefits() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.expire_benefits() TO authenticated;
 
--- Trigger function: auto-create profile on user signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-STABLE
-AS $$
-BEGIN
-  INSERT INTO public.profiles (id, full_name, email, role_id)
-  VALUES (
-    NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
-    COALESCE(NEW.email, ''),
-    4
-  );
-  RETURN NEW;
-END;
-$$;
+-- Trigger function: auto-create profile on user signup.
+-- Definición vigente en la migración 037 (guarda rut y birth_date del
+-- registro); ver bloque "UNA CUENTA POR PERSONA" al final del archivo.
 
 -- Trigger function: auto-update updated_at
 CREATE OR REPLACE FUNCTION public.update_updated_at()
@@ -2181,3 +2174,237 @@ VALUES (
   E'• Ahora puedes inscribirte a un evento desde su ficha (/eventos/[id]): el botón "Inscribirse" abre una confirmación con el nombre del evento y, al confirmar, se agrega tu nombre (y el de tus cargas) a la lista de asistencia del evento.\n• Al inscribirte verás un mensaje de "Confirmación exitosa" y el botón principal cambia a "Inscrito".\n• Si te registraste por error, pasa el mouse sobre "Inscrito" y haz clic: aparecerá el aviso "Eliminar asistencia" y una confirmación para borrar tu participación de la lista.\n• El administrador ve cuántos inscritos tiene cada evento en Eventos, y con el botón de la lista de asistencia puede ver quién se anotó (nombre, categoría y fecha) y quitar a alguien si corresponde.\n• Las inscripciones a eventos son independientes de las clases: no consumen tokens ni requieren membresía activa.'
 )
 ON CONFLICT (version) DO NOTHING;
+
+-- SEED v1.10.1 — Mejoras de seguridad y correcciones (migración 036)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.10.1',
+  'Mejoras de seguridad y correcciones',
+  E'• Se reforzaron los permisos de la base de datos: los alumnos ya no pueden modificar datos sensibles de su cuenta (rol, estado o correo), ni crear o editar pagos e inscripciones a clases por fuera de los flujos oficiales.\n• Las imágenes y archivos del sitio (productos, eventos, galería, comprobantes) ahora solo pueden ser subidos, reemplazados o eliminados por el administrador.\n• Los pagos en línea verifican que el monto cobrado coincida con el registrado antes de asignar el beneficio.\n• Corregido: las alertas internas al administrador (pago sin membresía asignada, nueva solicitud de transferencia) ahora se guardan correctamente.\n• Corregido: la asignación manual de inscripciones con el método "Cortesía" ya no falla.'
+)
+ON CONFLICT (version) DO NOTHING;
+
+-- ============================================================
+-- ENDURECIMIENTO DE SEGURIDAD (migración 035, espejo 1:1)
+-- Escrita contra la BD real (auditoría 2026-10-16). Cierra S-1…S-6
+-- y corrige F-1/F-2 de contexto/auditoria-esquema-real.md.
+-- ============================================================
+
+-- S-1: un usuario no puede cambiar su propio rol, estado, email ni id.
+CREATE OR REPLACE FUNCTION public.protect_profile_privileged_columns()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND NOT public.is_admin() THEN
+    IF NEW.id IS DISTINCT FROM OLD.id
+       OR NEW.role_id IS DISTINCT FROM OLD.role_id
+       OR NEW.active IS DISTINCT FROM OLD.active
+       OR NEW.email IS DISTINCT FROM OLD.email THEN
+      RAISE EXCEPTION 'No tienes permisos para modificar el rol, el estado o el correo de la cuenta'
+        USING ERRCODE = '42501';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_profiles_protect_privileged ON public.profiles;
+CREATE TRIGGER trg_profiles_protect_privileged
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.protect_profile_privileged_columns();
+
+-- S-2: el usuario ya no escribe pagos desde el browser.
+DROP POLICY IF EXISTS "payments_user_insert_own" ON public.payments;
+DROP POLICY IF EXISTS "payments_owner_update_flow" ON public.payments;
+DROP POLICY IF EXISTS "payments_flow_update" ON public.payments;
+CREATE INDEX IF NOT EXISTS idx_payments_flow_token ON public.payments(flow_token);
+
+-- S-3: sin inscripciones/desinscripciones directas del alumno.
+DROP POLICY IF EXISTS "enrollments_own_insert" ON public.class_enrollments;
+DROP POLICY IF EXISTS "enrollments_own_delete" ON public.class_enrollments;
+DROP POLICY IF EXISTS "class_enrollments_insert_admin_or_self" ON public.class_enrollments;
+
+-- S-4: escritura en el bucket "public" solo para el admin.
+DROP POLICY IF EXISTS "Authenticated users can upload images" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can upload" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can update" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can delete images" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can delete" ON storage.objects;
+
+DROP POLICY IF EXISTS "public_bucket_admin_insert" ON storage.objects;
+CREATE POLICY "public_bucket_admin_insert" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'public' AND public.is_admin());
+
+DROP POLICY IF EXISTS "public_bucket_admin_update" ON storage.objects;
+CREATE POLICY "public_bucket_admin_update" ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (bucket_id = 'public' AND public.is_admin())
+  WITH CHECK (bucket_id = 'public' AND public.is_admin());
+
+DROP POLICY IF EXISTS "public_bucket_admin_delete" ON storage.objects;
+CREATE POLICY "public_bucket_admin_delete" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (bucket_id = 'public' AND public.is_admin());
+
+-- S-5: nadie inserta notificaciones personales desde el browser.
+DROP POLICY IF EXISTS "Service role inserts notifications" ON public.user_notifications;
+
+-- S-6: roles con RLS (solo lectura pública).
+ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "roles_public_read" ON public.roles;
+CREATE POLICY "roles_public_read" ON public.roles FOR SELECT USING (true);
+
+-- F-1: alertas de sistema al staff.
+ALTER TABLE public.notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
+ALTER TABLE public.notifications ADD CONSTRAINT notifications_type_check
+  CHECK (type IN ('correo_masivo', 'aviso', 'recordatorio', 'comunicado', 'sistema'));
+
+ALTER TABLE public.notifications DROP CONSTRAINT IF EXISTS notifications_target_check;
+ALTER TABLE public.notifications ADD CONSTRAINT notifications_target_check
+  CHECK (target IN ('todos', 'segmento', 'staff'));
+
+-- F-2: método "cortesia".
+ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_method_check;
+ALTER TABLE public.payments ADD CONSTRAINT payments_method_check
+  CHECK (method IN ('efectivo', 'transferencia', 'flow', 'otro', 'cortesia'));
+
+-- SEED v1.11.0 — Una cuenta por persona (migración 038)
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.11.0',
+  'Una cuenta por persona',
+  E'• El registro ahora pide RUT y fecha de nacimiento, y no permite crear una segunda cuenta con un RUT ya registrado.\n• Tampoco se pueden crear cuentas con correos equivalentes (por ejemplo, en Gmail los puntos no cuentan: "juan.perez@gmail.com" y "juanperez@gmail.com" son el mismo correo).\n• Al crear un usuario desde el panel de administración, si ya existe una cuenta con ese RUT o correo se muestra a quién corresponde en lugar de crear un duplicado. Si solo coinciden el nombre y la fecha de nacimiento, se muestra una advertencia y se puede crear de todas formas.\n• El perfil valida el RUT y avisa si ya pertenece a otra cuenta.\n• Los alumnos sin RUT o sin fecha de nacimiento ven un aviso en su panel para completarlos.'
+)
+ON CONFLICT (version) DO NOTHING;
+
+-- ============================================================
+-- UNA CUENTA POR PERSONA (migración 037, espejo 1:1)
+-- Fase 1 de contexto/requisitos/cuenta-unica-por-alumno.md.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.normalize_rut(p_rut text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT regexp_replace(upper(coalesce(p_rut, '')), '[^0-9K]', '', 'g');
+$$;
+
+CREATE OR REPLACE FUNCTION public.canonical_email(p_email text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT CASE
+    WHEN split_part(lower(trim(coalesce(p_email, ''))), '@', 2) IN ('gmail.com', 'googlemail.com')
+      THEN regexp_replace(
+             split_part(split_part(lower(trim(p_email)), '@', 1), '+', 1),
+             '\.', '', 'g'
+           ) || '@gmail.com'
+    ELSE lower(trim(coalesce(p_email, '')))
+  END;
+$$;
+
+-- Índices únicos: 037 los crea solo si no hay duplicados (si los hay,
+-- emite WARNING y se re-ejecuta tras resolverlos).
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_rut_unique_idx
+  ON public.profiles (public.normalize_rut(rut))
+  WHERE public.normalize_rut(rut) <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_email_canonical_unique_idx
+  ON public.profiles (public.canonical_email(email));
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_rut text;
+  v_birth date;
+BEGIN
+  v_rut := nullif(trim(coalesce(NEW.raw_user_meta_data->>'rut', '')), '');
+
+  BEGIN
+    v_birth := nullif(NEW.raw_user_meta_data->>'birth_date', '')::date;
+  EXCEPTION WHEN others THEN
+    v_birth := NULL;
+  END;
+
+  INSERT INTO public.profiles (id, full_name, email, rut, birth_date)
+  VALUES (
+    NEW.id,
+    coalesce(NEW.raw_user_meta_data->>'full_name', ''),
+    NEW.email,
+    v_rut,
+    v_birth
+  );
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.check_registration_conflict(
+  p_rut text,
+  p_email text
+)
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT CASE
+    WHEN public.normalize_rut(p_rut) <> '' AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE public.normalize_rut(rut) = public.normalize_rut(p_rut)
+    ) THEN 'RUT_TAKEN'
+    WHEN coalesce(trim(p_email), '') <> '' AND EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE public.canonical_email(email) = public.canonical_email(p_email)
+    ) THEN 'EMAIL_TAKEN'
+    ELSE NULL
+  END;
+$$;
+
+REVOKE ALL ON FUNCTION public.check_registration_conflict(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.check_registration_conflict(text, text) TO anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.find_account_conflicts(
+  p_rut text,
+  p_email text,
+  p_full_name text,
+  p_birth_date date
+)
+RETURNS TABLE (
+  profile_id uuid,
+  full_name text,
+  email text,
+  match text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p.id, p.full_name, p.email, 'rut'::text
+    FROM public.profiles p
+   WHERE public.normalize_rut(p_rut) <> ''
+     AND public.normalize_rut(p.rut) = public.normalize_rut(p_rut)
+  UNION
+  SELECT p.id, p.full_name, p.email, 'email'::text
+    FROM public.profiles p
+   WHERE coalesce(trim(p_email), '') <> ''
+     AND public.canonical_email(p.email) = public.canonical_email(p_email)
+  UNION
+  SELECT p.id, p.full_name, p.email, 'name_birth'::text
+    FROM public.profiles p
+   WHERE p_birth_date IS NOT NULL
+     AND p.birth_date = p_birth_date
+     AND lower(trim(p.full_name)) = lower(trim(coalesce(p_full_name, '')));
+$$;
+
+REVOKE ALL ON FUNCTION public.find_account_conflicts(text, text, text, date) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.find_account_conflicts(text, text, text, date) TO service_role;

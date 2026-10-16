@@ -3,13 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signUp, signIn } from "@/lib/supabase/auth";
+import { signUp, signIn, checkRegistrationConflict } from "@/lib/supabase/auth";
+import { isValidRut, formatRut } from "@/lib/rut";
+import { getChileToday } from "@/lib/dates";
 
 type Mode = "login" | "register";
 type View = "form" | "register-success" | "forgot-password" | "forgot-success";
 
 interface FormErrors {
   name?: string;
+  rut?: string;
+  birthDate?: string;
   email?: string;
   password?: string;
   confirmPassword?: string;
@@ -52,6 +56,8 @@ export default function AuthPage() {
   const [mode, setMode] = useState<Mode>("login");
   const [view, setView] = useState<View>("form");
   const [name, setName] = useState("");
+  const [rut, setRut] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -63,6 +69,8 @@ export default function AuthPage() {
     setMode(newMode);
     setErrors({});
     setName("");
+    setRut("");
+    setBirthDate("");
     setEmail("");
     setPassword("");
     setConfirmPassword("");
@@ -95,6 +103,11 @@ export default function AuthPage() {
     setServerError("");
     const newErrors: FormErrors = {};
     if (!name.trim()) newErrors.name = "El nombre es obligatorio";
+    // Una cuenta por persona: el RUT identifica al alumno (migración 037).
+    if (!rut.trim()) newErrors.rut = "El RUT es obligatorio";
+    else if (!isValidRut(rut)) newErrors.rut = "RUT inválido";
+    if (!birthDate) newErrors.birthDate = "La fecha de nacimiento es obligatoria";
+    else if (birthDate > getChileToday()) newErrors.birthDate = "La fecha no puede ser futura";
     const emailErr = validateEmail(email);
     const passErr = validatePassword(password);
     if (emailErr) newErrors.email = emailErr;
@@ -110,7 +123,16 @@ export default function AuthPage() {
     setLoading(true);
     console.log("Calling signUp...");
     try {
-      const result = await signUp(email, password, name);
+      const conflict = await checkRegistrationConflict(rut, email);
+      if (conflict) {
+        setErrors(
+          conflict === "RUT_TAKEN"
+            ? { rut: "Ya existe una cuenta con este RUT. Si es tuya, recupera tu contraseña." }
+            : { email: "Ya existe una cuenta con este correo. Si es tuya, recupera tu contraseña." }
+        );
+        return;
+      }
+      const result = await signUp(email, password, name, { rut: formatRut(rut), birthDate });
       console.log("signUp success, result:", result);
       setView("register-success");
     } catch (err: unknown) {
@@ -367,6 +389,47 @@ export default function AuthPage() {
                         {errors.name}
                       </p>
                     )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block font-[family-name:var(--font-label-sm)] text-on-surface-variant uppercase tracking-wider text-[12px] leading-[16px] mb-2">
+                        RUT
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="12.345.678-9"
+                        value={rut}
+                        onChange={(e) => setRut(e.target.value)}
+                        onBlur={() => rut && isValidRut(rut) && setRut(formatRut(rut))}
+                        className={inputClass("rut")}
+                      />
+                      {errors.rut && (
+                        <p className="mt-1.5 text-red-400 font-[family-name:var(--font-body-md)] text-[13px] leading-[18px] flex items-center gap-1">
+                          <span className="material-symbols-outlined text-sm">info</span>
+                          {errors.rut}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block font-[family-name:var(--font-label-sm)] text-on-surface-variant uppercase tracking-wider text-[12px] leading-[16px] mb-2">
+                        Fecha de Nacimiento
+                      </label>
+                      <input
+                        type="date"
+                        value={birthDate}
+                        max={getChileToday()}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                        className={inputClass("birthDate")}
+                      />
+                      {errors.birthDate && (
+                        <p className="mt-1.5 text-red-400 font-[family-name:var(--font-body-md)] text-[13px] leading-[18px] flex items-center gap-1">
+                          <span className="material-symbols-outlined text-sm">info</span>
+                          {errors.birthDate}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   <div>

@@ -79,6 +79,11 @@ export default function AdminUsuariosPage() {
   const [resultModalOpen, setResultModalOpen] = useState(false);
   const [createdUser, setCreatedUser] = useState<{ email: string; full_name: string } | null>(null);
   const [tempPassword, setTempPassword] = useState("");
+  const [createConflict, setCreateConflict] = useState<{
+    message: string;
+    warning: boolean;
+    conflicts: { profileId: string; fullName: string; email: string; match: "rut" | "email" | "name_birth" }[];
+  } | null>(null);
 
   const [dependentModalOpen, setDependentModalOpen] = useState(false);
   const [editingDependent, setEditingDependent] = useState<{
@@ -387,19 +392,24 @@ export default function AdminUsuariosPage() {
     setModalOpen(true);
   };
 
-  const handleCreateUser = async () => {
+  const handleCreateUser = async (force = false) => {
     if (!createForm.email || !createForm.full_name) {
       setToast({ msg: "Email y nombre son obligatorios", type: "error" });
       return;
     }
     try {
       setCreating(true);
+      setCreateConflict(null);
       const res = await fetch("/api/admin/create-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createForm),
+        body: JSON.stringify({ ...createForm, force }),
       });
       const data = await res.json();
+      if (res.status === 409 && Array.isArray(data.conflicts)) {
+        setCreateConflict({ message: data.error, warning: Boolean(data.warning), conflicts: data.conflicts });
+        return;
+      }
       if (!res.ok) {
         setToast({ msg: data.error || "Error al crear usuario", type: "error" });
         return;
@@ -574,7 +584,7 @@ export default function AdminUsuariosPage() {
           </div>
         </div>
       </FormModal>
-      <FormModal open={createModalOpen} title="Crear Usuario" onClose={() => setCreateModalOpen(false)}>
+      <FormModal open={createModalOpen} title="Crear Usuario" onClose={() => { setCreateModalOpen(false); setCreateConflict(null); }}>
         <div className="space-y-4">
           <div>
             <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Email</label>
@@ -639,15 +649,47 @@ export default function AdminUsuariosPage() {
               className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface/30 focus:outline-none focus:border-primary/50"
             />
           </div>
+          {createConflict && (
+            <div className={`p-4 rounded-xl border ${createConflict.warning ? "bg-amber-500/10 border-amber-500/30" : "bg-red-500/10 border-red-500/30"}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`material-symbols-outlined text-[20px] ${createConflict.warning ? "text-amber-400" : "text-red-400"}`}>
+                  {createConflict.warning ? "warning" : "block"}
+                </span>
+                <p className={`text-[14px] font-medium ${createConflict.warning ? "text-amber-300" : "text-red-300"}`}>{createConflict.message}</p>
+              </div>
+              <ul className="space-y-1">
+                {createConflict.conflicts.map((c) => (
+                  <li key={`${c.profileId}-${c.match}`} className="text-[13px] text-on-surface-variant">
+                    <span className="text-on-surface">{c.fullName || "Sin nombre"}</span> · {c.email} ·{" "}
+                    {c.match === "rut" ? "mismo RUT" : c.match === "email" ? "correo equivalente" : "mismo nombre y fecha de nacimiento"}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[12px] text-on-surface-variant mt-2">
+                {createConflict.warning
+                  ? "Revisa que no sea la misma persona antes de crear otra cuenta."
+                  : "Cada alumno debe tener una sola cuenta: usa la cuenta existente."}
+              </p>
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-4 border-t border-on-surface/5">
             <button
-              onClick={() => setCreateModalOpen(false)}
+              onClick={() => { setCreateModalOpen(false); setCreateConflict(null); }}
               className="px-4 py-2.5 rounded-lg border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[14px] cursor-pointer"
             >
               Cancelar
             </button>
+            {createConflict?.warning && (
+              <button
+                onClick={() => handleCreateUser(true)}
+                disabled={creating}
+                className="px-4 py-2.5 rounded-lg border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 transition-colors text-[14px] disabled:opacity-50 cursor-pointer"
+              >
+                Crear de todas formas
+              </button>
+            )}
             <button
-              onClick={handleCreateUser}
+              onClick={() => handleCreateUser()}
               disabled={creating}
               className="px-4 py-2.5 rounded-lg btn-primary-gradient text-white text-[14px] disabled:opacity-50 cursor-pointer"
             >

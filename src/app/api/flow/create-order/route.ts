@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getChileToday } from "@/lib/dates";
 import { createFlowOrder, buildFlowPaymentUrl, verifyFlowPayment, mapFlowStatus, FLOW_LOG_PREFIX } from "@/lib/flow";
 import { getPaymentSettings } from "@/lib/payment-settings";
@@ -218,10 +219,14 @@ export async function POST(request: Request) {
     if (personalizedPlan) conceptParts.push(`Clase Personalizada ${personalizedPlan.name}`);
     const concept = conceptParts.join(" + ") || "Pago ZONAELITE";
 
+    // Los pagos se escriben con el service role: el usuario no tiene
+    // policies de INSERT/UPDATE sobre payments (migración 035).
+    const admin = getAdminClient();
+
     // Prevent duplicate pending payments (5 min window)
     const commerceOrder = crypto.randomUUID();
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { data: existingPending } = await supabase
+    const { data: existingPending } = await admin
       .from("payments")
       .select("id, flow_token")
       .eq("user_id", user.id)
@@ -237,7 +242,7 @@ export async function POST(request: Request) {
 
         if (mapped === "pagado") {
           // Ya fue confirmado por el callback (race) — mostrar el éxito, no pagar de nuevo.
-          await supabase
+          await admin
             .from("payments")
             .update({ status: "pagado", paid_at: new Date().toISOString() })
             .eq("id", existingPending.id);
@@ -254,7 +259,7 @@ export async function POST(request: Request) {
             paymentId: existingPending.id,
             flowStatus: verifyRes.status,
           });
-          await supabase
+          await admin
             .from("payments")
             .update({ status: mapped })
             .eq("id", existingPending.id);
@@ -295,7 +300,7 @@ export async function POST(request: Request) {
       insertPayload.enrollment_plan_id = enrollmentPlan.id;
     }
 
-    const { data: payment, error: paymentError } = await supabase
+    const { data: payment, error: paymentError } = await admin
       .from("payments")
       .insert(insertPayload)
       .select("id")
@@ -315,7 +320,7 @@ export async function POST(request: Request) {
       email: user.email || "",
     });
 
-    await supabase
+    await admin
       .from("payments")
       .update({
         flow_token: flowResponse.token,

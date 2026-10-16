@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "supabase-zonaelite": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=sfkkfcticgqdqvzthimz&read_only=true",
+      "headers": {
+        "Authorization": "Bearer ${SUPABASE_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

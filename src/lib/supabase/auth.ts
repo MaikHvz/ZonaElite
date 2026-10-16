@@ -13,18 +13,43 @@ function friendlyError(error: AuthError | unknown): string {
   if (msg.includes("Unable to validate email address")) return "Ingresa un correo válido.";
   if (msg.includes("signup_disabled")) return "El registro está deshabilitado temporalmente.";
   if (msg.includes("over_request_rate_limit")) return "Demasiadas solicitudes. Intenta en unos minutos.";
+  // El alta falla en handle_new_user() si el RUT o el correo ya existen
+  // (índices únicos de la migración 037); Supabase lo reporta así.
+  if (msg.includes("Database error saving new user")) {
+    return "Ya existe una cuenta con este RUT o correo. Si es tuya, recupera tu contraseña.";
+  }
   if (msg.includes("database")) return "Error de base de datos. Contacta al administrador.";
   if (code === "email_address_invalid") return "Ingresa un correo válido.";
 
   return msg || "Ha ocurrido un error. Intenta nuevamente.";
 }
 
-export async function signUp(email: string, password: string, name: string) {
+export type RegistrationConflict = "RUT_TAKEN" | "EMAIL_TAKEN" | null;
+
+// Pre-chequeo del registro: una cuenta por persona (migración 037).
+// Solo devuelve un código, nunca datos de la cuenta existente.
+export async function checkRegistrationConflict(rut: string, email: string): Promise<RegistrationConflict> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("check_registration_conflict", {
+    p_rut: rut,
+    p_email: email,
+  });
+  if (error) return null;
+  return (data as RegistrationConflict) ?? null;
+}
+
+export async function signUp(
+  email: string,
+  password: string,
+  name: string,
+  extra: { rut: string; birthDate: string }
+) {
   const supabase = createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: name } },
+    // handle_new_user() copia rut y birth_date al perfil.
+    options: { data: { full_name: name, rut: extra.rut, birth_date: extra.birthDate } },
   });
   if (error) throw new Error(friendlyError(error));
   return data;

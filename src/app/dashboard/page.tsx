@@ -10,6 +10,7 @@ import {
   type DashboardSummary,
 } from "@/lib/supabase/dashboard";
 import AlertBanner from "@/components/dashboard/AlertBanner";
+import CompleteProfileBanner from "@/components/dashboard/CompleteProfileBanner";
 import QuickStats from "@/components/dashboard/QuickStats";
 import MembershipCard from "@/components/dashboard/MembershipCard";
 import PaymentRow from "@/components/dashboard/PaymentRow";
@@ -315,6 +316,7 @@ export default function DashboardPage() {
         </div>
       ) : summary ? (
         <>
+          <CompleteProfileBanner />
           <AlertBanner memberships={summary.allMemberships} />
 
           <div data-guide="dashboard-stats">

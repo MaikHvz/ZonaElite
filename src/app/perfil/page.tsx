@@ -14,6 +14,7 @@ import {
   isValidAltura,
   isValidDominantHand,
 } from "@/lib/medidas";
+import { isValidRut, formatRut } from "@/lib/rut";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import GuideHelpButton from "@/components/guide/GuideHelpButton";
@@ -73,13 +74,17 @@ export default function PerfilPage() {
       setSaveMsg("La mano dominante debe ser diestro o zurdo.");
       return;
     }
+    if (rut.trim() && !isValidRut(rut)) {
+      setSaveMsg("El RUT ingresado no es válido.");
+      return;
+    }
     setSaving(true);
     setSaveMsg(null);
     const { error } = await updateProfile(user.id, {
       full_name: fullName,
       phone: phone || undefined,
       birth_date: birthDate || undefined,
-      rut: rut || undefined,
+      rut: rut.trim() ? formatRut(rut) : undefined,
       address: address || undefined,
       weight: weight.trim() ? parseMedida(weight) : null,
       height: height.trim() ? parseMedida(height) : null,

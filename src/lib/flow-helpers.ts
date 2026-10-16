@@ -360,6 +360,24 @@ export function isVerificationOrderMatch(
 }
 
 /**
+ * Verifica que el monto cobrado por Flow (payment/getStatus) coincida con
+ * el `amount` registrado en el pago del sistema. Flow trabaja en CLP
+ * enteros (la tienda envía Math.round(total)), así que se comparan ambos
+ * lados redondeados. Evita asignar un beneficio por un pago de otro monto.
+ */
+export function isVerificationAmountMatch(
+  paymentAmount: number | string | null | undefined,
+  flowAmount: number | string | null | undefined
+): boolean {
+  if (paymentAmount === null || paymentAmount === undefined) return false;
+  if (flowAmount === null || flowAmount === undefined) return false;
+  const expected = Number(paymentAmount);
+  const charged = Number(flowAmount);
+  if (!Number.isFinite(expected) || !Number.isFinite(charged)) return false;
+  return Math.round(expected) === Math.round(charged);
+}
+
+/**
  * B-008: alerta admin cuando un pago quedó "pagado" pero la membresía
  * no se pudo crear. Inserta una notificación `target='staff'` (solo visible
  * para admin/staff según RLS `notifications_select_all_or_admin`).

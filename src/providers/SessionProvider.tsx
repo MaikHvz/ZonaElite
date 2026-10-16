@@ -14,6 +14,7 @@ export interface UserProfile {
   email: string;
   phone: string | null;
   birth_date: string | null;
+  rut?: string | null;
   photo_url: string | null;
   active: boolean;
   created_at: string;
