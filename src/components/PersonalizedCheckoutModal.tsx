@@ -84,16 +84,13 @@ export default function PersonalizedCheckoutModal({
 
     (async () => {
       try {
-        const [ownBenRes, depsRes, plansRes] = await Promise.all([
+        // Una cuenta por alumno: se compra solo para el propio beneficiario.
+        const [ownBenRes, plansRes] = await Promise.all([
           supabase
             .from("beneficiaries")
             .select("id")
             .eq("profile_id", user.id)
             .maybeSingle(),
-          supabase
-            .from("dependents")
-            .select("id, full_name, category, beneficiaries(id)")
-            .eq("tutor_id", user.id),
           supabase
             .from("personalized_plans")
             .select("id, name, price, total_classes, validity_days, features")
@@ -111,18 +108,6 @@ export default function PersonalizedCheckoutModal({
             label: "Yo",
             sublabel: user.email || "Titular",
           });
-        }
-
-        for (const dep of depsRes.data || []) {
-          const bRaw = (dep as unknown as { beneficiaries: unknown }).beneficiaries;
-          const bId = Array.isArray(bRaw) ? (bRaw[0] as { id: string })?.id : (bRaw as { id: string } | null)?.id;
-          if (bId) {
-            list.push({
-              id: bId,
-              label: dep.full_name,
-              sublabel: `Carga · ${dep.category === "nino" ? "Niño" : dep.category === "juvenil" ? "Juvenil" : "Adulto"}`,
-            });
-          }
         }
 
         setBeneficiaries(list);

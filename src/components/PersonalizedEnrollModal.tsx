@@ -114,17 +114,12 @@ export default function PersonalizedEnrollModal({ open, schedule, userId, onClos
 
     const allowedPlanIds = schedule.personalized_schedule_plans?.map((p) => p.plan_id) || [];
 
-    const [ownBenRes, depsRes] = await Promise.all([
-      supabase
-        .from("beneficiaries")
-        .select("id")
-        .eq("profile_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("dependents")
-        .select("id, full_name")
-        .eq("tutor_id", userId),
-    ]);
+    // Una cuenta por alumno: solo el propio beneficiario (sin cargas).
+    const ownBenRes = await supabase
+      .from("beneficiaries")
+      .select("id")
+      .eq("profile_id", userId)
+      .maybeSingle();
 
     const rows: BeneficiaryRow[] = [];
 
@@ -187,20 +182,6 @@ export default function PersonalizedEnrollModal({ open, schedule, userId, onClos
         .eq("id", userId)
         .maybeSingle();
       await loadBeneficiary(ownBenRes.data.id, (profile as { full_name: string } | null)?.full_name || "Yo");
-    }
-
-    if (depsRes.data && depsRes.data.length > 0) {
-      const depIds = depsRes.data.map((d) => d.id);
-      const { data: depBeneficiaries } = await supabase
-        .from("beneficiaries")
-        .select("id, dependent_id")
-        .in("dependent_id", depIds);
-
-      for (const dep of depsRes.data) {
-        const ben = depBeneficiaries?.find((b) => b.dependent_id === dep.id);
-        if (!ben) continue;
-        await loadBeneficiary(ben.id, dep.full_name);
-      }
     }
 
     setBeneficiaries(rows);

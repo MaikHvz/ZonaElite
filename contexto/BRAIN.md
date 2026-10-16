@@ -13,7 +13,7 @@
 - **Qué es:** sistema web integral de **ZonaElite**, academia de artes marciales (American Kenpo, Kickboxing, Funcional, MMA) en La Serena, Chile. Sirve como landing pública, tienda online, portal del alumno y panel administrativo.
 - **Stack:** Next.js **16.2.10** (App Router, `src/app/`) + React 19.2 + TypeScript 5 + Tailwind **v4** + **Supabase** (Postgres + Auth + Storage + RLS) + **Flow.cl** (pagos) + Nodemailer (Gmail SMTP). Deploy en Vercel (`https://zona-elite-six.vercel.app`).
 - **Idioma:** todo el contenido visible en **español** (Chile). Zona horaria de negocio: **America/Santiago**.
-- **Núcleo del dominio:** todo derecho (membresía, matrícula, pack personalizado, asistencia, evento) se ancla a un **beneficiario** (`beneficiaries`), que es o el propio usuario titular o una de sus **cargas** (`dependents`).
+- **Núcleo del dominio:** todo derecho (membresía, matrícula, pack personalizado, asistencia, evento) se ancla a un **beneficiario** (`beneficiaries`). **Una cuenta por alumno** (v1.13.0): cada alumno, incluidos los niños, tiene su propia cuenta, y su beneficiario es el de esa cuenta. El antiguo sistema de **cargas** (`dependents`: hijos colgados de la cuenta del padre) está en retiro: las 12 cargas existentes se migran desde `/admin/migracion-cargas` y luego se aplica la migración 042.
 - **Dos canales para obtener membresías/matrículas/packs:** (1) **manual** — transferencia con comprobante validada por el administrador (o asignación directa desde el panel); (2) **online** — Flow.cl. **Hoy los tres productos están en modo `manual` por temas legales** (verificado en BD 2026-10-16); Flow solo se usa en la tienda de productos. El toggle está en `/admin/configuracion` → "Modo de Pago".
 - **No hay ORM ni backend separado.** Las páginas son mayormente `"use client"` y consultan Supabase directo con el browser client (RLS); las operaciones sensibles van por **route handlers** en `src/app/api/` con el cliente service-role, o por **RPC `SECURITY DEFINER`** en Postgres.
 
@@ -172,22 +172,19 @@ Bucket único **`public`** (lectura pública). Carpetas: `products/`, `events/`,
 
 ## 4. Modelo de dominio central
 
-### 4.1 Usuarios, cargas y beneficiarios
+### 4.1 Alumnos y beneficiarios (una cuenta por alumno)
 
 ```
-auth.users ─1:1─ profiles (role_id, rut, address, weight, height, dominant_hand)
-                   │
-                   ├── beneficiaries (profile_id = user.id, dependent_id = NULL)   ← el titular
-                   │
-                   └── dependents (tutor_id = user.id, category nino|juvenil|adulto)
-                         └── beneficiaries (dependent_id = dep.id, profile_id = NULL) ← cada carga
+auth.users ─1:1─ profiles (role_id, rut, birth_date, address, weight, height, dominant_hand,
+                 │          guardian_name/phone/email ← apoderado de los menores)
+                 └── beneficiaries (profile_id = user.id)   ← un beneficiario por cuenta
 ```
 
-- `memberships`, `academy_enrollments`, `personalized_packs`, `class_enrollments`, `personalized_enrollments`, `attendance`, `debts`, `event_attendees`, `medical_records`, `sport_profiles`, `sports_podiums`, `consent_forms`, `body_metrics` → todos apuntan a **`beneficiary_id`**.
-- **Los `beneficiaries` los crean triggers de la BD**, no la app: `trg_profiles_create_beneficiary` (AFTER INSERT en `profiles`) y `trg_dependents_create_beneficiary` (AFTER INSERT en `dependents`). CHECK `chk_beneficiary_exactly_one` (exactamente uno de `profile_id`/`dependent_id`) + UNIQUE en cada columna. Las APIs admin `create-user`/`create-dependent` igual "aseguran" la fila (redundante pero inocuo).
-- El "dueño" de un beneficiario (para RLS y notificaciones) es `profile_id` o `dependents.tutor_id` → función `owns_beneficiary(b_id)`.
-- `beneficiaries` **no tiene `category`**: se toma de `dependents.category` o del plan (titular ≈ `adulto`).
-- Categorías por edad: `nino` < 10, `juvenil` 10–15, `adulto` ≥ 16 (`computeCategoryFromBirth` en admin/usuarios y APIs de cargas). En `schedules.category` se usan **plurales** (`ninos|juveniles|adultos`, `text[]`); `EnrollModal` convierte con `categoryToPlural()`.
+- `memberships`, `academy_enrollments`, `personalized_packs`, `class_enrollments`, `personalized_enrollments`, `attendance`, `debts`, `event_attendees`, `medical_records`, `sport_profiles`, `sports_podiums`, `consent_forms`, `body_metrics` (y `payments.beneficiary_id`) → todos apuntan a **`beneficiary_id`**.
+- **El beneficiario lo crea un trigger de la BD**, no la app: `trg_profiles_create_beneficiary` (AFTER INSERT en `profiles`). `create-user` igual lo "asegura" (redundante, inocuo).
+- El dueño de un beneficiario es su `profile_id` → `owns_beneficiary(b_id)`. Un padre gestiona a su hijo **entrando con la cuenta del hijo**; el admin también puede asignarle membresías y matrículas.
+- **Categoría** (`nino` < 10, `juvenil` 10–15, `adulto` ≥ 16): se deriva de `profiles.birth_date` con `categoryFromBirth()` (`src/lib/category.ts`, igual que `compute_category_from_birth()` en BD). En `schedules.category` se usan plurales (`categoryToPlural()`).
+- **Legado de cargas (en retiro):** `dependents` (cargas con `tutor_id`) + `beneficiaries.dependent_id`. CHECK `chk_beneficiary_exactly_one`; `beneficiaries.dependent_id` es **ON DELETE CASCADE** (nunca borrar una carga directo). Ya no se crean cargas (040); se migran con `migrate_dependent_to_profile`, que re-ancla el beneficiario, y quedan en `dependents_archive`. Con 0 cargas se aplica la 042: `profile_id NOT NULL`, `owns_beneficiary` solo por perfil y `dependents` vacía de solo lectura. Las pantallas admin de solo lectura (asistencia, deudas, ventas, membresías, eventos, cierre QR) y `flow-helpers`/`verify` conservan `dependents(full_name)` **solo como respaldo de nombre**; es inocuo porque la tabla se conserva.
 
 ### 4.2 Los tres "derechos" que se compran
 
@@ -219,19 +216,19 @@ Formato: **Rutas UI** · **APIs** · **Tablas / RPC** · **Archivos clave** · *
 - Componentes sin uso actualmente (no importados en ninguna página): `Lifestyle`, `Philosophy`, `Security`.
 
 ### M2. Autenticación y perfil
-- **UI:** `/auth` (tabs login/registro; acepta `?redirect=`), `/auth/confirm`, `/auth/update-password`, `/perfil` (nombre, teléfono, nacimiento, RUT, dirección, peso/altura/mano, cambio de contraseña).
+- **UI:** `/auth` (tabs login/registro; acepta `?redirect=`), `/auth/confirm`, `/auth/update-password`, `/perfil` (nombre, teléfono, nacimiento, RUT, dirección, peso/altura/mano, **apoderado**, cambio de contraseña).
 - **Signup:** `/auth` pide nombre, **RUT** y **fecha de nacimiento** (obligatorios), correo y contraseña → `rpc("check_registration_conflict")` → `supabase.auth.signUp` con `full_name`, `rut`, `birth_date` en metadata → trigger `trg_on_auth_user_created` (en `auth.users`) → `handle_new_user()` inserta `profiles` con esos datos (role_id por default 4) → trigger `trg_profiles_create_beneficiary` crea el beneficiario.
-- **Una cuenta por persona (v1.11.0, migración 037):** índices únicos sobre `normalize_rut(rut)` y `canonical_email(email)` (Gmail sin puntos ni `+etiqueta`). `create-user` consulta `find_account_conflicts` y responde 409 (bloquea por RUT o correo; advierte por nombre + fecha de nacimiento). **En curso:** eliminación del sistema de cargas, donde cada alumno, incluidos los niños, tendrá su propia cuenta (plan en `contexto/requisitos/cuenta-unica-por-alumno.md`). No crear funcionalidades nuevas basadas en `dependents`. Desde v1.12.0 no se crean cargas nuevas: el admin migra las existentes en `/admin/migracion-cargas` (RPC `migrate_dependent_to_profile`, que re-ancla el beneficiario sin copiar historial; las migradas quedan en `dependents_archive` y se pueden revertir). Los menores guardan los datos de su apoderado en `profiles.guardian_*`. **Nunca borrar una fila de `dependents` directamente: `beneficiaries.dependent_id` es ON DELETE CASCADE y arrastra todo el historial.**
+- **Una cuenta por persona (v1.11.0, migración 037):** índices únicos sobre `normalize_rut(rut)` y `canonical_email(email)` (Gmail sin puntos ni `+etiqueta`). `create-user` consulta `find_account_conflicts` y responde 409 (bloquea por RUT o correo; advierte por nombre + fecha de nacimiento). **Una cuenta por alumno (v1.13.0):** ver §4.1. No crear funcionalidades nuevas basadas en `dependents`. Plan e historial en `contexto/requisitos/cuenta-unica-por-alumno.md`.
 
-### M3. Usuarios, cargas y fichas
-- **Admin `/admin/usuarios`:** lista titulares con sus cargas agrupadas, columna RUT, búsqueda por nombre/email/RUT, cambiar rol, activar/desactivar, **crear usuario** (`POST /api/admin/create-user`: crea auth user con contraseña aleatoria + email de bienvenida + beneficiario + audit), **crear y asignar carga** (`CreateDependentModal` → `POST /api/admin/create-dependent`), editar carga (`POST /api/admin/update-dependent`), "Ver Ficha" (`VerFichaModal`, solo lectura), perfil deportivo (`SportProfileModal`), export Excel (mes/año/histórico).
-- **Usuario `/dashboard/cargas`:** `DependentCard` + `AddDependentModal` + `EditDependentModal` (update directo por RLS `dependents_update_own_or_admin`), checkbox "usar dirección del tutor", `TutorSportCard`.
-- **Ficha médica `/dashboard/cargas/[id]/medico`:** `MedicalInfoCard` + `EmergencyContactCard` (upsert `medical_records` por `beneficiary_id`) + `PhysicalInfoCard` (peso/altura/mano en `dependents`).
-- **Reglas:** RUT validado con `src/lib/rut.ts` en todos los formularios; medidas con `src/lib/medidas.ts` (y CHECK en BD); las APIs admin revalidan en servidor.
+### M3. Usuarios, fichas y migración de cargas
+- **Admin `/admin/usuarios`:** lista plana de cuentas (nombre, rol, categoría por fecha de nacimiento, teléfono, RUT, estado), búsqueda por nombre/email/RUT, cambiar rol, activar/desactivar, **crear usuario** (`POST /api/admin/create-user`: chequeo de duplicados, contraseña temporal + correo de bienvenida, beneficiario y audit), "Ver Ficha" (`VerFichaModal`: datos, medidas y apoderado), perfil deportivo (`SportProfileModal`), export Excel con categoría y apoderado. Botón "Migrar Cargas".
+- **Admin `/admin/migracion-cargas` (v1.12.0):** cargas pendientes (`get_pending_dependents`) con su historial; asistente para crear la cuenta del alumno (o usar una vacía) y migrar (`migrate_dependent_to_profile`); pestaña Migradas con "Revertir". Tras aplicar la 042, migrar y revertir quedan deshabilitados.
+- **Alumno `/dashboard/ficha` ("Mi ficha", reemplaza "Mis Cargas"):** `TutorSportCard` (perfil deportivo propio) + `MedicalInfoCard` + `PhysicalInfoCard` (guarda en el perfil) + `EmergencyContactCard`. `/dashboard/cargas` y `/dashboard/cargas/[id]/medico` redirigen aquí.
+- **Reglas:** RUT validado con `src/lib/rut.ts`; medidas con `src/lib/medidas.ts` (y CHECK en BD); categoría con `src/lib/category.ts`.
 
 ### M4. Perfil deportivo (v1.5.0, migración 024)
 - **Tablas:** `belt_grades` (grados por disciplina con color, seed Blanco→Negro), `sport_profiles` (beneficiario+disciplina+grado; trigger `sport_profile_validate_grade` impide grado de otra disciplina), `sports_podiums` (torneo, fecha, posición `1|2|3|participacion`, foto en `podiums/`).
-- **RLS:** escritura **solo admin**; lectura dueño o admin. Anclado a `beneficiaries` (no a `dependents`) para que el tutor no pueda auto-asignarse grados.
+- **RLS:** escritura **solo admin**; lectura dueño o admin. Anclado a `beneficiaries` (no al perfil) para que nadie pueda auto-asignarse grados editando su perfil.
 - **UI:** admin `SportProfileModal` + `PodiumFormModal`; usuario `BeltBanner`, `SportProfileInfo`, `PodiumStatsLine`, `TutorSportCard`. El color del cinturón viene siempre de BD.
 
 ### M5. Disciplinas, horarios y sesiones
@@ -256,7 +253,7 @@ Formato: **Rutas UI** · **APIs** · **Tablas / RPC** · **Archivos clave** · *
 - Admin: `AssignPersonalizedModal` y tab "Personalizadas" en `/admin/membresias`.
 
 ### M9. Inscripción a clases normales
-- `EnrollModal` (desde `/horarios`): muestra titular + cargas, valida en cliente categoría, membresía activa, plan permitido (`class_plans`), tokens y duplicados; luego llama **RPC `enroll_class(p_session_id, p_beneficiary_ids[])`**, que revalida en servidor: sesión no pasada, autorización, membresía vigente (`NO_MEMBERSHIP`), matrícula vigente (`NO_ENROLLMENT`), aforo con lock (`CLASS_FULL`). Inserta `class_enrollments` con `source='horarios'`.
+- `EnrollModal` (desde `/horarios`): solo la cuenta propia (categoría por fecha de nacimiento), valida en cliente categoría, membresía activa, plan permitido (`class_plans`), tokens y duplicados; luego llama **RPC `enroll_class(p_session_id, p_beneficiary_ids[])`**, que revalida en servidor: sesión no pasada, autorización, membresía vigente (`NO_MEMBERSHIP`), matrícula vigente (`NO_ENROLLMENT`), aforo con lock (`CLASS_FULL`). Inserta `class_enrollments` con `source='horarios'`.
 - `class_enrollments.source`: `horarios | admin | qr`. Modelo **por sesión** (`session_id`); existen filas legacy con solo `schedule_id` (inscripción recurrente) que algunos flujos aún consideran.
 
 ### M10. Asistencia (admin + check-in QR)
@@ -312,7 +309,7 @@ CheckoutModal / PersonalizedCheckoutModal
 
 ### M16. Eventos y lista de asistencia (v1.8.0–v1.10.0)
 - **Admin `/admin/eventos`:** CRUD `events` (`type` torneo|graduacion|seminario|clase_especial — CHECK real, `event_date`, `location_name`, `location_url` para Google Maps, imagen en `events/`); columna **Asistencia** con contador → `EventAttendeesModal` (lista + quitar con `cancel_event_attendance`).
-- **Público:** `/eventos` (tabs por tipo), `/eventos/[id]` (hero, mapa embebido, imagen como **adjunto descargable** con lightbox `ImagePreviewModal`), `EventEnrollButton` + `EventEnrollModal` (selección múltiple titular/cargas → RPC `enroll_event`; botón "Inscrito" con hover "Eliminar asistencia").
+- **Público:** `/eventos` (tabs por tipo), `/eventos/[id]` (hero, mapa embebido, imagen como **adjunto descargable** con lightbox `ImagePreviewModal`), `EventEnrollButton` + `EventEnrollModal` (la cuenta propia → RPC `enroll_event`; botón "Inscrito" con hover "Eliminar asistencia").
 - **Reglas:** `event_attendees` sin policies de escritura (solo RPC); sin aforo, sin tokens, sin exigir membresía ni matrícula; eventos pasados bloqueados (lista histórica). No toca tablas de clases.
 
 ### M17. Notificaciones y correos
@@ -336,13 +333,13 @@ CheckoutModal / PersonalizedCheckoutModal
 - `/admin`: `StatsCard`, `RevenueChart`, `NewStudentsChart`, `MembershipBreakdown`, `MonthlyComparison`, `PaymentOverview`, `AttendanceOverview` (`getAdminAttendanceAnalytics`). Usa límites de mes/trimestre Chile-aware.
 
 ### M22. Dashboard del usuario
-- `/dashboard`: resumen (`getDashboardSummary`: membresías, pagos recientes, cargas, pagado este mes; dispara `expire_benefits`), `EnrollmentBanner`, `AlertBanner`, `QuickStats`, `MembershipCard`, `PurchaseSuccessBanner`. Tabs (`DashboardNav`): Resumen, Membresías, Pagos, Mi Tienda, Cargas, Asistencia, Alertas, Reglamento.
+- `/dashboard`: resumen (`getDashboardSummary`: membresías, pagos recientes, asistencias del mes, pagado este mes; dispara `expire_benefits`), `CompleteProfileBanner`, `EnrollmentBanner`, `AlertBanner`, `QuickStats`, `MembershipCard`, `PurchaseSuccessBanner`. Tabs (`DashboardNav`): Resumen, Membresías, Pagos, Mi Tienda, **Mi ficha**, Asistencia, Alertas, Reglamento. Todas las consultas son de la cuenta propia (sin cargas).
 
 ### M23. Changelog de desarrolladores
 - Tabla `changelog` (`version` UNIQUE, `title`, `summary`), **solo lectura admin** en `/admin/changelog`. Las entradas se agregan **solo por migración SQL** `NNN_changelog_vX_Y_Z.sql` con `ON CONFLICT (version) DO NOTHING`. Última: **v1.10.0**.
 
 ### M24. Guía interactiva (onboarding)
-- `src/components/guide/`: `GuideProvider`/`useGuide`, `GuideTour` (spotlight por selector `[data-guide='…']`), `GuideTooltip`, `GuideHelpButton`. Tours definidos como datos en `guide-data.ts`: `membresias`, `horarios`, `cargas`, `perfil`, `landing`, `dashboard`. Vistos se recuerdan en `localStorage` (`ze_guide_viewed_<id>`). Al cambiar una UI con tour, **actualizar los `data-guide`**.
+- `src/components/guide/`: `GuideProvider`/`useGuide`, `GuideTour` (spotlight por selector `[data-guide='…']`), `GuideTooltip`, `GuideHelpButton`. Tours definidos como datos en `guide-data.ts`: `membresias`, `horarios`, `ficha`, `perfil`, `landing`, `dashboard`. Vistos se recuerdan en `localStorage` (`ze_guide_viewed_<id>`). Al cambiar una UI con tour, **actualizar los `data-guide`**.
 
 ---
 
@@ -354,7 +351,7 @@ Proyecto Supabase `sfkkfcticgqdqvzthimz` ("Web principal zona elite", Postgres 1
 
 | Dominio | Tablas |
 |---------|--------|
-| Identidad | `roles`, `profiles`, `dependents`, `beneficiaries`, `audit_logs` |
+| Identidad | `roles`, `profiles`, `beneficiaries`, `audit_logs` · legado: `dependents` (en retiro), `dependents_archive` (cargas migradas) |
 | Fichas | `medical_records`, `body_metrics`, `consent_forms`, `belt_grades`, `sport_profiles`, `sports_podiums` |
 | Clases | `disciplines`, `schedules`, `class_sessions`, `class_plans`, `class_enrollments`, `attendance`, `debts`, `qr_session_lock` |
 | Membresías / matrícula | `membership_plans`, `memberships`, `enrollment_plans`, `academy_enrollments` |
@@ -392,7 +389,8 @@ Proyecto Supabase `sfkkfcticgqdqvzthimz` ("Web principal zona elite", Postgres 1
 | `is_admin()`, `is_staff()`, `owns_beneficiary(b_id)` | helpers RLS (SECURITY DEFINER) | En casi todas las policies |
 | `chile_today()` | fecha local | Policies y RPCs |
 | `handle_new_user()` | trigger `trg_on_auth_user_created` (auth.users) | Crea `profiles` (role 4 por default) |
-| `create_beneficiary_for_profile()` / `create_beneficiary_for_dependent()` | triggers `trg_profiles_create_beneficiary` / `trg_dependents_create_beneficiary` | Crean el `beneficiaries` correspondiente |
+| `create_beneficiary_for_profile()` / `create_beneficiary_for_dependent()` | triggers `trg_profiles_create_beneficiary` / `trg_dependents_create_beneficiary` | Crean el `beneficiaries` correspondiente (el de cargas se elimina en la 042) |
+| `get_pending_dependents()` / `migrate_dependent_to_profile()` / `revert_dependent_migration()` | RPC admin (040) | Migración de cargas; la 042 deshabilita migrar/revertir |
 | `set_updated_at()` | triggers `trg_*_updated_at` | academy_settings, blog_posts, dependents, medical_records, products, profiles |
 | `update_updated_at()` | triggers | qr_session_lock, sport_profiles, sports_podiums |
 | `compute_category_from_birth(date)` | helper SQL | nino < 10, juvenil < 16, adulto (sin uso desde la app; la app tiene su propia copia en TS) |
@@ -425,7 +423,7 @@ Todas las policies tienen rol `public`; el filtro es `auth.uid()`/`is_admin()`/`
 ## 7. Migraciones y versionado
 
 - Carpeta `contexto/migrations/`, numeradas `001…034`, **idempotentes**, aplicadas **manualmente** en el SQL Editor de Supabase. Cada feature con cambios de BD agrega su migración **y** replica el DDL en `documentacion/squema-sql-actualizado.sql` (la suite lo verifica).
-- Ojo: hay números repetidos (`018_*`, `019_*`, `020_*` tienen dos archivos cada uno: feature + changelog). La próxima migración libre es **042**.
+- Ojo: hay números repetidos (`018_*`, `019_*`, `020_*` tienen dos archivos cada uno: feature + changelog). La próxima migración libre es **044** (042/043 escritas, se aplican al terminar la migración de cargas).
 - Cada feature registra su changelog con una migración `NNN_changelog_vX_Y_Z.sql`. Historial:
 
 | Versión | Feature | Migraciones |
@@ -448,7 +446,8 @@ Todas las policies tienen rol `public`; el filtro es `auth.uid()`/`is_admin()`/`
 | v1.10.1 | Endurecimiento de seguridad (RLS, storage, CHECK, monto Flow) — aplicada 2026-10-16 | 035, 036 |
 | v1.11.0 | Una cuenta por persona (RUT único, correo canónico) — aplicada 2026-10-16; índices únicos pendientes hasta resolver el duplicado de Hilder (re-ejecutar 037) | 037, 038 |
 | — | Permisos de funciones SECURITY DEFINER (stock, `find_account_conflicts`, `notify_token_return`) — aplicada 2026-10-16 | 039 |
-| v1.12.0 | Migración de cargas a cuentas propias (re-anclaje, `dependents_archive`, apoderado, cargas congeladas) — **pendiente de aplicar; antes del deploy** | 040, 041 |
+| v1.12.0 | Migración de cargas a cuentas propias (re-anclaje, `dependents_archive`, apoderado, cargas congeladas) — aplicada 2026-10-16 | 040, 041 |
+| v1.13.0 | Una cuenta por alumno (retiro de cargas en UI y admin) — **042 solo con 0 cargas pendientes**; 043 con ella | 042, 043 |
 
 Anteriores (001–010): tokens, membresía activa única, `chile_today` en RLS, `enroll_class`, ventana de tokens, deudas + RLS, `location_url`, reglamento, packs personalizados, horarios personalizados. `028`: FK `personalized_packs.purchased_by`.
 

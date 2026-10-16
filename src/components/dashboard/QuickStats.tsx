@@ -22,8 +22,8 @@ const statConfig = [
     borderColor: "border-l-green-500",
   },
   {
-    icon: "group",
-    label: "Cargas",
+    icon: "fact_check",
+    label: "Asistencias este mes",
     color: "text-blue-400",
     bgColor: "bg-blue-500/10",
     borderColor: "border-l-blue-500",
@@ -33,13 +33,13 @@ const statConfig = [
 export default function QuickStats({
   activeCount,
   paidThisMonth,
-  dependentsCount,
+  attendanceThisMonth,
 }: {
   activeCount: number;
   paidThisMonth: number;
-  dependentsCount: number;
+  attendanceThisMonth: number;
 }) {
-  const values = [activeCount, formatCLP(paidThisMonth), dependentsCount];
+  const values = [activeCount, formatCLP(paidThisMonth), attendanceThisMonth];
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">

@@ -3,12 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getChileToday } from "@/lib/dates";
-
-function categoryToPlural(cat: string): string {
-  if (cat === "nino") return "ninos";
-  if (cat === "juvenil") return "juveniles";
-  return "adultos";
-}
+import { categoryFromBirth, categoryToPlural } from "@/lib/category";
 
 interface Schedule {
   id: string;
@@ -114,16 +109,18 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
 
     if (enriched.length > 0) setSelectedSession(enriched[0].id);
 
-    const [ownBenRes, depsRes] = await Promise.all([
+    // Una cuenta por alumno: solo el propio beneficiario (sin cargas).
+    const [ownBenRes, profileRes] = await Promise.all([
       supabase
         .from("beneficiaries")
         .select("id")
         .eq("profile_id", userId)
         .maybeSingle(),
       supabase
-        .from("dependents")
-        .select("id, full_name, category")
-        .eq("tutor_id", userId),
+        .from("profiles")
+        .select("birth_date")
+        .eq("id", userId)
+        .maybeSingle(),
     ]);
 
     const rows: BeneficiaryRow[] = [];
@@ -142,7 +139,12 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
 
       const membership = membershipRows?.[0] || null;
 
-      const planCategory = (membership as { membership_plans?: { category?: string } } | null)?.membership_plans?.category || "adulto";
+      // La categoría del alumno sale de su fecha de nacimiento; si no la
+      // tiene, se usa la del plan de su membresía (comportamiento previo).
+      const birthDate = (profileRes.data as { birth_date?: string | null } | null)?.birth_date;
+      const planCategory = birthDate
+        ? categoryFromBirth(birthDate)
+        : (membership as { membership_plans?: { category?: string } } | null)?.membership_plans?.category || "adulto";
       const planId = membership?.plan_id || null;
       const planName = (membership as { membership_plans?: { name?: string } } | null)?.membership_plans?.name || null;
       const membershipValid = !!membership;
@@ -220,111 +222,6 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
         tokensTotal,
         isUnlimited,
       });
-    }
-
-    if (depsRes.data && depsRes.data.length > 0) {
-      const depIds = depsRes.data.map((d) => d.id);
-      const { data: depBeneficiaries } = await supabase
-        .from("beneficiaries")
-        .select("id, dependent_id")
-        .in("dependent_id", depIds);
-
-      for (const dep of depsRes.data) {
-        const ben = depBeneficiaries?.find((b) => b.dependent_id === dep.id);
-        if (!ben) continue;
-
-        const benId = ben.id;
-
-        const { data: membershipRows } = await supabase
-          .from("memberships")
-          .select("id, plan_id, membership_plans(name, category)")
-          .eq("beneficiary_id", benId)
-          .eq("status", "activa")
-          .gte("end_date", today)
-          .order("end_date", { ascending: false })
-          .limit(1);
-
-        const membership = membershipRows?.[0] || null;
-
-        const planCategory = dep.category;
-        const planId = membership?.plan_id || null;
-        const planName = (membership as { membership_plans?: { name?: string } } | null)?.membership_plans?.name || null;
-        const membershipValid = !!membership;
-
-        const { data: enrollment } = await supabase
-          .from("academy_enrollments")
-          .select("id")
-          .eq("beneficiary_id", benId)
-          .eq("status", "activa")
-          .gte("end_date", today)
-          .maybeSingle();
-
-        const hasActiveEnrollment = !!enrollment;
-
-        const { data: enrolledSessions } = await supabase
-          .from("class_enrollments")
-          .select("session_id")
-          .eq("beneficiary_id", benId)
-          .in("session_id", enriched.map((s) => s.id));
-
-        const enrolledSessionIds = new Set((enrolledSessions || []).map((e) => e.session_id));
-
-        const classPlanIds = schedule.class_plans.map((cp) => cp.plan_id);
-        const planAllowed = classPlanIds.length === 0 || (planId && classPlanIds.includes(planId));
-
-        let eligible = true;
-        let ineligibleReason: string | null = null;
-        let tokensRemaining: number | null = null;
-        let tokensTotal: number | null = null;
-        let isUnlimited = true;
-
-        if (membership) {
-          const { data: tokenData } = await supabase.rpc("get_remaining_tokens", {
-            p_beneficiary_id: benId,
-            p_membership_id: membership.id,
-          });
-
-          if (tokenData && tokenData.length > 0) {
-            const tokenInfo = tokenData[0];
-            tokensRemaining = tokenInfo.remaining;
-            tokensTotal = tokenInfo.total;
-            isUnlimited = tokenInfo.is_unlimited;
-          }
-        }
-
-        if (!schedule.category.includes(categoryToPlural(planCategory))) {
-          eligible = false;
-          ineligibleReason = "Categoría no compatible con esta clase";
-        } else if (!hasActiveEnrollment) {
-          eligible = false;
-          ineligibleReason = "Sin inscripción a la academia";
-        } else if (!membershipValid) {
-          eligible = false;
-          ineligibleReason = "Sin membresía activa";
-        } else if (!planAllowed) {
-          eligible = false;
-          ineligibleReason = "Plan no habilitado para esta clase";
-        } else if (!isUnlimited && tokensRemaining !== null && tokensRemaining <= 0) {
-          eligible = false;
-          ineligibleReason = "Sin tokens disponibles";
-        }
-
-        rows.push({
-          beneficiaryId: benId,
-          label: dep.full_name,
-          category: planCategory,
-          activePlan: planId,
-          activePlanName: planName,
-          membershipValid,
-          hasActiveEnrollment,
-          enrolledSessions: enrolledSessionIds,
-          eligible,
-          ineligibleReason,
-          tokensRemaining,
-          tokensTotal,
-          isUnlimited,
-        });
-      }
     }
 
     setBeneficiaries(rows);
@@ -472,7 +369,7 @@ export default function EnrollModal({ open, schedule, userId, onClose, onEnrolle
           ) : (
             <div className="space-y-2">
               <p className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-3">
-                Selecciona quiénes asistirán
+                Confirma tu asistencia
               </p>
               {beneficiaries.map((b) => {
                 const alreadyInSession = selectedSession ? b.enrolledSessions.has(selectedSession) : false;

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { categoryFromBirth } from "@/lib/category";
 
 export interface EventAttendee {
   id: string;
@@ -37,52 +38,26 @@ function categoryBadgeClass(category: string): string {
   return "bg-green-500/10 text-green-400";
 }
 
-/** Beneficiarios propios (el usuario y sus cargas) legibles por RLS. Sin N+1. */
+/**
+ * Beneficiario propio legible por RLS. Una cuenta por alumno: cada persona
+ * se inscribe con su propia cuenta (sin cargas). La categoría sale de la
+ * fecha de nacimiento.
+ */
 export async function fetchOwnBeneficiaries(userId: string, selfName?: string | null): Promise<EventBeneficiaryRow[]> {
   const supabase = createClient();
   const rows: EventBeneficiaryRow[] = [];
 
-  const { data: selfBeneficiary } = await supabase
-    .from("beneficiaries")
-    .select("id")
-    .eq("profile_id", userId)
-    .maybeSingle();
+  const [{ data: selfBeneficiary }, { data: profile }] = await Promise.all([
+    supabase.from("beneficiaries").select("id").eq("profile_id", userId).maybeSingle(),
+    supabase.from("profiles").select("birth_date").eq("id", userId).maybeSingle(),
+  ]);
 
   if (selfBeneficiary) {
     rows.push({
       beneficiaryId: selfBeneficiary.id,
       label: selfName || "Yo",
-      category: "adulto",
+      category: categoryFromBirth((profile as { birth_date?: string | null } | null)?.birth_date),
     });
-  }
-
-  const { data: dependents } = await supabase
-    .from("dependents")
-    .select("id, full_name, category")
-    .eq("tutor_id", userId)
-    .order("full_name");
-
-  const deps = (dependents || []) as { id: string; full_name: string; category: string }[];
-  if (deps.length > 0) {
-    const { data: depBeneficiaries } = await supabase
-      .from("beneficiaries")
-      .select("id, dependent_id")
-      .in("dependent_id", deps.map((d) => d.id));
-
-    const byDependent = new Map(
-      ((depBeneficiaries || []) as { id: string; dependent_id: string }[]).map((b) => [b.dependent_id, b.id])
-    );
-
-    for (const dep of deps) {
-      const beneficiaryId = byDependent.get(dep.id);
-      if (beneficiaryId) {
-        rows.push({
-          beneficiaryId,
-          label: dep.full_name,
-          category: dep.category === "nino" || dep.category === "juvenil" ? dep.category : "adulto",
-        });
-      }
-    }
   }
 
   return rows;
@@ -226,7 +201,7 @@ export default function EventEnrollModal({
           ) : (
             <div className="space-y-2">
               <p className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-3">
-                Selecciona quiénes asistirán
+                Confirma tu asistencia
               </p>
               {beneficiaries.map((b) => {
                 const isEnrolled = alreadyEnrolled.has(b.beneficiaryId);

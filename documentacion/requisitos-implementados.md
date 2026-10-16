@@ -360,3 +360,12 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Espejo SQL**: bloque 040 + seed v1.12.0.
 - **Changelog**: entrada **v1.12.0** (`contexto/migrations/041_changelog_v1_12_0.sql`).
 - **Verificación**: suite sección **AI** (11 asserts); se actualizaron `V: admin/usuarios ... Crear y Asignar Carga` (ahora verifica el acceso a la migración), `Y: getProfileForEdit ... address` (acepta columnas nuevas) y el conteo de seeds (16 → 17).
+- **Aplicado** en producción el 2026-10-16.
+
+## 35. Una Cuenta por Alumno: Retiro del Sistema de Cargas (2026-10-16)
+**Requisito**: cada alumno, incluidos los niños, usa su propia cuenta; el padre entra con la cuenta del hijo o el admin asigna. Fases 5–7 del plan `contexto/requisitos/cuenta-unica-por-alumno.md`.
+- **Alumno**: compra, inscripción a clases y eventos, y check-in QR solo para la cuenta propia (UI + APIs `create-order`, `payments/transfer`, `checkin`); `dashboard.ts` sin cargas; "Mi ficha" (`/dashboard/ficha`) reemplaza "Mis Cargas"; indicador "Asistencias este mes"; tour `ficha`; `src/lib/category.ts` (`categoryFromBirth`, `categoryLabel`, `categoryToPlural`).
+- **Admin**: asignación de membresía, pack y matrícula, e inscripción en asistencia, por cuenta (nombre, correo o RUT); `/admin/usuarios` como lista plana con Ver Ficha (medidas + apoderado) y export con categoría y apoderado. Eliminados los componentes y APIs de cargas.
+- **BD (`042_retire_dependents.sql`)**: retiro suave con seguro (aborta si quedan cargas): `owns_beneficiary` por perfil, `profile_id NOT NULL`, sin trigger de cargas, `dependents` vacía de solo lectura, migrar/revertir deshabilitados. **Pendiente de aplicar** hasta migrar las 12 cargas.
+- **Changelog**: entrada **v1.13.0** (`contexto/migrations/043_changelog_v1_13_0.sql`), aplicar junto con la 042.
+- **Verificación**: suite sección **AJ** (12 asserts). Se reemplazaron las aserciones de los componentes eliminados (secciones U, V, W, Y, Z, AB, AE, AI) por las del comportamiento nuevo; el conteo de seeds pasó de 17 a 18. `npx tsc --noEmit` limpio; lint sin errores nuevos (comparado contra el código anterior).

@@ -91,32 +91,8 @@ export default function CheckinPage({
         });
       }
 
-      const { data: deps } = await supabase
-        .from("dependents")
-        .select("id, full_name")
-        .eq("tutor_id", user.id);
-
-      if (deps && deps.length > 0) {
-        const depIds = deps.map((d) => d.id);
-        const { data: depBen } = await supabase
-          .from("beneficiaries")
-          .select("id, dependent_id")
-          .in("dependent_id", depIds);
-
-        if (depBen) {
-          for (const b of depBen) {
-            const dep = deps.find((d) => d.id === b.dependent_id);
-            if (dep) {
-              all.push({
-                id: b.id,
-                name: dep.full_name,
-                is_self: false,
-              });
-            }
-          }
-        }
-      }
-
+      // Una cuenta por alumno: el niño hace check-in desde su propia cuenta
+      // (en el celular del apoderado) o el profesor marca la asistencia.
       setBeneficiaries(all);
       if (all.length > 0) {
         setSelected(new Set(all.map((b) => b.id)));

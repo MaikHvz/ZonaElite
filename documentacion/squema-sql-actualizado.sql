@@ -2864,3 +2864,113 @@ VALUES (
   E'• Nuevo panel "Migración de cargas" en el panel de administración: lista cada carga con su tutor y su historial, y permite crear la cuenta propia del alumno (o elegir una cuenta existente vacía) y trasladarle todo: membresías, matrículas, packs, inscripciones y asistencia a clases, pagos, eventos, ficha médica, perfil deportivo y podios.\n• El traslado no copia datos: el historial queda exactamente igual, solo cambia de dueño. Si algo sale mal, la migración se puede revertir desde la pestaña "Migradas".\n• Para los menores de edad se guardan en su perfil los datos del apoderado (nombre, teléfono y correo), que también pueden editarse desde "Mi perfil".\n• Ya no se pueden crear cargas nuevas: cada alumno se registra con su propia cuenta. Las cargas existentes se siguen viendo hasta que se migren.'
 )
 ON CONFLICT (version) DO NOTHING;
+
+-- ============================================================
+-- RETIRO DEL SISTEMA DE CARGAS (migración 042, espejo 1:1)
+-- Fase 6 de contexto/requisitos/cuenta-unica-por-alumno.md.
+-- Aplicar solo con todas las cargas migradas (el DO inicial aborta si no).
+-- ============================================================
+
+DO $$
+DECLARE
+  v_pending integer;
+  v_anchored integer;
+BEGIN
+  SELECT count(*) INTO v_pending FROM public.dependents;
+  SELECT count(*) INTO v_anchored FROM public.beneficiaries WHERE dependent_id IS NOT NULL;
+  IF v_pending > 0 OR v_anchored > 0 THEN
+    RAISE EXCEPTION 'No se puede retirar el sistema de cargas: quedan % cargas sin migrar (% beneficiarios anclados a cargas). Migra todas en /admin/migracion-cargas y vuelve a ejecutar 042.',
+      v_pending, v_anchored;
+  END IF;
+END;
+$$;
+
+-- ------------------------------------------------------------
+-- Pertenencia: solo la propia cuenta.
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.owns_beneficiary(b_id uuid)
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.beneficiaries
+    WHERE id = b_id AND profile_id = auth.uid()
+  );
+$$;
+
+DROP POLICY IF EXISTS "enrollments_own_read" ON public.class_enrollments;
+CREATE POLICY "enrollments_own_read" ON public.class_enrollments
+  FOR SELECT USING (public.is_admin() OR public.owns_beneficiary(beneficiary_id));
+
+-- ------------------------------------------------------------
+-- Beneficiarios: siempre de una cuenta.
+-- ------------------------------------------------------------
+ALTER TABLE public.beneficiaries ALTER COLUMN profile_id SET NOT NULL;
+
+-- ------------------------------------------------------------
+-- dependents: legado vacío, sin escritura.
+-- ------------------------------------------------------------
+DROP TRIGGER IF EXISTS trg_dependents_create_beneficiary ON public.dependents;
+DROP FUNCTION IF EXISTS public.create_beneficiary_for_dependent();
+
+DROP POLICY IF EXISTS "dependents_tutor_read" ON public.dependents;
+DROP POLICY IF EXISTS "dependents_tutor_update" ON public.dependents;
+DROP POLICY IF EXISTS "dependents_admin_all" ON public.dependents;
+DROP POLICY IF EXISTS "dependents_admin_read" ON public.dependents;
+CREATE POLICY "dependents_admin_read" ON public.dependents
+  FOR SELECT USING (public.is_admin());
+
+COMMENT ON TABLE public.dependents IS
+  'LEGADO (retirada en la migración 042): una cuenta por alumno. Vacía y de solo lectura. El historial de las cargas migradas está en dependents_archive.';
+
+-- ------------------------------------------------------------
+-- Migrar / revertir: deshabilitados (misma firma, mensaje claro).
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.migrate_dependent_to_profile(
+  p_dependent_id uuid,
+  p_profile_id uuid
+)
+RETURNS TABLE (
+  archive_id uuid,
+  beneficiary_id uuid,
+  moved jsonb
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RAISE EXCEPTION 'El sistema de cargas fue retirado: ya no hay cargas que migrar.' USING ERRCODE = 'P0001';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.revert_dependent_migration(p_archive_id uuid)
+RETURNS TABLE (
+  dependent_id uuid,
+  beneficiary_id uuid
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RAISE EXCEPTION 'El sistema de cargas fue retirado: las migraciones ya no se pueden revertir.' USING ERRCODE = 'P0001';
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.migrate_dependent_to_profile(uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.migrate_dependent_to_profile(uuid, uuid) FROM anon;
+REVOKE ALL ON FUNCTION public.revert_dependent_migration(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.revert_dependent_migration(uuid) FROM anon;
+
+-- SEED v1.13.0 — Una cuenta por alumno
+INSERT INTO public.changelog (version, title, summary)
+VALUES (
+  'v1.13.0',
+  'Una cuenta por alumno',
+  E'• Cada alumno (también los niños) usa su propia cuenta: la compra de membresías, matrículas y packs, la inscripción a clases y eventos y el check-in por QR se hacen siempre para la persona que inició sesión. El apoderado entra con la cuenta de su hijo cuando corresponde.\n• La pestaña "Mis Cargas" se reemplazó por "Mi ficha": perfil deportivo, ficha médica, datos físicos y contacto de emergencia del propio alumno.\n• El resumen del panel ahora muestra las asistencias del mes.\n• En el panel de administración, la asignación de membresías, packs y matrículas busca directamente la cuenta del alumno (por nombre, correo o RUT), y la sección Usuarios lista cada alumno con su categoría, ficha (incluido el apoderado de los menores) y perfil deportivo.\n• Se retiraron la creación y edición de cargas: las cargas existentes se trasladan a cuentas propias desde "Migración de cargas".'
+)
+ON CONFLICT (version) DO NOTHING;

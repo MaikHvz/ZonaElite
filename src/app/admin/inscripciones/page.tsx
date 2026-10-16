@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getChileToday, addDaysChile } from "@/lib/dates";
 import { extendOrCreateEnrollment } from "@/lib/enrollments";
+import { categoryFromBirth } from "@/lib/category";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
@@ -156,31 +157,22 @@ export default function AdminInscripcionesPage() {
     const supabase = createClient();
     const today = getChileToday();
 
+    // Una cuenta por alumno: se busca la cuenta del alumno (nombre, correo o RUT).
+    // Una carga aún sin migrar se migra primero en /admin/migracion-cargas.
+    const safe = query.replace(/[,()]/g, " ");
     const { data: profiles } = await supabase
       .from("profiles")
-      .select("id, full_name, email")
-      .or(`full_name.ilike.%${query}%,email.ilike.%${query}%`)
+      .select("id, full_name, email, birth_date")
+      .or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%,rut.ilike.%${safe}%`)
       .limit(10);
 
     if (!profiles || profiles.length === 0) { setSearchResults([]); setSearching(false); return; }
 
     const profileIds = profiles.map((p) => p.id);
 
-    const [ownBenRes, depsRes] = await Promise.all([
-      supabase.from("beneficiaries").select("id, profile_id").in("profile_id", profileIds),
-      supabase.from("dependents").select("id, full_name, category, tutor_id").in("tutor_id", profileIds),
-    ]);
-
+    const ownBenRes = await supabase.from("beneficiaries").select("id, profile_id").in("profile_id", profileIds);
     const ownBens = ownBenRes.data || [];
-    const deps = depsRes.data || [];
-
-    const depBenIds = deps.map((d) => d.id);
-    const depBenRes = depBenIds.length > 0
-      ? await supabase.from("beneficiaries").select("id, dependent_id").in("dependent_id", depBenIds)
-      : { data: [] };
-    const depBens = depBenRes.data || [];
-
-    const allBenIds = [...ownBens.map((b) => b.id), ...depBens.map((b) => b.id)];
+    const allBenIds = ownBens.map((b) => b.id);
 
     const enrollRes = allBenIds.length > 0
       ? await supabase
@@ -200,23 +192,10 @@ export default function AdminInscripcionesPage() {
       if (ownBen) {
         beneficiaries.push({
           beneficiaryId: ownBen.id,
-          label: `${p.full_name} (Yo)`,
-          category: "adulto",
+          label: p.full_name,
+          category: categoryFromBirth((p as { birth_date?: string | null }).birth_date),
           hasActiveEnrollment: enrolledIds.has(ownBen.id),
         });
-      }
-
-      const userDeps = deps.filter((d) => d.tutor_id === p.id);
-      for (const d of userDeps) {
-        const depBen = depBens.find((b) => b.dependent_id === d.id);
-        if (depBen) {
-          beneficiaries.push({
-            beneficiaryId: depBen.id,
-            label: `${d.full_name} (Carga)`,
-            category: d.category,
-            hasActiveEnrollment: enrolledIds.has(depBen.id),
-          });
-        }
       }
 
       if (beneficiaries.length > 0) {

@@ -317,6 +317,19 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Congelamiento**: la policy `dependents_owner_or_admin` (ALL) se reemplaza por `dependents_tutor_read`, `dependents_tutor_update` y `dependents_admin_all`, así que el tutor ya no crea ni borra cargas. `/dashboard/cargas` muestra un aviso en lugar de "Agregar carga", y `/admin/usuarios` cambia "Crear y Asignar Carga" por "Migrar Cargas".
 - **Panel `/admin/migracion-cargas`**: pestaña Pendientes (`get_pending_dependents()`: carga, tutor e historial resumido) con un asistente de 3 pasos: 1) crear la cuenta del alumno con `/api/admin/create-user` (datos precargados y chequeo de duplicados; si hay coincidencia, "Usar esta cuenta") o elegir una cuenta existente vacía, 2) revisar qué se traslada y los datos del apoderado, 3) migrar. Pestaña Migradas con historial y botón "Revertir".
 - **Perfil**: `/perfil` muestra y edita los datos del apoderado.
-- **Pendiente (fase 5)**: las pantallas de compra, inscripción, QR, eventos y asignación siguen aceptando cargas no migradas. Se simplifican a una persona por cuenta cuando no quede ninguna.
+- **Pendiente (fase 5)**: las pantallas de compra, inscripción, QR, eventos y asignación siguen aceptando cargas no migradas. Se simplifican a una persona por cuenta cuando no quede ninguna. → **Hecho en v1.13.0** (sección 19).
+
+---
+
+## 19. Una Cuenta por Alumno: Retiro del Sistema de Cargas (IMPLEMENTADO - v1.13.0)
+
+> Estado: **implementado en código (2026-10-16)**, suite A-AJ en verde (642 tests; se mantiene el fallo preexistente dependiente de la fecha), `npx tsc --noEmit` limpio y sin errores de lint nuevos. Migraciones `042_retire_dependents.sql` y `043_changelog_v1_13_0.sql` (**aplicar solo con 0 cargas pendientes en `/admin/migracion-cargas`**, porque la 042 aborta si queda alguna). Fases 5–7 del plan `contexto/requisitos/cuenta-unica-por-alumno.md`.
+
+**Problema**: el cliente pidió que cada alumno, incluidos los niños, tenga su propia cuenta. El sistema estaba armado en torno a cargas: el padre compraba, inscribía y hacía check-in por sus hijos desde su cuenta.
+
+**Solución**:
+- **Alumno (fase 5)**: `CheckoutModal`, `PersonalizedCheckoutModal`, `EnrollModal`, `PersonalizedEnrollModal`, `EventEnrollModal` y `/checkin/[sessionId]` trabajan solo con el beneficiario propio ("Confirma tu asistencia"). `create-order`, `payments/transfer` y `api/checkin` rechazan beneficiarios ajenos (`profile_id !== user.id`). `dashboard.ts` (`getUserMemberships`, `getDashboardSummary`, asistencia, tokens, packs) sin lecturas de cargas; `QuickStats` muestra "Asistencias este mes". "Mis Cargas" pasa a **"Mi ficha"** (`/dashboard/ficha`: perfil deportivo, ficha médica, datos físicos en el perfil y contacto de emergencia); `/dashboard/cargas` y `/dashboard/cargas/[id]/medico` redirigen. La categoría sale de `profiles.birth_date` (`src/lib/category.ts`). El padre gestiona a su hijo entrando con la cuenta del hijo.
+- **Admin (fase 6)**: `AssignMembershipModal`, `AssignPersonalizedModal`, `/admin/inscripciones` y el buscador de `/admin/asistencia` buscan cuentas por nombre, correo o RUT (sin "carga de X"). `/admin/usuarios` queda como lista plana de cuentas: categoría por fecha de nacimiento, `VerFichaModal` para cualquier alumno (medidas y apoderado) y export con categoría y apoderado. Se eliminaron `CreateDependentModal`, `AddDependentModal`, `EditDependentModal`, `DependentCard` y `/api/admin/create-dependent` + `update-dependent`.
+- **BD (`042`, retiro suave y con seguro)**: aborta si quedan cargas o beneficiarios anclados a cargas; `owns_beneficiary()` y `enrollments_own_read` solo por `profile_id`; `beneficiaries.profile_id NOT NULL`; se elimina el trigger `trg_dependents_create_beneficiary`; `dependents` queda vacía y de solo lectura para el admin (`dependents_admin_read`); migrar y revertir se deshabilitan con mensaje. No hay `DROP TABLE` ni `DROP COLUMN`, así que los respaldos de nombre `dependents(full_name)` de las pantallas admin de solo lectura siguen funcionando.
 
 ---

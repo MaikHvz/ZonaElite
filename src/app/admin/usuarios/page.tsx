@@ -5,8 +5,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
-import CreateDependentModal from "@/components/admin/CreateDependentModal";
-import VerFichaModal from "@/components/admin/VerFichaModal";
+import VerFichaModal, { type StudentFicha } from "@/components/admin/VerFichaModal";
+import { categoryFromBirth, categoryLabel } from "@/lib/category";
 import SportProfileModal from "@/components/admin/SportProfileModal";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
@@ -25,36 +25,17 @@ interface UserRow {
   birth_date?: string | null;
   rut?: string | null;
   address?: string | null;
-  _isDependent?: boolean;
-  _tutorName?: string;
-  _tutorId?: string;
-  _birthDate?: string | null;
-  _category?: string;
-  _address?: string | null;
-  _weight?: number | null;
-  _height?: number | null;
-  _dominantHand?: string | null;
+  weight?: number | null;
+  height?: number | null;
+  dominant_hand?: string | null;
+  guardian_name?: string | null;
+  guardian_phone?: string | null;
+  guardian_email?: string | null;
 }
 
 interface Role { id: number; name: string; }
-interface Dependent { id: string; full_name: string; tutor_id: string; birth_date: string; category: string; rut?: string | null; address?: string | null; weight?: number | null; height?: number | null; dominant_hand?: string | null; created_at?: string; }
 
 const ROLE_LABELS: Record<number, string> = { 1: "Administrador", 2: "Instructor", 3: "Recepción", 4: "Alumno" };
-
-function computeCategoryFromBirth(birthDate: string | null | undefined): string {
-  if (!birthDate) return "adulto";
-  const birth = new Date(birthDate + "T12:00:00");
-  const now = new Date();
-  const ageMs = now.getTime() - birth.getTime();
-  const ageYears = ageMs / (365.25 * 24 * 60 * 60 * 1000);
-  if (ageYears < 10) return "nino";
-  if (ageYears < 16) return "juvenil";
-  return "adulto";
-}
-
-function categoryLabel(cat: string): string {
-  return cat === "nino" ? "Niño" : cat === "juvenil" ? "Juvenil" : "Adulto";
-}
 
 function categoryBadgeClass(cat: string): string {
   if (cat === "nino") return "bg-blue-500/10 text-blue-400 border-blue-500/20";
@@ -86,31 +67,8 @@ export default function AdminUsuariosPage() {
     conflicts: { profileId: string; fullName: string; email: string; match: "rut" | "email" | "name_birth" }[];
   } | null>(null);
 
-  const [dependentModalOpen, setDependentModalOpen] = useState(false);
-  const [editingDependent, setEditingDependent] = useState<{
-    id: string;
-    full_name: string;
-    rut: string | null;
-    birth_date: string | null;
-    category: string;
-    tutor_id: string;
-    address: string | null;
-    weight: number | null;
-    height: number | null;
-    dominant_hand: string | null;
-  } | null>(null);
-
   const [fichaOpen, setFichaOpen] = useState(false);
-  const [fichaRow, setFichaRow] = useState<{
-    full_name: string;
-    category: string;
-    rut?: string | null;
-    address?: string | null;
-    birth_date?: string | null;
-    weight?: number | null;
-    height?: number | null;
-    dominant_hand?: string | null;
-  } | null>(null);
+  const [fichaRow, setFichaRow] = useState<StudentFicha | null>(null);
 
   const [sportOpen, setSportOpen] = useState(false);
   const [sportBeneficiaryId, setSportBeneficiaryId] = useState<string | null>(null);
@@ -125,13 +83,11 @@ export default function AdminUsuariosPage() {
       // 1. Obtain all beneficiaries mapping
       const { data: beneficiariesData } = await supabase
         .from("beneficiaries")
-        .select("id, profile_id, dependent_id");
+        .select("id, profile_id");
 
       const benByProfile = new Map<string, string>();
-      const benByDependent = new Map<string, string>();
       (beneficiariesData || []).forEach((b: any) => {
         if (b.profile_id) benByProfile.set(b.profile_id, b.id);
-        if (b.dependent_id) benByDependent.set(b.dependent_id, b.id);
       });
 
       // 2. Query memberships
@@ -186,13 +142,11 @@ export default function AdminUsuariosPage() {
         "Instructor": 0,
         "Recepción": 0,
         "Alumno": 0,
-        "Carga (Niño)": 0,
-        "Carga (Juvenil)": 0,
-        "Carga (Adulto)": 0,
       };
+      const categoryCounts: Record<string, number> = { nino: 0, juvenil: 0, adulto: 0 };
 
       users.forEach(u => {
-        const benId = u._isDependent ? benByDependent.get(u.id) : benByProfile.get(u.id);
+        const benId = benByProfile.get(u.id);
         const membership = benId ? activeMembershipsByBen.get(benId) : null;
         const enrollment = benId ? activeEnrollmentsByBen.get(benId) : null;
 
@@ -203,15 +157,13 @@ export default function AdminUsuariosPage() {
         if (tieneInscripcion) totalConInscripcion++;
         if (tieneMembresia && tieneInscripcion) totalActivosAmbos++;
 
-        const rolTipo = u._isDependent
-          ? `Carga (${u._category === "nino" ? "Niño" : u._category === "juvenil" ? "Juvenil" : "Adulto"})`
-          : ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`;
+        const rolTipo = ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`;
+        const categoria = categoryFromBirth(u.birth_date);
 
         if (rolCounts[rolTipo] !== undefined) rolCounts[rolTipo]++;
+        if (u.role_id === 4) categoryCounts[categoria]++;
 
-        const fechaNacimiento = u._isDependent
-          ? (u._birthDate ? new Date(u._birthDate + "T12:00:00").toLocaleDateString("es-CL") : "—")
-          : (u.birth_date ? new Date(u.birth_date + "T12:00:00").toLocaleDateString("es-CL") : "—");
+        const fechaNacimiento = u.birth_date ? new Date(u.birth_date + "T12:00:00").toLocaleDateString("es-CL") : "—";
 
         const fechaRegistro = new Date(u.created_at).toLocaleDateString("es-CL");
 
@@ -221,10 +173,11 @@ export default function AdminUsuariosPage() {
           "RUT": u.rut || "—",
           "Teléfono": u.phone || "—",
           "Rol / Tipo": rolTipo,
-          "Tutor (si es carga)": u._tutorName || "—",
+          "Categoría": categoryLabel(categoria),
+          "Apoderado": u.guardian_name || "—",
           "Fecha Nacimiento": fechaNacimiento,
           "Fecha Registro Ingreso": fechaRegistro,
-          "Estado Cuenta": u._isDependent ? "—" : (u.active ? "Activo" : "Inactivo"),
+          "Estado Cuenta": u.active ? "Activo" : "Inactivo",
           "Membresía Activa": tieneMembresia ? ((membership.membership_plans as any)?.name || "Sí") : "Sin membresía",
           "Vencimiento Membresía": tieneMembresia ? new Date(membership.end_date).toLocaleDateString("es-CL") : "—",
           "Estado Inscripción": tieneInscripcion ? `Vigente (${(enrollment.enrollment_plans as any)?.name || "Inscripción"})` : "Sin inscripción",
@@ -232,8 +185,7 @@ export default function AdminUsuariosPage() {
         });
       });
 
-      const alumnos = users.filter(u => !u._isDependent && u.role_id === 4);
-      const cargas = users.filter(u => u._isDependent);
+      const alumnos = users.filter(u => u.role_id === 4);
       const periodoLabel =
         exportTimeframe === "mes"
           ? now.toLocaleString("es-CL", { month: "long", year: "numeric" })
@@ -249,10 +201,11 @@ export default function AdminUsuariosPage() {
           {
             title: "INDICADORES GENERALES",
             rows: [
-              ["Total Perfiles Registrados", users.filter(u => !u._isDependent).length],
-              ["Total Alumnos Directos", alumnos.length],
-              ["Total Cargas / Dependientes", cargas.length],
-              ["Total General Registros", users.length],
+              ["Total Perfiles Registrados", users.length],
+              ["Total Alumnos", alumnos.length],
+              ["Alumnos Niños", categoryCounts.nino],
+              ["Alumnos Juveniles", categoryCounts.juvenil],
+              ["Alumnos Adultos", categoryCounts.adulto],
             ],
           },
           {
@@ -271,10 +224,7 @@ export default function AdminUsuariosPage() {
               ["Administradores", rolCounts["Administrador"] || 0],
               ["Instructores", rolCounts["Instructor"] || 0],
               ["Personal Recepción", rolCounts["Recepción"] || 0],
-              ["Alumnos Titulares", rolCounts["Alumno"] || 0],
-              ["Cargas (Niños)", rolCounts["Carga (Niño)"] || 0],
-              ["Cargas (Juveniles)", rolCounts["Carga (Juvenil)"] || 0],
-              ["Cargas (Adultos)", rolCounts["Carga (Adulto)"] || 0],
+              ["Alumnos", rolCounts["Alumno"] || 0],
             ],
           },
         ],
@@ -298,9 +248,9 @@ export default function AdminUsuariosPage() {
               ["Administradores", rolCounts["Administrador"] || 0],
               ["Instructores", rolCounts["Instructor"] || 0],
               ["Personal Recepción", rolCounts["Recepción"] || 0],
-              ["Alumnos Titulares", rolCounts["Alumno"] || 0],
-              ["Cargas Niños", rolCounts["Carga (Niño)"] || 0],
-              ["Cargas Adultos", rolCounts["Carga (Adulto)"] || 0],
+              ["Alumnos Niños", categoryCounts.nino],
+              ["Alumnos Juveniles", categoryCounts.juvenil],
+              ["Alumnos Adultos", categoryCounts.adulto],
             ],
           },
           {
@@ -326,68 +276,21 @@ export default function AdminUsuariosPage() {
 
   const load = async () => {
     const supabase = createClient();
-    const [uRes, rRes, dRes] = await Promise.all([
+    // Una cuenta por alumno: la lista son solo cuentas. Las cargas aún sin
+    // migrar se gestionan en /admin/migracion-cargas.
+    const [uRes, rRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("roles").select("*").order("id"),
-      supabase.from("dependents").select("id, full_name, tutor_id, birth_date, category, rut, address, weight, height, dominant_hand, created_at"),
     ]);
 
-    const profiles = (uRes.data as UserRow[]) || [];
-    const deps = (dRes.data as Dependent[]) || [];
     setRoles((rRes.data as Role[]) || []);
-
-    const rows: UserRow[] = [];
-
-    for (const p of profiles) {
-      rows.push(p);
-      const userDeps = deps.filter((d) => d.tutor_id === p.id);
-      for (const d of userDeps) {
-        rows.push({
-          id: d.id,
-          full_name: d.full_name,
-          email: `—`,
-          phone: null,
-          role_id: 0,
-          active: true,
-          created_at: (d as any).created_at || p.created_at,
-          birth_date: d.birth_date,
-          rut: d.rut || null,
-          _isDependent: true,
-          _tutorName: p.full_name,
-          _tutorId: p.id,
-          _birthDate: d.birth_date,
-          _category: computeCategoryFromBirth(d.birth_date),
-          _address: d.address || null,
-          _weight: d.weight ?? null,
-          _height: d.height ?? null,
-          _dominantHand: d.dominant_hand || null,
-        });
-      }
-    }
-
-    setUsers(rows);
+    setUsers((uRes.data as UserRow[]) || []);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
   const openEdit = (u: UserRow) => {
-    if (u._isDependent) {
-      setEditingDependent({
-        id: u.id,
-        full_name: u.full_name,
-        rut: u.rut || null,
-        birth_date: u._birthDate || null,
-        category: u._category || "nino",
-        tutor_id: u._tutorId || "",
-        address: u._address || null,
-        weight: u._weight ?? null,
-        height: u._height ?? null,
-        dominant_hand: u._dominantHand || null,
-      });
-      setDependentModalOpen(true);
-      return;
-    }
     setEditing(u);
     setForm({ role_id: u.role_id, active: u.active });
     setModalOpen(true);
@@ -447,23 +350,23 @@ export default function AdminUsuariosPage() {
   const openFicha = (u: UserRow) => {
     setFichaRow({
       full_name: u.full_name,
-      category: u._category || "nino",
+      category: categoryFromBirth(u.birth_date),
       rut: u.rut || null,
-      address: u._address || null,
-      birth_date: u._birthDate || null,
-      weight: u._weight ?? null,
-      height: u._height ?? null,
-      dominant_hand: u._dominantHand || null,
+      address: u.address || null,
+      birth_date: u.birth_date || null,
+      weight: u.weight ?? null,
+      height: u.height ?? null,
+      dominant_hand: u.dominant_hand || null,
+      guardian_name: u.guardian_name || null,
+      guardian_phone: u.guardian_phone || null,
+      guardian_email: u.guardian_email || null,
     });
     setFichaOpen(true);
   };
 
   const openSportProfile = async (u: UserRow) => {
     const supabase = createClient();
-    const query = u._isDependent
-      ? supabase.from("beneficiaries").select("id").eq("dependent_id", u.id).maybeSingle()
-      : supabase.from("beneficiaries").select("id").eq("profile_id", u.id).maybeSingle();
-    const { data } = await query;
+    const { data } = await supabase.from("beneficiaries").select("id").eq("profile_id", u.id).maybeSingle();
     if (!data) {
       setToast({ msg: "Este alumno no tiene un beneficiario registrado", type: "error" });
       return;
@@ -520,40 +423,28 @@ export default function AdminUsuariosPage() {
       <DataTable
         columns={[
           { key: "full_name", label: "Nombre", render: (u) => (
-            <div className={`flex items-center gap-3 ${u._isDependent ? "pl-6" : ""}`}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${u._isDependent ? "bg-surface-container" : "bg-surface-container"}`}>
-                <span className={`material-symbols-outlined text-[16px] ${u._isDependent ? "text-on-surface-variant" : "text-primary"}`}>
-                  {u._isDependent ? "child_care" : "person"}
-                </span>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-surface-container">
+                <span className="material-symbols-outlined text-[16px] text-primary">person</span>
               </div>
               <div>
                 <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{u.full_name}</p>
-                {u._isDependent ? (
-                  <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant">Carga de {u._tutorName}</p>
-                ) : (
-                  <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant">{u.email}</p>
-                )}
+                <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant">{u.email}</p>
               </div>
             </div>
           )},
-          { key: "role_id", label: "Rol / Tipo", render: (u) => {
-            if (u._isDependent) return <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">Carga</span>;
-            return ROLE_LABELS[u.role_id] || `Rol ${u.role_id}`;
-          }},
-          { key: "_category", label: "Categoría", render: (u) => {
-            const cat = u._isDependent ? (u._category || "adulto") : computeCategoryFromBirth(u.birth_date);
+          { key: "role_id", label: "Rol", render: (u) => ROLE_LABELS[u.role_id] || `Rol ${u.role_id}` },
+          { key: "birth_date", label: "Categoría", render: (u) => {
+            const cat = categoryFromBirth(u.birth_date);
             return (
               <span className={`inline-block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${categoryBadgeClass(cat)}`}>
                 {categoryLabel(cat)}
               </span>
             );
           }},
-          { key: "phone", label: "Teléfono", render: (u) => u._isDependent ? "—" : (u.phone || "—") },
+          { key: "phone", label: "Teléfono", render: (u) => u.phone || "—" },
           { key: "rut", label: "RUT", render: (u) => u.rut || "—" },
-          { key: "active", label: "Estado", render: (u) => {
-            if (u._isDependent) return <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">—</span>;
-            return <StatusBadge status={u.active ? "activo" : "cancelado"} />;
-          }},
+          { key: "active", label: "Estado", render: (u) => <StatusBadge status={u.active ? "activo" : "cancelado"} /> },
           { key: "created_at", label: "Registro", render: (u) => new Date(u.created_at).toLocaleDateString("es-CL") },
         ]}
         data={users}
@@ -563,8 +454,8 @@ export default function AdminUsuariosPage() {
         onEdit={openEdit}
         onView={openFicha}
         onSport={openSportProfile}
-        canView={(u) => !!u._isDependent}
-        canSport={(u) => !!u._isDependent || u.role_id === 4}
+        canView={(u) => u.role_id === 4}
+        canSport={(u) => u.role_id === 4}
         emptyMessage="No hay usuarios registrados"
       />
 
@@ -745,21 +636,10 @@ export default function AdminUsuariosPage() {
         </div>
       </FormModal>
 
-      <CreateDependentModal
-        open={dependentModalOpen}
-        onClose={() => setDependentModalOpen(false)}
-        onSaved={async () => {
-          await load();
-          setToast({ msg: editingDependent ? "Carga actualizada" : "Carga creada y asignada", type: "success" });
-        }}
-        tutors={users.filter((u) => !u._isDependent).map((u) => ({ id: u.id, full_name: u.full_name, email: u.email, address: u.address || null }))}
-        editingDependent={editingDependent}
-      />
-
       <VerFichaModal
         open={fichaOpen}
         onClose={() => setFichaOpen(false)}
-        dependent={fichaRow}
+        student={fichaRow}
       />
 
       <SportProfileModal

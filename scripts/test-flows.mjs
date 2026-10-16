@@ -1404,14 +1404,11 @@ const adminConfigT = readFileSync(join(ROOT, "src", "app", "admin", "configuraci
 const perfilT = readFileSync(join(ROOT, "src", "app", "perfil", "page.tsx"), "utf8");
 const adminUsuariosT = readFileSync(join(ROOT, "src", "app", "admin", "usuarios", "page.tsx"), "utf8");
 const dataTableT = readFileSync(join(ROOT, "src", "components", "admin", "DataTable.tsx"), "utf8");
-const createDependentRouteT = readFileSync(join(ROOT, "src", "app", "api", "admin", "create-dependent", "route.ts"), "utf8");
-const updateDependentRouteT = readFileSync(join(ROOT, "src", "app", "api", "admin", "update-dependent", "route.ts"), "utf8");
-const createDependentModalT = readFileSync(join(ROOT, "src", "components", "admin", "CreateDependentModal.tsx"), "utf8");
+// Fase 6 (una cuenta por alumno): create/update-dependent, CreateDependentModal,
+// AddDependentModal, EditDependentModal y DependentCard fueron eliminados; sus
+// aserciones se reemplazaron por la sección AJ (retiro del sistema de cargas).
 const rutLibT = readFileSync(join(ROOT, "src", "lib", "rut.ts"), "utf8");
-const editDependentModalT = readFileSync(join(ROOT, "src", "components", "dashboard", "EditDependentModal.tsx"), "utf8");
-const dependentCardT = readFileSync(join(ROOT, "src", "components", "dashboard", "DependentCard.tsx"), "utf8");
 const cargasPageT = readFileSync(join(ROOT, "src", "app", "dashboard", "cargas", "page.tsx"), "utf8");
-const addDependentModalT = readFileSync(join(ROOT, "src", "components", "dashboard", "AddDependentModal.tsx"), "utf8");
 
 // T1. Migración 013: contrato de la columna de configuración
 ok("T: 013 agrega payment_settings jsonb a academy_settings (idempotente)",
@@ -1656,7 +1653,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 17);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 18);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -1722,12 +1719,13 @@ ok("T: dashboard.ts expone getUserTransferRequests (method='transferencia' por u
 
 // U. RUT visible y filtrable en admin/usuarios
 ok("U: UserRow tipa rut (string | null)",
-  /interface UserRow \{[\s\S]*?rut\?: string \| null;[\s\S]*?_isDependent\?: boolean;/.test(adminUsuariosT));
+  /interface UserRow \{[\s\S]*?rut\?: string \| null;/.test(adminUsuariosT));
 ok("U: admin/usuarios muestra columna RUT (u.rut o —)",
   /key: "rut", label: "RUT", render: \(u\) => u\.rut \|\| "—"/.test(adminUsuariosT));
-ok("U: carga RUT desde profiles (select *) y desde dependents (select rut)",
-  /\.from\("dependents"\)\.select\("id, full_name, tutor_id, birth_date, category, rut, address, weight, height, dominant_hand, created_at"\)/.test(adminUsuariosT) &&
-  /rut: d\.rut \|\| null,[\s\S]*?_isDependent: true,/.test(adminUsuariosT));
+// Fase 6: la lista son solo cuentas (profiles select *, que incluye rut).
+ok("U: carga RUT desde profiles (select *), sin filas de cargas",
+  /supabase\.from\("profiles"\)\.select\("\*"\)/.test(adminUsuariosT) &&
+  !/from\("dependents"\)/.test(adminUsuariosT));
 ok("U: búsqueda cubre nombre, email y RUT (searchKey multi-campo)",
   /searchKey=\{\["full_name", "email", "rut"\]\}[\s\S]*?Buscar por nombre, email o RUT\.\.\./.test(adminUsuariosT));
 ok("U: export Excel incluye RUT (u.rut o —)",
@@ -1742,31 +1740,11 @@ ok("U: DataTable acepta searchKey string | string[] y busca en cualquiera",
 ok("V: admin/usuarios reemplaza Crear y Asignar Carga por el acceso a la migración",
   /href="\/admin\/migracion-cargas"[\s\S]*?Migrar Cargas/.test(adminUsuariosT) &&
   !/Crear y Asignar Carga/.test(adminUsuariosT));
-ok("V: openEdit de carga abre el modal en modo edición (sin early return)",
-  /if \(u\._isDependent\) \{[\s\S]*?setEditingDependent\(\{[\s\S]*?tutor_id: u\._tutorId \|\| "",[\s\S]*?\}\);\s*setDependentModalOpen\(true\);[\s\S]*?return;[\s\S]*?\}\s*setEditing\(u\);/.test(adminUsuariosT));
-ok("V: página renderiza CreateDependentModal con tutors (no dependientes)",
-  /<CreateDependentModal[\s\S]*?tutors=\{users\.filter\(\(u\) => !u\._isDependent\)[\s\S]*?editingDependent=\{editingDependent\}/.test(adminUsuariosT));
-ok("V: create-dependent inserta en dependents con tutor_id y campos completos",
-  /\.from\("dependents"\)\s*\.insert\(\{[\s\S]*?tutor_id,[\s\S]*?full_name: full_name\.trim\(\),[\s\S]*?rut: rut\?\.trim\(\) \|\| null,[\s\S]*?birth_date,[\s\S]*?category: finalCategory,[\s\S]*?address: address\?\.trim\(\) \|\| null,[\s\S]*?weight: weight \?\? null,[\s\S]*?height: height \?\? null,[\s\S]*?dominant_hand: dominant_hand \|\| null,[\s\S]*?\}\s*\)[\s\S]*?\.select\("id, tutor_id, full_name, rut, birth_date, category, address, weight, height, dominant_hand, created_at"\)/.test(createDependentRouteT));
-ok("V: create-dependent asegura beneficiaries por dependent_id (idempotente)",
-  /\.from\("beneficiaries"\)\s*\.select\("id"\)[\s\S]*?\.eq\("dependent_id", dependent\.id\)[\s\S]*?if \(!existingBeneficiary\)[\s\S]*?\.from\("beneficiaries"\)\.insert\(\{[\s\S]*?dependent_id: dependent\.id,[\s\S]*?profile_id: null,[\s\S]*?\}\)/.test(createDependentRouteT));
-ok("V: create-dependent valida admin y categoría, registra audit_logs",
-  /role_id !== 1[\s\S]*?Solo administradores pueden crear cargas/.test(createDependentRouteT) &&
-  /VALID_CATEGORIES\.includes\(category\)/.test(createDependentRouteT) &&
-  /action: "create_dependent",[\s\S]*?entity: "dependents"/.test(createDependentRouteT));
-ok("V: update-dependent actualiza campos y registra audit_logs",
-  /\.from\("dependents"\)\s*\.update\(\{[\s\S]*?full_name: full_name\.trim\(\),[\s\S]*?rut: rut\?\.trim\(\) \|\| null,[\s\S]*?birth_date,[\s\S]*?category: finalCategory,[\s\S]*?\}\)[\s\S]*?\.eq\("id", dependent_id\)/.test(updateDependentRouteT) &&
-  /action: "update_dependent",[\s\S]*?entity: "dependents"/.test(updateDependentRouteT));
-ok("V: CreateDependentModal tiene selector de tutor + campos nombre/rut/fecha/categoría",
-  /Usuario tutor \(padre\/madre\) \*/.test(createDependentModalT) &&
-  /Nombre completo \*/.test(createDependentModalT) &&
-  /RUT \(opcional\)/.test(createDependentModalT) &&
-  /Fecha de nacimiento \*/.test(createDependentModalT) &&
-  /Categoría \*/.test(createDependentModalT) &&
-  /setCategory\(cat\.value\)/.test(createDependentModalT));
-ok("V: CreateDependentModal llama a create/update según modo y valida tutor",
-  /editingDependent \? "\/api\/admin\/update-dependent" : "\/api\/admin\/create-dependent"/.test(createDependentModalT) &&
-  /Debes seleccionar el usuario al que se asignará la carga/.test(createDependentModalT));
+// Fase 6: openEdit edita solo la cuenta (rol/estado); la creación y edición
+// de cargas (CreateDependentModal + APIs) se retiró (ver sección AJ).
+ok("V: openEdit edita la cuenta sin ramas de cargas",
+  /const openEdit = \(u: UserRow\) => \{\s*setEditing\(u\);/.test(adminUsuariosT) &&
+  !/CreateDependentModal/.test(adminUsuariosT));
 
 // V2. Changelog v1.1.1 (migración 015: entrada de release para crear/asignar carga)
 const migration015 = readFileSync(join(ROOT, "contexto", "migrations", "015_changelog_v1_1_1.sql"), "utf8");
@@ -1805,21 +1783,12 @@ ok("W: isValidRut rechaza vacíos, letras en el cuerpo y símbolos",
 ok("W: formatRut agrega puntos y guión",
   formatRut("111111111") === "11.111.111-1" &&
   formatRut("123456785") === "12.345.678-5");
-ok("W: EditDependentModal edita via dependents.update por id con validación RUT",
-  /\.from\("dependents"\)\s*\.update\(\{[\s\S]*?rut: rutTrimmed \|\| null,[\s\S]*?\}\s*\)\s*\.eq\("id", dependent\.id\)/.test(editDependentModalT) &&
-  /if \(rutTrimmed && !isValidRut\(rutTrimmed\)\)/.test(editDependentModalT));
-ok("W: EditDependentModal carga valores actuales del dependiente",
-  /setFullName\(dependent\.full_name\);[\s\S]*?setRut\(dependent\.rut \|\| ""\);[\s\S]*?setBirthDate\(dependent\.birth_date\);[\s\S]*?setCategory\(/.test(editDependentModalT));
-ok("W: DependentCard muestra botón Editar datos",
-  /Editar datos[\s\S]*?edit[\s\S]*?onEdit/.test(dependentCardT) ||
-  /onEdit &&[\s\S]*?Editar datos/.test(dependentCardT));
-ok("W: cargas page integra EditDependentModal y pasa onEdit a la tarjeta",
-  /<EditDependentModal[\s\S]*?dependent=\{editingDependent\}/.test(cargasPageT) &&
-  /onEdit=\{\(\) => setEditingDependent\(d\)\}/.test(cargasPageT));
-ok("W: AddDependentModal también valida RUT al agregar",
-  /import \{ isValidRut \} from "@\/lib\/rut";[\s\S]*?if \(rutTrimmed && !isValidRut\(rutTrimmed\)\)/.test(addDependentModalT));
-ok("W: admin CreateDependentModal también valida RUT",
-  /import \{ isValidRut \} from "@\/lib\/rut";[\s\S]*?if \(rutTrimmed && !isValidRut\(rutTrimmed\)\)/.test(createDependentModalT));
+// Una cuenta por alumno (fase 5): "Mis Cargas" pasó a "Mi ficha"; la
+// ruta antigua redirige.
+ok("W: /dashboard/cargas redirige a Mi ficha (ya no hay edición de cargas)",
+  /redirect\("\/dashboard\/ficha"\)/.test(cargasPageT) &&
+  !/EditDependentModal/.test(cargasPageT));
+// Fase 6: la validación de RUT vive en el registro, create-user y /perfil (AG).
 
 // W2. Changelog v1.1.2 (migración 016: entrada de release editar cargas + validación RUT)
 const migration016 = readFileSync(join(ROOT, "contexto", "migrations", "016_changelog_v1_1_2.sql"), "utf8");
@@ -1868,40 +1837,23 @@ ok("Y: 018 changelog v1.2.1 'Dirección en Perfil y Cargas' (idempotente)",
 ok("Y: espejo refleja el seed v1.2.1",
   /'v1\.2\.1'/.test(schemaSqlT) &&
   /'Dirección en Perfil y Cargas'/.test(schemaSqlT));
-ok("Y: dashboard.ts DependentData tipa address",
-  /interface DependentData \{[\s\S]*?address: string \| null;/.test(dashboardLibT));
+// Fase 6: DependentData se eliminó; la dirección del alumno vive en su perfil.
+ok("Y: admin/usuarios tipa address del alumno (UserRow)",
+  /interface UserRow \{[\s\S]*?address\?: string \| null;/.test(adminUsuariosT));
 ok("Y: dashboard.ts getProfileForEdit y updateProfile soportan address",
   // Las columnas siguientes (datos físicos v1.3.0, apoderado v1.12.0) se agregaron después.
   /\.select\("full_name, phone, birth_date, rut, address(, [a-z_]+)*"\)/.test(dashboardLibT) &&
   /updates: \{[\s\S]*?address\?: string;[\s\S]*?weight\?: number \| null;[\s\S]*?height\?: number \| null;[\s\S]*?dominant_hand\?: string \| null;[\s\S]*?\}/.test(dashboardLibT));
-ok("Y: dashboard.ts getUserMemberships incluye address en dependents",
-  /\.select\("id, full_name, birth_date, category, address, beneficiaries\(id\)"\)/.test(dashboardLibT));
+// Fase 5: getUserMemberships ya no lee cargas (solo el propio beneficiario).
+ok("Y: dashboard.ts getUserMemberships lee solo el beneficiario propio",
+  /export async function getUserMemberships[\s\S]*?\.eq\("profile_id", userId\)[\s\S]*?\.eq\("beneficiary_id", ownBeneficiary\.id\)/.test(dashboardLibT) &&
+  !/export async function getUserMemberships[\s\S]{0,600}?from\("dependents"\)/.test(dashboardLibT));
 ok("Y: perfil carga, edita y guarda dirección",
   /const \[address, setAddress\] = useState\(""\);[\s\S]*?setAddress\(data\.address \|\| ""\);[\s\S]*?address: address \|\| undefined,/.test(perfilT) &&
   /placeholder="Calle, número, comuna"/.test(perfilT));
-ok("Y: AddDependentModal guarda address al insertar",
-  /\.from\("dependents"\)\.insert\(\{[\s\S]*?category,[\s\S]*?address: address\.trim\(\) \|\| null,[\s\S]*?\}\)/.test(addDependentModalT));
-ok("Y: AddDependentModal ofrece checkbox que autocompleta desde la dirección del tutor",
-  /Usar la misma dirección que el tutor/.test(addDependentModalT) &&
-  /setAddress\(e\.target\.checked \? tutorAddress : ""\)/.test(addDependentModalT) &&
-  /\.from\("profiles"\)[\s\S]*?\.select\("address"\)[\s\S]*?\.eq\("id", tutorId\)/.test(addDependentModalT));
-ok("Y: EditDependentModal edita address y tipa address en el dependiente",
-  /address: string \| null;[\s\S]*?tutor_id: string;[\s\S]*?\} \| null;/.test(editDependentModalT) &&
-  /setAddress\(dependent\.address \|\| ""\);/.test(editDependentModalT) &&
-  /address: address\.trim\(\) \|\| null,[\s\S]*?\.eq\("id", dependent\.id\)/.test(editDependentModalT) &&
-  /Usar la misma dirección que el tutor/.test(editDependentModalT));
-ok("Y: DependentCard muestra Dirección",
-  /dependent\.address &&[\s\S]*?Dirección[\s\S]*?\{dependent\.address\}/.test(dependentCardT));
-ok("Y: admin CreateDependentModal soporta address + checkbox del tutor",
-  /editingDependent\?: \{[\s\S]*?address: string \| null;[\s\S]*?\} \| null;/.test(createDependentModalT) &&
-  /address: address\.trim\(\) \|\| null,[\s\S]*?\}\)/.test(createDependentModalT) &&
-  /Usar la misma dirección que el tutor/.test(createDependentModalT));
-ok("Y: update-dependent actualiza address y lo registra en audit",
-  /address: address\?\.trim\(\) \|\| null,[\s\S]*?\.eq\("id", dependent_id\)/.test(updateDependentRouteT) &&
-  /metadata: \{ full_name: dependent\.full_name, category: finalCategory, address: dependent\.address, weight: dependent\.weight, height: dependent\.height, dominant_hand: dependent\.dominant_hand \}/.test(updateDependentRouteT));
-ok("Y: admin/usuarios pasa address al modal de dependientes (edición y tutores)",
-  /address: u\._address \|\| null,[\s\S]*?\}/.test(adminUsuariosT) &&
-  /tutors=\{users\.filter\(\(u\) => !u\._isDependent\)\.map\(\(u\) => \(\{ id: u\.id, full_name: u\.full_name, email: u\.email, address: u\.address \|\| null \}\)\)\}/.test(adminUsuariosT));
+// Fase 6: la dirección de cada alumno vive en su perfil y se ve en la ficha admin.
+ok("Y: admin/usuarios muestra la dirección del alumno en su ficha",
+  /address: u\.address \|\| null,/.test(adminUsuariosT));
 
 // Z. Datos físicos (peso/altura/mano dominante) y Ver Ficha (v1.3.0)
 const migration019 = readFileSync(join(ROOT, "contexto", "migrations", "019_physical_info_profiles_dependents.sql"), "utf8");
@@ -1940,48 +1892,36 @@ ok("Z: medidas.ts normaliza y valida peso/altura/mano (isomórfico)",
   /export function isValidPeso\(value: string\): boolean[\s\S]*?n !== null && n > 0 && n <= 300/.test(medidasT) &&
   /export function isValidAltura\(value: string\): boolean[\s\S]*?n !== null && n > 0 && n <= 250/.test(medidasT) &&
   /export function isValidDominantHand\(value: string\): boolean[\s\S]*?"diestro" \|\| value === "zurdo"/.test(medidasT));
-ok("Z: dashboard.ts DependentData tipa weight/height/dominant_hand",
-  /interface DependentData \{[\s\S]*?weight: number \| null;[\s\S]*?height: number \| null;[\s\S]*?dominant_hand: string \| null;/.test(dashboardLibT));
+ok("Z: admin/usuarios tipa weight/height/dominant_hand del alumno",
+  /interface UserRow \{[\s\S]*?weight\?: number \| null;[\s\S]*?height\?: number \| null;[\s\S]*?dominant_hand\?: string \| null;/.test(adminUsuariosT));
 ok("Z: perfil registra datos físicos con validación y select de mano",
   /const \[weight, setWeight\] = useState\(""\);[\s\S]*?isValidPeso\(weight\)[\s\S]*?weight: weight\.trim\(\) \? parseMedida\(weight\) : null,/.test(perfilT) &&
   /<option value="diestro">Diestro<\/option>[\s\S]*?<option value="zurdo">Zurdo<\/option>/.test(perfilT));
-ok("Z: AddDependentModal guarda medidas con validación",
-  /weight: weight\.trim\(\) \? parseMedida\(weight\) : null,[\s\S]*?height: height\.trim\(\) \? parseMedida\(height\) : null,[\s\S]*?dominant_hand: dominantHand \|\| null,[\s\S]*?\}\)/.test(addDependentModalT) &&
-  /if \(weight\.trim\(\) && !isValidPeso\(weight\)\)[\s\S]*?El peso debe ser mayor a 0 y hasta 300 kg/.test(addDependentModalT) &&
-  /if \(height\.trim\(\) && !isValidAltura\(height\)\)/.test(addDependentModalT));
-ok("Z: EditDependentModal carga y edita medidas",
-  /setWeight\(dependent\.weight != null \? String\(dependent\.weight\) : ""\);[\s\S]*?setHeight\(dependent\.height != null \? String\(dependent\.height\) : ""\);[\s\S]*?setDominantHand\(dependent\.dominant_hand \|\| ""\);/.test(editDependentModalT) &&
-  /weight: number \| null;[\s\S]*?height: number \| null;[\s\S]*?dominant_hand: string \| null;[\s\S]*?\} \| null;/.test(editDependentModalT) &&
-  /dominant_hand: dominantHand \|\| null,[\s\S]*?\.eq\("id", dependent\.id\)/.test(editDependentModalT));
-ok("Z: DependentCard muestra datos físicos (peso/altura/mano)",
-  /Datos físicos[\s\S]*?dependent\.weight != null \? `\$\{dependent\.weight\} kg` : null,[\s\S]*?dependent\.height != null \? `\$\{dependent\.height\} cm` : null,[\s\S]*?dependent\.dominant_hand === "zurdo" \? "Zurdo"/.test(dependentCardT));
 ok("Z: PhysicalInfoCard es card editable con validación de medidas",
   /export default function PhysicalInfoCard[\s\S]*?isValidPeso\(peso\)[\s\S]*?isValidAltura\(altura\)[\s\S]*?parseMedida\(peso\)[\s\S]*?Datos Físicos/.test(physicalInfoCardT));
-ok("Z: medico page carga y guarda medidas de la carga (dependents.update por id)",
-  /\.select\("full_name, birth_date, category, weight, height, dominant_hand, beneficiaries\(id\)"\)/.test(medicoPageT) &&
-  /\.from\("dependents"\)\s*\.update\(data\)[\s\S]*?\.eq\("id", dependentId\)[\s\S]*?\.eq\("tutor_id", user\.id\)/.test(medicoPageT) &&
-  /<PhysicalInfoCard/.test(medicoPageT));
-ok("Z: admin CreateDependentModal valida y envía medidas",
-  /weight: weight\.trim\(\) \? parseMedida\(weight\) : null,[\s\S]*?height: height\.trim\(\) \? parseMedida\(height\) : null,[\s\S]*?dominant_hand: dominantHand \|\| null,[\s\S]*?\}\)/.test(createDependentModalT) &&
-  /if \(weight\.trim\(\) && !isValidPeso\(weight\)\)/.test(createDependentModalT) &&
-  /Datos físicos/.test(createDependentModalT));
-ok("Z: APIs create/update-dependent validan y persisten medidas + audit",
-  /El peso debe ser mayor a 0 y hasta 300 kg/.test(createDependentRouteT) &&
-  /La altura debe ser mayor a 0 y hasta 250 cm/.test(updateDependentRouteT) &&
-  /La mano dominante debe ser diestro o zurdo/.test(createDependentRouteT) &&
-  /weight: weight \?\? null,[\s\S]*?height: height \?\? null,[\s\S]*?dominant_hand: dominant_hand \|\| null,[\s\S]*?\.select\("id, tutor_id, full_name, rut, birth_date, category, address, weight, height, dominant_hand, created_at"\)/.test(updateDependentRouteT) &&
-  /weight: dependent\.weight, height: dependent\.height, dominant_hand: dependent\.dominant_hand \}/.test(createDependentRouteT));
+// Fase 5: la ficha médica de cada alumno vive en "Mi ficha" de su cuenta;
+// las medidas se guardan en su propio perfil.
+const fichaPageZ = readFileSync(join(ROOT, "src", "app", "dashboard", "ficha", "page.tsx"), "utf8");
+ok("Z: Mi ficha carga y guarda las medidas del propio perfil (medico de carga redirige)",
+  /redirect\("\/dashboard\/ficha"\)/.test(medicoPageT) &&
+  /await updateProfile\(user\.id, data\)/.test(fichaPageZ) &&
+  /<PhysicalInfoCard/.test(fichaPageZ) &&
+  /<MedicalInfoCard record=\{record\} beneficiaryId=\{beneficiaryId\}/.test(fichaPageZ));
+ok("Z: Ver Ficha del admin muestra medidas y apoderado del alumno",
+  /export interface StudentFicha \{[\s\S]*?weight\?: number \| null;[\s\S]*?guardian_name\?: string \| null;/.test(verFichaModalT) &&
+  /label: "Apoderado"/.test(verFichaModalT) &&
+  /<VerFichaModal[\s\S]*?student=\{fichaRow\}/.test(adminUsuariosT));
 ok("Z: DataTable soporta onView + canView (botón ojo Ver Ficha)",
   /onView\?: \(item: T\) => void;[\s\S]*?canView\?: \(item: T\) => boolean;/.test(dataTableT) &&
   /onView && \(!canView \|\| canView\(item\)\)[\s\S]*?visibility/.test(dataTableT));
 ok("Z: VerFichaModal es solo lectura y muestra datos físicos",
   /export default function VerFichaModal[\s\S]*?dependent\.weight != null \? `\$\{dependent\.weight\} kg` : "—"[\s\S]*?dependent\.height != null \? `\$\{dependent\.height\} cm` : "—"[\s\S]*?Mano dominante[\s\S]*?Cerrar/.test(verFichaModalT) &&
   !/<input|<textarea|<select/.test(verFichaModalT));
+// Fase 6: Ver Ficha es para cualquier alumno (sus medidas vienen del perfil).
 ok("Z: admin/usuarios abre VerFichaModal (onView/canView) y carga medidas",
-  /onView=\{openFicha\}[^]*canView=\{\(u\) => !!u\._isDependent\}/.test(adminUsuariosT) &&
-  /<VerFichaModal[\s\S]*?dependent=\{fichaRow\}/.test(adminUsuariosT) &&
-  /_weight: d\.weight \?\? null,[\s\S]*?_height: d\.height \?\? null,[\s\S]*?_dominantHand: d\.dominant_hand \|\| null,/.test(adminUsuariosT) &&
-  /weight: u\._weight \?\? null,[\s\S]*?height: u\._height \?\? null,[\s\S]*?dominant_hand: u\._dominantHand \|\| null,[\s\S]*?\}/.test(adminUsuariosT));
+  /onView=\{openFicha\}[^]*canView=\{\(u\) => u\.role_id === 4\}/.test(adminUsuariosT) &&
+  /<VerFichaModal[\s\S]*?student=\{fichaRow\}/.test(adminUsuariosT) &&
+  /weight: u\.weight \?\? null,[\s\S]*?height: u\.height \?\? null,[\s\S]*?dominant_hand: u\.dominant_hand \|\| null,/.test(adminUsuariosT));
 
 
 // AA. Tienda con carrito y checkout Flow (v1.4.0, requisito tienda-carrito-ventas)
@@ -2236,8 +2176,7 @@ ok("AB: sportProfilesFrom normaliza a lista (multi-disciplina)",
 ok("AB: SportProfileInfo lista todas las disciplinas con su cinturón",
   /profiles: SportProfileData\[\]/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "SportProfileInfo.tsx"), "utf8")) &&
   /profiles\.map/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "SportProfileInfo.tsx"), "utf8")));
-ok("AB: DependentCard y TutorSportCard usan la lista de perfiles",
-  /sportProfilesFrom/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "DependentCard.tsx"), "utf8")) &&
+ok("AB: TutorSportCard usa la lista de perfiles",
   /sportProfilesFrom/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "TutorSportCard.tsx"), "utf8")));
 ok("AB: DataTable tiene botón de perfil deportivo",
   /onSport/.test(readFileSync(join(ROOT, "src", "components", "admin", "DataTable.tsx"), "utf8")));
@@ -2248,11 +2187,8 @@ ok("AB: SportProfileModal gestiona disciplinas (add/edit/remove) + podios CRUD",
   /from\("sport_profiles"\)[\s\S]*?\.upsert\(payload, \{ onConflict: "beneficiary_id,discipline_id" \}\)/.test(readFileSync(join(ROOT, "src", "components", "admin", "SportProfileModal.tsx"), "utf8")) &&
   /from\("sport_profiles"\)[\s\S]*?\.delete\(\)/.test(readFileSync(join(ROOT, "src", "components", "admin", "SportProfileModal.tsx"), "utf8")) &&
   /from\("sports_podiums"\)[\s\S]*?\.insert/.test(readFileSync(join(ROOT, "src", "components", "admin", "PodiumFormModal.tsx"), "utf8")));
-ok("AB: DependentCard muestra perfil deportivo de la carga",
-  /SportProfileInfo/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "DependentCard.tsx"), "utf8")) &&
-  /BeltBanner/.test(readFileSync(join(ROOT, "src", "components", "dashboard", "DependentCard.tsx"), "utf8")));
-ok("AB: /dashboard/cargas muestra la card del titular",
-  /TutorSportCard/.test(readFileSync(join(ROOT, "src", "app", "dashboard", "cargas", "page.tsx"), "utf8")));
+ok("AB: Mi ficha muestra el perfil deportivo del alumno",
+  /<TutorSportCard \/>/.test(readFileSync(join(ROOT, "src", "app", "dashboard", "ficha", "page.tsx"), "utf8")));
 
 // ============================================================
 // AC. ADJUNTO DE IMAGEN EN EVENTOS (migración 030, v1.8.0)
@@ -2496,11 +2432,12 @@ ok("AE: alta y baja viajan por RPC, nunca por escritura directa del browser",
   /rpc\("cancel_event_attendance"/.test(evEnrollButtonAe) &&
   /rpc\("cancel_event_attendance"/.test(evAttendeesModalAe) &&
   !/\.from\("event_attendees"\)[\s\S]{0,120}?\.(insert|upsert|delete)\(/.test(evEnrollModalAe + evEnrollButtonAe + evAttendeesModalAe));
-ok("AE: el modal de inscripción ofrece titular y cargas, y marca a los ya inscritos",
-  /from\("beneficiaries"\)[\s\S]*?\.eq\("profile_id", userId\)/.test(evEnrollModalAe) &&
-  /from\("dependents"\)[\s\S]*?\.eq\("tutor_id", userId\)/.test(evEnrollModalAe) &&
-  /\.in\("dependent_id"/.test(evEnrollModalAe) &&
-  /Selecciona quiénes asistirán/.test(evEnrollModalAe) &&
+// Fase 5 (una cuenta por alumno): cada persona se inscribe con su cuenta.
+ok("AE: el modal de inscripción usa solo la cuenta propia y marca si ya está inscrito",
+  /from\("beneficiaries"\)\.select\("id"\)\.eq\("profile_id", userId\)/.test(evEnrollModalAe) &&
+  !/from\("dependents"\)/.test(evEnrollModalAe) &&
+  /categoryFromBirth\(/.test(evEnrollModalAe) &&
+  /Confirma tu asistencia/.test(evEnrollModalAe) &&
   /alreadyEnrolled\.has\(b\.beneficiaryId\)/.test(evEnrollModalAe) &&
   /export async function fetchMyEventAttendees/.test(evEnrollModalAe));
 ok("AE: /admin/eventos muestra el contador de inscritos y abre la lista por evento",
@@ -2796,8 +2733,9 @@ ok("AI: las RPC no son ejecutables por anon y los helpers internos tampoco por a
   /REVOKE ALL ON FUNCTION public\.beneficiary_has_data\(uuid\) FROM anon, authenticated/.test(migration040));
 ok("AI: 041 es seed de changelog v1.12.0 y el espejo refleja 040/041 sin duplicar",
   /'v1\.12\.0'/.test(migration041) && /ON CONFLICT \(version\) DO NOTHING/.test(migration041) &&
-  (schemaAi.match(/CREATE OR REPLACE FUNCTION public\.migrate_dependent_to_profile\(/g) || []).length === 1 &&
-  (schemaAi.match(/CREATE OR REPLACE FUNCTION public\.revert_dependent_migration\(/g) || []).length === 1 &&
+  // 040 las define y 042 las reemplaza por versiones deshabilitadas.
+  (schemaAi.match(/CREATE OR REPLACE FUNCTION public\.migrate_dependent_to_profile\(/g) || []).length === 2 &&
+  (schemaAi.match(/CREATE OR REPLACE FUNCTION public\.revert_dependent_migration\(/g) || []).length === 2 &&
   (schemaAi.match(/CREATE TABLE IF NOT EXISTS public\.dependents_archive/g) || []).length === 1 &&
   (schemaAi.match(/'v1\.12\.0'/g) || []).length === 1);
 ok("AI: el panel crea la cuenta con create-user (con chequeo de duplicados) y migra/revierte por RPC",
@@ -2810,8 +2748,83 @@ ok("AI: el panel crea la cuenta con create-user (con chequeo de duplicados) y mi
   /href: "\/admin\/migracion-cargas"/.test(sidebarAi));
 ok("AI: el dashboard ya no ofrece agregar cargas y el perfil edita el apoderado",
   !/AddDependentModal/.test(cargasPageAi) &&
-  /data-guide="cargas-agregar"/.test(cargasPageAi) &&
+  /redirect\("\/dashboard\/ficha"\)/.test(cargasPageAi) &&
   /guardian_name: guardianName\.trim\(\) \|\| null/.test(perfilAi));
+
+// ============================================================
+// AJ. Una cuenta por alumno: retiro del sistema de cargas (fases 5–6, v1.13.0)
+// ============================================================
+section("AJ. Una cuenta por alumno (retiro de cargas)");
+
+const { categoryFromBirth } = await import("../src/lib/category.ts");
+const migration042 = readFileSync(join(ROOT, "contexto", "migrations", "042_retire_dependents.sql"), "utf8");
+const migration043 = readFileSync(join(ROOT, "contexto", "migrations", "043_changelog_v1_13_0.sql"), "utf8");
+const schemaAj = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const exists = (...p) => { try { statSync(join(ROOT, ...p)); return true; } catch { return false; } };
+const srcAj = (...p) => readFileSync(join(ROOT, "src", ...p), "utf8");
+
+ok("AJ: categoryFromBirth usa la edad cumplida en la fecha de Chile (nino <10, juvenil <16)",
+  categoryFromBirth("2016-10-17", "2026-10-16") === "nino" &&
+  categoryFromBirth("2016-10-16", "2026-10-16") === "juvenil" &&
+  categoryFromBirth("2010-10-17", "2026-10-16") === "juvenil" &&
+  categoryFromBirth("2010-10-16", "2026-10-16") === "adulto" &&
+  categoryFromBirth(null, "2026-10-16") === "adulto");
+ok("AJ: se eliminaron los componentes y APIs de cargas",
+  !exists("src", "components", "admin", "CreateDependentModal.tsx") &&
+  !exists("src", "components", "dashboard", "AddDependentModal.tsx") &&
+  !exists("src", "components", "dashboard", "EditDependentModal.tsx") &&
+  !exists("src", "components", "dashboard", "DependentCard.tsx") &&
+  !exists("src", "app", "api", "admin", "create-dependent", "route.ts") &&
+  !exists("src", "app", "api", "admin", "update-dependent", "route.ts"));
+ok("AJ: compra, inscripción, QR y eventos usan solo el beneficiario propio",
+  ["components/CheckoutModal.tsx", "components/PersonalizedCheckoutModal.tsx", "components/EnrollModal.tsx",
+   "components/PersonalizedEnrollModal.tsx", "components/EventEnrollModal.tsx", "app/checkin/[sessionId]/page.tsx"]
+    .every((f) => !/from\("dependents"\)/.test(srcAj(...f.split("/")))));
+ok("AJ: las APIs de compra y check-in aceptan solo profile_id = usuario",
+  /benError \|\| !beneficiary \|\| beneficiary\.profile_id !== user\.id/.test(srcAj("app", "api", "flow", "create-order", "route.ts")) &&
+  /benError \|\| !beneficiary \|\| beneficiary\.profile_id !== user\.id/.test(srcAj("app", "api", "payments", "transfer", "route.ts")) &&
+  /const isOwner = benCheck\?\.profile_id === user\.id;/.test(srcAj("app", "api", "checkin", "route.ts")) &&
+  !/dependents/.test(srcAj("app", "api", "flow", "create-order", "route.ts") + srcAj("app", "api", "payments", "transfer", "route.ts")));
+ok("AJ: las consultas del panel del alumno no leen cargas",
+  !/from\("dependents"\)/.test(srcAj("lib", "supabase", "dashboard.ts")) &&
+  !/getUserDependents|DependentData|getDependentSportProfile/.test(srcAj("lib", "supabase", "dashboard.ts")) &&
+  /attendanceThisMonth/.test(srcAj("lib", "supabase", "dashboard.ts")) &&
+  /attendanceThisMonth=\{summary\.attendanceThisMonth\}/.test(srcAj("app", "dashboard", "page.tsx")));
+ok("AJ: inscribir desde /admin/asistencia busca solo cuentas",
+  !/from\("dependents"\)/.test(srcAj("app", "admin", "asistencia", "page.tsx")) &&
+  /categoryFromBirth\(\(p as \{ birth_date\?: string \| null \}\)\.birth_date\)/.test(srcAj("app", "admin", "asistencia", "page.tsx")));
+ok("AJ: la asignación admin busca cuentas (nombre, correo o RUT) sin cargas",
+  ["components/admin/AssignMembershipModal.tsx", "components/admin/AssignPersonalizedModal.tsx", "app/admin/inscripciones/page.tsx"]
+    .every((f) => {
+      const s = srcAj(...f.split("/"));
+      return !/from\("dependents"\)/.test(s) && /rut\.ilike\.%\$\{safe\}%/.test(s);
+    }));
+ok("AJ: navegación del alumno: Mi ficha reemplaza Cargas y las rutas viejas redirigen",
+  /\{ label: "Mi ficha", href: "\/dashboard\/ficha"/.test(srcAj("components", "dashboard", "DashboardNav.tsx")) &&
+  !/"\/dashboard\/cargas"/.test(srcAj("components", "dashboard", "DashboardNav.tsx")) &&
+  /redirect\("\/dashboard\/ficha"\)/.test(srcAj("app", "dashboard", "cargas", "[id]", "medico", "page.tsx")) &&
+  /ficha: \{\s*id: "ficha"/.test(srcAj("components", "guide", "guide-data.ts")) &&
+  !/cargas: \{\s*id: "cargas"/.test(srcAj("components", "guide", "guide-data.ts")));
+ok("AJ: 042 aborta si queda alguna carga o beneficiario anclado a una carga",
+  /SELECT count\(\*\) INTO v_pending FROM public\.dependents;/.test(migration042) &&
+  /dependent_id IS NOT NULL/.test(migration042) &&
+  /IF v_pending > 0 OR v_anchored > 0 THEN\s+RAISE EXCEPTION/.test(migration042) &&
+  migration042.indexOf("RAISE EXCEPTION 'No se puede retirar") < migration042.indexOf("ALTER TABLE public.beneficiaries"));
+ok("AJ: 042 retira suave: owns_beneficiary solo por perfil, profile_id NOT NULL, dependents de solo lectura",
+  /CREATE OR REPLACE FUNCTION public\.owns_beneficiary\(b_id uuid\)[\s\S]*?WHERE id = b_id AND profile_id = auth\.uid\(\)/.test(migration042) &&
+  /ALTER TABLE public\.beneficiaries ALTER COLUMN profile_id SET NOT NULL/.test(migration042) &&
+  /DROP TRIGGER IF EXISTS trg_dependents_create_beneficiary ON public\.dependents/.test(migration042) &&
+  /CREATE POLICY "dependents_admin_read" ON public\.dependents\s+FOR SELECT USING \(public\.is_admin\(\)\)/.test(migration042) &&
+  !/DROP TABLE/.test(migration042) &&
+  !/DROP COLUMN/.test(migration042));
+ok("AJ: 042 deshabilita migrar/revertir con mensaje y 043 es seed v1.13.0",
+  /El sistema de cargas fue retirado: ya no hay cargas que migrar/.test(migration042) &&
+  /las migraciones ya no se pueden revertir/.test(migration042) &&
+  /'v1\.13\.0'/.test(migration043) && /ON CONFLICT \(version\) DO NOTHING/.test(migration043));
+ok("AJ: el espejo refleja 042/043",
+  /CREATE POLICY "dependents_admin_read" ON public\.dependents/.test(schemaAj) &&
+  /ALTER TABLE public\.beneficiaries ALTER COLUMN profile_id SET NOT NULL/.test(schemaAj) &&
+  (schemaAj.match(/'v1\.13\.0'/g) || []).length === 1);
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

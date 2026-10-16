@@ -43,10 +43,6 @@ export default function MembershipCard({
   const daysLeft = daysRemaining(membership.end_date, today);
   const isExpired = effectiveStatus === "vencida";
   const isWarning = effectiveStatus === "activa" && daysLeft <= 7;
-  const beneficiaryName = membership.beneficiary?.dependent
-    ? membership.beneficiary.dependent.full_name
-    : null;
-
   const [tokenInfo, setTokenInfo] = useState<TokenInfo | null>(null);
   const [pendingDebts, setPendingDebts] = useState<PendingDebt[]>([]);
   const [availablePersonalized, setAvailablePersonalized] = useState<number | null>(null);
@@ -134,14 +130,6 @@ export default function MembershipCard({
             <h3 className="font-[family-name:var(--font-headline-md)] text-[17px] md:text-[18px] text-on-surface uppercase">
               {membership.plan?.name || "Plan"}
             </h3>
-            {beneficiaryName && (
-              <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant mt-0.5">
-                {beneficiaryName}
-                {membership.beneficiary?.dependent?.category === "nino" ||
-                  membership.beneficiary?.dependent?.category === "juvenil"
-                    ? " (carga)" : ""}
-              </p>
-            )}
           </div>
         </div>
         <StatusBadge status={effectiveStatus} />

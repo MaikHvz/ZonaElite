@@ -2,22 +2,29 @@
 
 import { useEffect, useRef, useCallback } from "react";
 
+// Ficha de solo lectura de un alumno (una cuenta por alumno). Para menores
+// muestra los datos del apoderado (profiles.guardian_*).
+export interface StudentFicha {
+  full_name: string;
+  category: string;
+  rut?: string | null;
+  address?: string | null;
+  birth_date?: string | null;
+  weight?: number | null;
+  height?: number | null;
+  dominant_hand?: string | null;
+  guardian_name?: string | null;
+  guardian_phone?: string | null;
+  guardian_email?: string | null;
+}
+
 interface VerFichaModalProps {
   open: boolean;
   onClose: () => void;
-  dependent: {
-    full_name: string;
-    category: string;
-    rut?: string | null;
-    address?: string | null;
-    birth_date?: string | null;
-    weight?: number | null;
-    height?: number | null;
-    dominant_hand?: string | null;
-  } | null;
+  student: StudentFicha | null;
 }
 
-export default function VerFichaModal({ open, onClose, dependent }: VerFichaModalProps) {
+export default function VerFichaModal({ open, onClose, student: dependent }: VerFichaModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   const handleEsc = useCallback((e: KeyboardEvent) => {
@@ -40,7 +47,7 @@ export default function VerFichaModal({ open, onClose, dependent }: VerFichaModa
   const rows: { label: string; value: string }[] = [
     { label: "Nombre", value: dependent.full_name },
     {
-      label: "Tipo",
+      label: "Categoría",
       value: dependent.category === "nino" ? "Niño" : dependent.category === "juvenil" ? "Juvenil" : "Adulto",
     },
     {
@@ -73,6 +80,13 @@ export default function VerFichaModal({ open, onClose, dependent }: VerFichaModa
             : "—",
     },
   ];
+  if (dependent.guardian_name || dependent.guardian_phone || dependent.guardian_email) {
+    rows.push(
+      { label: "Apoderado", value: dependent.guardian_name || "—" },
+      { label: "Teléfono apoderado", value: dependent.guardian_phone || "—" },
+      { label: "Correo apoderado", value: dependent.guardian_email || "—" },
+    );
+  }
 
   return (
     <div
@@ -97,14 +111,14 @@ export default function VerFichaModal({ open, onClose, dependent }: VerFichaModa
         <div className="p-6">
           <div className="flex items-center gap-3 mb-5">
             <div className="w-11 h-11 rounded-full btn-primary-gradient flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-white text-[20px]">child_care</span>
+              <span className="material-symbols-outlined text-white text-[20px]">person</span>
             </div>
             <div className="min-w-0">
               <p className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase truncate">
                 {dependent.full_name}
               </p>
               <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
-                Carga de alumno
+                Ficha del alumno
               </p>
             </div>
           </div>

@@ -145,53 +145,6 @@ export default function MembresiasPage() {
         };
       }
 
-      // ── Dependents inscriptions ───────────────────────────────────
-      const { data: deps } = await supabase
-        .from("dependents")
-        .select("id, full_name, beneficiaries(id)")
-        .eq("tutor_id", user.id);
-
-      if (deps && deps.length > 0) {
-        const depBenIds = (deps as Array<{ id: string; full_name: string; beneficiaries: unknown }>)
-          .map((d) => {
-            const b = d.beneficiaries;
-            if (!b) return null;
-            return Array.isArray(b) ? (b[0] as { id: string })?.id : (b as { id: string }).id;
-          })
-          .filter(Boolean) as string[];
-
-        if (depBenIds.length > 0) {
-          const { data: depEnrolls } = await supabase
-            .from("academy_enrollments")
-            .select("beneficiary_id, end_date, enrollment_plans(name)")
-            .in("beneficiary_id", depBenIds)
-            .eq("status", "activa")
-            .gte("end_date", today);
-
-          const enrollMap = new Map(
-            (depEnrolls || []).map((e: { beneficiary_id: string; end_date: string; enrollment_plans: unknown }) => [
-              e.beneficiary_id,
-              {
-                planName: (Array.isArray(e.enrollment_plans) ? e.enrollment_plans[0] : e.enrollment_plans) as { name: string } | null,
-                endDate: e.end_date,
-              },
-            ])
-          );
-
-          for (const dep of deps as Array<{ id: string; full_name: string; beneficiaries: unknown }>) {
-            const b = dep.beneficiaries;
-            const benId = Array.isArray(b) ? (b[0] as { id: string })?.id : (b as { id: string } | null)?.id;
-            if (!benId) continue;
-            const enroll = enrollMap.get(benId);
-            newInscriptionMap[benId] = {
-              hasActive: !!enroll,
-              planName: enroll?.planName?.name || null,
-              endDate: enroll?.endDate || null,
-            };
-          }
-        }
-      }
-
       setInscriptionMap(newInscriptionMap);
 
       // ── Enrollment plans for checkout ─────────────────────────────

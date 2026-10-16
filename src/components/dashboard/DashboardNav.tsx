@@ -10,14 +10,14 @@ const tabs = [
   { label: "Membresías", href: "/dashboard/membresias", icon: "card_membership" },
   { label: "Pagos", href: "/dashboard/pagos", icon: "payments" },
   { label: "Mi Tienda", href: "/dashboard/tienda", icon: "storefront" },
-  { label: "Cargas", href: "/dashboard/cargas", icon: "group" },
+  { label: "Mi ficha", href: "/dashboard/ficha", icon: "medical_information" },
   { label: "Asistencia", href: "/dashboard/asistencia", icon: "fact_check" },
   { label: "Alertas", href: "/dashboard/notificaciones", icon: "notifications" },
   { label: "Reglamento", href: "/dashboard/reglamento", icon: "rule" },
 ];
 
 // Tabs to show directly in mobile bottom nav (max 5 for good touch targets)
-const MOBILE_PRIMARY_TABS = ["/dashboard", "/dashboard/membresias", "/dashboard/pagos", "/dashboard/cargas", "/dashboard/asistencia"];
+const MOBILE_PRIMARY_TABS = ["/dashboard", "/dashboard/membresias", "/dashboard/pagos", "/dashboard/ficha", "/dashboard/asistencia"];
 
 export default function DashboardNav() {
   const pathname = usePathname();

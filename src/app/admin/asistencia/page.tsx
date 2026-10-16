@@ -14,6 +14,7 @@ import {
   type AttendanceBeneficiary,
 } from "@/lib/supabase/dashboard";
 import { exportProfessionalExcel, type ProfessionalSheetConfig } from "@/lib/excel";
+import { categoryFromBirth } from "@/lib/category";
 
 const DAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -577,18 +578,13 @@ export default function AdminAsistenciaPage() {
     if (query.length < 2) { setSearchResults([]); return; }
     setSearching(true);
 
-    const [profilesRes, depsRes] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("id, full_name")
-        .ilike("full_name", `%${query}%`)
-        .limit(10),
-      supabase
-        .from("dependents")
-        .select("id, full_name, category, tutor_id")
-        .ilike("full_name", `%${query}%`)
-        .limit(10),
-    ]);
+    // Una cuenta por alumno: se inscribe la cuenta del alumno. Una carga aún
+    // sin migrar se migra primero en /admin/migracion-cargas.
+    const profilesRes = await supabase
+      .from("profiles")
+      .select("id, full_name, birth_date")
+      .ilike("full_name", `%${query}%`)
+      .limit(10);
 
     const results: EnrollableBeneficiary[] = [];
 
@@ -605,29 +601,7 @@ export default function AdminAsistenciaPage() {
       results.push({
         id: p.id,
         full_name: p.full_name,
-        category: "adulto",
-        beneficiary_id: ben.id,
-        ...eligibility,
-      });
-    }
-
-    for (const d of depsRes.data || []) {
-      const { data: ben } = await supabase
-        .from("beneficiaries")
-        .select("id")
-        .eq("dependent_id", d.id)
-        .maybeSingle();
-
-      if (!ben) continue;
-
-      const alreadyFound = results.some((r) => r.beneficiary_id === ben.id);
-      if (alreadyFound) continue;
-
-      const eligibility = await getEligibility(ben.id);
-      results.push({
-        id: d.tutor_id,
-        full_name: d.full_name,
-        category: d.category,
+        category: categoryFromBirth((p as { birth_date?: string | null }).birth_date),
         beneficiary_id: ben.id,
         ...eligibility,
       });

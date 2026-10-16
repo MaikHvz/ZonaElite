@@ -37,7 +37,7 @@ export const GUIDE_TOURS: Record<string, GuideTourDef> = {
         targetSelector: "[data-guide='membresias-resumen']",
         title: "Resumen de cobertura",
         description:
-          "Aquí ves un resumen de todos tus beneficiarios (tú y tus cargas) con su estado de inscripción y membresía. Verde = cobertura completa, amarillo = parcial.",
+          "Aquí ves el estado de tu inscripción a la academia y de tu membresía. Verde = cobertura completa, amarillo = parcial.",
         icon: "monitoring",
         position: "bottom",
       },
@@ -132,42 +132,42 @@ export const GUIDE_TOURS: Record<string, GuideTourDef> = {
     ],
   },
 
-  cargas: {
-    id: "cargas",
-    pageTitle: "Cargas / Dependientes",
-    icon: "group",
+  ficha: {
+    id: "ficha",
+    pageTitle: "Mi ficha",
+    icon: "medical_information",
     steps: [
       {
-        targetSelector: "[data-guide='cargas-header']",
-        title: "¿Qué son las cargas?",
+        targetSelector: "[data-guide='ficha-header']",
+        title: "Tu ficha de alumno",
         description:
-          "Las cargas son tus familiares o dependientes (hijos, pareja). Al agregarlos, puedes comprar membresías e inscripciones para ellos y agendar sus clases.",
-        icon: "family_restroom",
-        position: "bottom",
-      },
-      {
-        targetSelector: "[data-guide='cargas-agregar']",
-        title: "Cada alumno con su cuenta",
-        description:
-          "Ya no se agregan cargas nuevas: cada alumno (también los niños) tiene su propia cuenta con su correo. Tus cargas actuales se trasladarán a la cuenta de cada uno con todo su historial.",
-        icon: "person_add",
-        position: "bottom",
-      },
-      {
-        targetSelector: "[data-guide='cargas-card']",
-        title: "Ficha de la carga",
-        description:
-          "Cada tarjeta muestra los datos de tu carga: nombre, categoría, RUT, dirección, datos físicos y perfil deportivo (cinturón y podios). Puedes editar los datos con el botón ✏️.",
+          "Cada alumno (también los niños) tiene su propia cuenta. Aquí están tus datos deportivos, médicos y de emergencia. Si eres apoderado, entra con la cuenta de tu hijo para ver su ficha.",
         icon: "badge",
         position: "bottom",
       },
       {
-        targetSelector: "[data-guide='cargas-tutor-sport']",
+        targetSelector: "[data-guide='ficha-sport']",
         title: "Tu perfil deportivo",
         description:
-          "Aquí se muestra tu propio perfil deportivo como titular: disciplina, grado (cinturón) e historial de podios. Estos datos los gestiona el administrador de la academia.",
+          "Disciplina, grado (cinturón) e historial de podios. Estos datos los gestiona el administrador de la academia.",
         icon: "sports_martial_arts",
         position: "bottom",
+      },
+      {
+        targetSelector: "[data-guide='ficha-medica']",
+        title: "Ficha médica",
+        description:
+          "Enfermedades, lesiones, medicamentos y alergias. Mantenla al día: la academia la consulta ante cualquier emergencia.",
+        icon: "medical_services",
+        position: "top",
+      },
+      {
+        targetSelector: "[data-guide='ficha-emergencia']",
+        title: "Contacto de emergencia",
+        description:
+          "A quién llamar si pasa algo durante una clase. Para los menores, normalmente el apoderado.",
+        icon: "emergency",
+        position: "top",
       },
     ],
   },
@@ -237,7 +237,7 @@ export const GUIDE_TOURS: Record<string, GuideTourDef> = {
         targetSelector: "[data-guide='landing-inscripcion']",
         title: "Inscripción Anual (Matrícula)",
         description:
-          "Es la matrícula de la academia. Es obligatoria para ti y tus cargas familiares antes o durante la compra de membresías.",
+          "Es la matrícula de la academia. Es obligatoria antes o durante la compra de membresías.",
         icon: "card_membership",
         position: "bottom",
       },

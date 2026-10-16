@@ -137,16 +137,13 @@ export default function CheckoutModal({
 
     (async () => {
       try {
-        const [ownBenRes, depsRes, enrollPlansRes] = await Promise.all([
+        // Una cuenta por alumno: se compra solo para el propio beneficiario.
+        const [ownBenRes, enrollPlansRes] = await Promise.all([
         supabase
           .from("beneficiaries")
           .select("id, profile_id, dependent_id")
           .eq("profile_id", user.id)
           .single(),
-        supabase
-          .from("dependents")
-          .select("id, full_name, category")
-          .eq("tutor_id", user.id),
         supabase
           .from("enrollment_plans")
           .select("id, name, price, duration_days")
@@ -202,50 +199,6 @@ export default function CheckoutModal({
           activeMembershipName: memResult?.membership_plans?.name || null,
           activeMembershipEndDate: memResult?.end_date || null,
         });
-      }
-
-      if (depsRes.data && depsRes.data.length > 0) {
-        const depIds = depsRes.data.map((d) => d.id);
-        const { data: depBeneficiaries } = await supabase
-          .from("beneficiaries")
-          .select("id, profile_id, dependent_id")
-          .in("dependent_id", depIds);
-
-        for (const dep of depsRes.data) {
-          const ben = depBeneficiaries?.find(
-            (b) => b.dependent_id === dep.id
-          );
-          if (ben) {
-            const [enrollResult, memResult] = await Promise.all([
-              supabase
-                .from("academy_enrollments")
-                .select("end_date, enrollment_plans(name)")
-                .eq("beneficiary_id", ben.id)
-                .eq("status", "activa")
-                .gte("end_date", today)
-                .maybeSingle(),
-              fetchMembership(ben.id),
-            ]);
-
-            const enroll = enrollResult.data;
-            const hasActiveEnrollment = !!enroll;
-            const e = enroll as { end_date: string; enrollment_plans?: { name: string } } | null;
-
-            list.push({
-              id: ben.id,
-              profile_id: ben.profile_id,
-              dependent_id: ben.dependent_id,
-              label: dep.full_name,
-              sublabel: `Carga · ${dep.category === "nino" ? "Niño" : dep.category === "juvenil" ? "Juvenil" : "Adulto"}`,
-              hasActiveEnrollment,
-              enrollmentEndDate: hasActiveEnrollment ? e?.end_date || null : null,
-              enrollmentPlanName: hasActiveEnrollment ? e?.enrollment_plans?.name || null : null,
-              hasActiveMembership: !!memResult,
-              activeMembershipName: memResult?.membership_plans?.name || null,
-              activeMembershipEndDate: memResult?.end_date || null,
-            });
-          }
-        }
       }
 
       setBeneficiaries(list);

@@ -62,15 +62,14 @@ export async function POST(req: Request) {
   }> = [];
 
   for (const bId of beneficiary_ids) {
+    // Una cuenta por alumno: solo el propio beneficiario hace check-in.
     const { data: benCheck } = await admin
       .from("beneficiaries")
-      .select("id, profile_id, dependent:dependents(tutor_id)")
+      .select("id, profile_id")
       .eq("id", bId)
       .maybeSingle();
 
-    const isOwner =
-      benCheck?.profile_id === user.id ||
-      (benCheck?.dependent as unknown as { tutor_id: string })?.tutor_id === user.id;
+    const isOwner = benCheck?.profile_id === user.id;
 
     if (!isOwner) {
       results.push({
@@ -86,14 +85,11 @@ export async function POST(req: Request) {
 
     const { data: bInfo } = await admin
       .from("beneficiaries")
-      .select("id, profile:profiles(full_name), dependent:dependents(full_name)")
+      .select("id, profile:profiles(full_name)")
       .eq("id", bId)
       .single();
 
-    const bName =
-      (bInfo?.dependent as unknown as { full_name: string })?.full_name ||
-      (bInfo?.profile as unknown as { full_name: string })?.full_name ||
-      "Alumno";
+    const bName = (bInfo?.profile as unknown as { full_name: string })?.full_name || "Alumno";
 
     const { data: existingEnrollment } = await admin
       .from("class_enrollments")

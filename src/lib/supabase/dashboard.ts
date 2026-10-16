@@ -42,46 +42,12 @@ export interface MembershipData {
   beneficiary: {
     id: string;
     profile_id: string | null;
-    dependent_id: string | null;
-    dependent: {
-      full_name: string;
-      category: string;
-    } | null;
   } | null;
-}
-
-export interface DependentData {
-  id: string;
-  tutor_id: string;
-  full_name: string;
-  rut: string | null;
-  birth_date: string;
-  category: string;
-  address: string | null;
-  weight: number | null;
-  height: number | null;
-  dominant_hand: string | null;
-  beneficiaries: {
-    id: string;
-    memberships: {
-      status: string;
-      end_date: string;
-      plan: { name: string; price: number } | null;
-    }[];
-    academy_enrollments: {
-      status: string;
-      end_date: string;
-      enrollment_plans: { name: string } | null;
-    }[];
-    sport_profiles: SportProfileData[] | null;
-    sports_podiums: SportPodiumData[] | null;
-  }[];
 }
 
 export interface UserSportProfileData {
   id: string;
   profile_id: string | null;
-  dependent_id: string | null;
   sport_profiles: SportProfileData[] | null;
   sports_podiums: SportPodiumData[] | null;
 }
@@ -154,7 +120,7 @@ export interface DashboardSummary {
   activeMemberships: MembershipData[];
   allMemberships: MembershipData[];
   recentPayments: PaymentData[];
-  dependentsCount: number;
+  attendanceThisMonth: number;
   paidThisMonth: number;
 }
 
@@ -162,32 +128,15 @@ export async function getUserMemberships(userId: string) {
   return safeQuery(async () => {
     const supabase = createClient();
 
-    const [ownBeneficiary, dependentsWithBeneficiary] = await Promise.all([
-      supabase
-        .from("beneficiaries")
-        .select("id")
-        .eq("profile_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("dependents")
-        .select("id, full_name, birth_date, category, address, beneficiaries(id)")
-        .eq("tutor_id", userId),
-    ]);
+    // Una cuenta por alumno: solo las membresías del propio beneficiario.
+    const { data: ownBeneficiary } = await supabase
+      .from("beneficiaries")
+      .select("id")
+      .eq("profile_id", userId)
+      .maybeSingle();
 
-    const beneficiaryIds = [
-      ownBeneficiary.data?.id,
-      ...(dependentsWithBeneficiary.data || []).map((d) => {
-        const b = d.beneficiaries as unknown as { id: string }[] | { id: string } | null;
-        if (!b) return undefined;
-        return Array.isArray(b) ? b[0]?.id : b.id;
-      }),
-    ].filter(Boolean) as string[];
-
-    if (beneficiaryIds.length === 0) {
-      return {
-        memberships: [] as MembershipData[],
-        dependents: (dependentsWithBeneficiary.data || []) as DependentData[],
-      };
+    if (!ownBeneficiary) {
+      return { memberships: [] as MembershipData[] };
     }
 
     const { data: memberships } = await supabase
@@ -196,21 +145,13 @@ export async function getUserMemberships(userId: string) {
         `
         *,
         plan:membership_plans(id, name, price, duration_days, category, benefits, tokens),
-        beneficiary:beneficiaries(
-          id,
-          profile_id,
-          dependent_id,
-          dependent:dependents(full_name, category)
-        )
+        beneficiary:beneficiaries(id, profile_id)
       `
       )
-      .in("beneficiary_id", beneficiaryIds)
+      .eq("beneficiary_id", ownBeneficiary.id)
       .order("created_at", { ascending: false });
 
-    return {
-      memberships: (memberships || []) as MembershipData[],
-      dependents: (dependentsWithBeneficiary.data || []) as DependentData[],
-    };
+    return { memberships: (memberships || []) as MembershipData[] };
   });
 }
 
@@ -268,56 +209,6 @@ export async function getUserTransferRequests(userId: string) {
   });
 }
 
-export async function getUserDependents(userId: string) {
-  return safeQuery(async () => {
-    const supabase = createClient();
-
-    const { data } = await supabase
-      .from("dependents")
-      .select(
-        `
-        *,
-        beneficiaries(
-          id,
-          memberships(
-            status,
-            end_date,
-            plan:membership_plans(name, price)
-          ),
-          academy_enrollments(
-            status,
-            end_date,
-            enrollment_plans(name)
-          ),
-          sport_profiles(
-            id,
-            beneficiary_id,
-            discipline_id,
-            grade_id,
-            disciplines(id, name, color_hex),
-            belt_grades(id, name, color, position)
-          ),
-          sports_podiums(
-            id,
-            beneficiary_id,
-            tournament,
-            event_date,
-            discipline_id,
-            category,
-            position,
-            description,
-            image_url
-          )
-        )
-      `
-      )
-      .eq("tutor_id", userId)
-      .order("full_name");
-
-    return (data || []) as DependentData[];
-  });
-}
-
 export async function getUserSportProfile(userId: string) {
   return safeQuery(async () => {
     const supabase = createClient();
@@ -328,7 +219,6 @@ export async function getUserSportProfile(userId: string) {
         `
         id,
         profile_id,
-        dependent_id,
         sport_profiles(
           id,
           beneficiary_id,
@@ -357,44 +247,6 @@ export async function getUserSportProfile(userId: string) {
   });
 }
 
-export async function getDependentSportProfile(dependentId: string) {
-  return safeQuery(async () => {
-    const supabase = createClient();
-
-    const { data } = await supabase
-      .from("beneficiaries")
-      .select(
-        `
-        id,
-        profile_id,
-        dependent_id,
-        sport_profiles(
-          id,
-          beneficiary_id,
-          discipline_id,
-          grade_id,
-          disciplines(id, name, color_hex),
-          belt_grades(id, name, color, position)
-        ),
-        sports_podiums(
-          id,
-          beneficiary_id,
-          tournament,
-          event_date,
-          discipline_id,
-          category,
-          position,
-          description,
-          image_url
-        )
-      `
-      )
-      .eq("dependent_id", dependentId)
-      .maybeSingle();
-
-    return (data || null) as UserSportProfileData | null;
-  });
-}
 
 export async function getUserNotifications(page = 0, pageSize = 20) {
   return safeQuery(async () => {
@@ -432,7 +284,13 @@ export async function getDashboardSummary(userId: string) {
 
     const firstOfMonth = chileDateToUtc(chileMonthStartDate());
 
-    const [membershipsRes, paymentsRes, dependentsRes, thisMonthRes] =
+    const { data: ownBeneficiary } = await supabase
+      .from("beneficiaries")
+      .select("id")
+      .eq("profile_id", userId)
+      .maybeSingle();
+
+    const [membershipsRes, paymentsRes, attendanceRes, thisMonthRes] =
       await Promise.all([
         getUserMemberships(userId),
         supabase
@@ -443,10 +301,13 @@ export async function getDashboardSummary(userId: string) {
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
           .limit(3),
+        // Asistencias del mes (reemplaza el contador de cargas).
         supabase
-          .from("dependents")
+          .from("attendance")
           .select("id", { count: "exact", head: true })
-          .eq("tutor_id", userId),
+          .eq("beneficiary_id", ownBeneficiary?.id ?? "00000000-0000-0000-0000-000000000000")
+          .eq("status", "presente")
+          .gte("marked_at", firstOfMonth),
         supabase
           .from("payments")
           .select("amount")
@@ -471,7 +332,7 @@ export async function getDashboardSummary(userId: string) {
       activeMemberships,
       allMemberships,
       recentPayments: (paymentsRes.data || []) as PaymentData[],
-      dependentsCount: dependentsRes.count || 0,
+      attendanceThisMonth: attendanceRes.count || 0,
       paidThisMonth,
     } as DashboardSummary;
   });
@@ -1068,26 +929,16 @@ export async function getUserAttendanceStats(userId: string) {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
 
-    const [ownBeneficiary, dependentsWithBeneficiary] = await Promise.all([
-      supabase
-        .from("beneficiaries")
-        .select("id")
-        .eq("profile_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("dependents")
-        .select("id, full_name, beneficiaries(id)")
-        .eq("tutor_id", userId),
-    ]);
+    // Una cuenta por alumno: solo el propio beneficiario.
+    const ownBeneficiary = await supabase
+      .from("beneficiaries")
+      .select("id")
+      .eq("profile_id", userId)
+      .maybeSingle();
 
     const beneficiaryIds: { id: string; name: string }[] = [];
     if (ownBeneficiary.data) {
       beneficiaryIds.push({ id: ownBeneficiary.data.id, name: "Yo" });
-    }
-    for (const d of dependentsWithBeneficiary.data || []) {
-      const bRaw = d.beneficiaries as unknown as { id: string }[] | { id: string } | null;
-      const bId = Array.isArray(bRaw) ? bRaw[0]?.id : bRaw?.id;
-      if (bId) beneficiaryIds.push({ id: bId, name: d.full_name });
     }
 
     if (beneficiaryIds.length === 0) {
@@ -1162,17 +1013,12 @@ export async function getUserAttendance(userId: string, limit = 50) {
   return safeQuery(async () => {
     const supabase = createClient();
 
-    const [ownBeneficiary, dependentsWithBeneficiary] = await Promise.all([
-      supabase
-        .from("beneficiaries")
-        .select("id, profile:profiles(full_name)")
-        .eq("profile_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("dependents")
-        .select("full_name, beneficiaries(id)")
-        .eq("tutor_id", userId),
-    ]);
+    // Una cuenta por alumno: solo el propio beneficiario.
+    const ownBeneficiary = await supabase
+      .from("beneficiaries")
+      .select("id, profile:profiles(full_name)")
+      .eq("profile_id", userId)
+      .maybeSingle();
 
     const beneficiaryIds: { id: string; name: string }[] = [];
 
@@ -1182,14 +1028,6 @@ export async function getUserAttendance(userId: string, limit = 50) {
         id: ownBeneficiary.data.id,
         name: p?.full_name || "Yo",
       });
-    }
-
-    for (const d of dependentsWithBeneficiary.data || []) {
-      const bRaw = d.beneficiaries as unknown as { id: string }[] | { id: string } | null;
-      const bId = Array.isArray(bRaw) ? bRaw[0]?.id : bRaw?.id;
-      if (bId) {
-        beneficiaryIds.push({ id: bId, name: d.full_name });
-      }
     }
 
     if (beneficiaryIds.length === 0) {
@@ -1333,30 +1171,17 @@ export async function getBeneficiaryTokens(
   const supabase = createClient();
   const tokenMap = new Map<string, TokenInfo>();
 
-  const [ownBeneficiary, dependentsWithBeneficiary] = await Promise.all([
-    supabase
-      .from("beneficiaries")
-      .select("id")
-      .eq("profile_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("dependents")
-      .select("id, beneficiaries(id)")
-      .eq("tutor_id", userId),
-  ]);
+  // Una cuenta por alumno: solo el propio beneficiario.
+  const ownBeneficiary = await supabase
+    .from("beneficiaries")
+    .select("id")
+    .eq("profile_id", userId)
+    .maybeSingle();
 
   const beneficiaryIds: string[] = [];
 
   if (ownBeneficiary.data?.id) {
     beneficiaryIds.push(ownBeneficiary.data.id);
-  }
-
-  for (const d of dependentsWithBeneficiary.data || []) {
-    const bRaw = d.beneficiaries as unknown as { id: string }[] | { id: string } | null;
-    const bId = Array.isArray(bRaw) ? bRaw[0]?.id : bRaw?.id;
-    if (bId) {
-      beneficiaryIds.push(bId);
-    }
   }
 
   if (beneficiaryIds.length === 0) {
@@ -1420,8 +1245,6 @@ export interface PersonalizedPackData {
   beneficiary: {
     id: string;
     profile_id: string | null;
-    dependent_id: string | null;
-    dependent: { full_name: string; category: string } | null;
   } | null;
 }
 
@@ -1448,17 +1271,12 @@ export async function getUserPersonalizedData(userId: string) {
   return safeQuery(async () => {
     const supabase = createClient();
 
-    const [ownBeneficiary, dependentsWithBeneficiary] = await Promise.all([
-      supabase
-        .from("beneficiaries")
-        .select("id")
-        .eq("profile_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("dependents")
-        .select("id, full_name, beneficiaries(id)")
-        .eq("tutor_id", userId),
-    ]);
+    // Una cuenta por alumno: solo el propio beneficiario.
+    const ownBeneficiary = await supabase
+      .from("beneficiaries")
+      .select("id")
+      .eq("profile_id", userId)
+      .maybeSingle();
 
     const beneficiaryEntries: { id: string; name: string; isSelf: boolean }[] = [];
     if (ownBeneficiary.data) {
@@ -1474,14 +1292,6 @@ export async function getUserPersonalizedData(userId: string) {
       });
     }
 
-    for (const d of dependentsWithBeneficiary.data || []) {
-      const bRaw = d.beneficiaries as unknown as { id: string }[] | { id: string } | null;
-      const bId = Array.isArray(bRaw) ? bRaw[0]?.id : bRaw?.id;
-      if (bId) {
-        beneficiaryEntries.push({ id: bId, name: d.full_name, isSelf: false });
-      }
-    }
-
     const packsByBeneficiary = new Map<string, PersonalizedPackData[]>();
     if (beneficiaryEntries.length > 0) {
       const { data: packs } = await supabase
@@ -1490,10 +1300,7 @@ export async function getUserPersonalizedData(userId: string) {
           `
           *,
           plan:personalized_plans(id, name, price, total_classes, validity_days, features),
-          beneficiary:beneficiaries(
-            id, profile_id, dependent_id,
-            dependent:dependents(full_name, category)
-          )
+          beneficiary:beneficiaries(id, profile_id)
         `
         )
         .in(

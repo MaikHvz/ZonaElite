@@ -143,32 +143,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "El comprobante supera 5MB o está vacío" }, { status: 400 });
     }
 
-    // Validar beneficiario (mismo patrón que create-order)
+    // Validar beneficiario (mismo patrón que create-order): una cuenta por
+    // alumno, solo se compra para el propio beneficiario.
     const { data: beneficiary, error: benError } = await supabase
       .from("beneficiaries")
-      .select("id, profile_id, dependent_id")
+      .select("id, profile_id")
       .eq("id", beneficiaryId)
       .single();
 
-    if (benError || !beneficiary) {
-      return NextResponse.json({ error: "Beneficiario no válido" }, { status: 400 });
-    }
-
-    if (beneficiary.profile_id) {
-      if (beneficiary.profile_id !== user.id) {
-        return NextResponse.json({ error: "Beneficiario no válido" }, { status: 400 });
-      }
-    } else if (beneficiary.dependent_id) {
-      const { data: dependent } = await supabase
-        .from("dependents")
-        .select("id")
-        .eq("id", beneficiary.dependent_id)
-        .eq("tutor_id", user.id)
-        .single();
-      if (!dependent) {
-        return NextResponse.json({ error: "Beneficiario no válido" }, { status: 400 });
-      }
-    } else {
+    if (benError || !beneficiary || beneficiary.profile_id !== user.id) {
       return NextResponse.json({ error: "Beneficiario no válido" }, { status: 400 });
     }
 
