@@ -28,7 +28,7 @@ const sidebarLinks = [
 export default function AdminSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const { count: pendingCount } = usePendingTransferCount();
+  const { count: pendingCount, renewalCount } = usePendingTransferCount();
 
   // Close sidebar on Escape key
   useEffect(() => {
@@ -114,6 +114,16 @@ export default function AdminSidebar({ open, onClose }: { open: boolean; onClose
                     title={`${pendingCount} ${pendingCount === 1 ? "solicitud pendiente" : "solicitudes pendientes"}`}
                   >
                     {pendingCount > 99 ? "99+" : pendingCount}
+                  </span>
+                )}
+                {link.href === "/admin/membresias" && renewalCount > 0 && (
+                  <span
+                    className={`ml-auto flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-amber-500 text-white font-[family-name:var(--font-label-sm)] text-[11px] font-bold ${
+                      collapsed ? "md:hidden" : ""
+                    }`}
+                    title={`${renewalCount} ${renewalCount === 1 ? "solicitud de renovación" : "solicitudes de renovación"}`}
+                  >
+                    {renewalCount > 99 ? "99+" : renewalCount}
                   </span>
                 )}
               </Link>

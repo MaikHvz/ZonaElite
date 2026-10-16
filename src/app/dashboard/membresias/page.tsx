@@ -17,6 +17,7 @@ import MembershipCard from "@/components/dashboard/MembershipCard";
 import BeneficiaryCard, { type InscriptionInfo } from "@/components/dashboard/BeneficiaryCard";
 import { MembershipCardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import CheckoutModal from "@/components/CheckoutModal";
+import RenewalRequestButton from "@/components/dashboard/RenewalRequestButton";
 import PersonalizedCheckoutModal from "@/components/PersonalizedCheckoutModal";
 import PersonalizedEnrollModal from "@/components/PersonalizedEnrollModal";
 import type { EnrollmentPlan } from "@/components/CheckoutModal";
@@ -208,6 +209,9 @@ export default function MembresiasPage() {
         </h1>
         <GuideHelpButton tourId="membresias" pill />
       </div>
+
+      {/* Solicitud de renovación (v1.14.0): solo aparece con la membresía vencida. */}
+      <RenewalRequestButton />
 
       {/* ── BENEFICIARY CARDS GRID ────────────────────────────────────────── */}
       {loading ? (

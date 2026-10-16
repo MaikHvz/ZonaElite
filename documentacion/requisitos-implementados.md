@@ -369,3 +369,11 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **BD (`042_retire_dependents.sql`)**: retiro suave con seguro (aborta si quedan cargas): `owns_beneficiary` por perfil, `profile_id NOT NULL`, sin trigger de cargas, `dependents` vacía de solo lectura, migrar/revertir deshabilitados. **Pendiente de aplicar** hasta migrar las 12 cargas.
 - **Changelog**: entrada **v1.13.0** (`contexto/migrations/043_changelog_v1_13_0.sql`), aplicar junto con la 042.
 - **Verificación**: suite sección **AJ** (12 asserts). Se reemplazaron las aserciones de los componentes eliminados (secciones U, V, W, Y, Z, AB, AE, AI) por las del comportamiento nuevo; el conteo de seeds pasó de 17 a 18. `npx tsc --noEmit` limpio; lint sin errores nuevos (comparado contra el código anterior).
+
+## 36. Ficha Rápida del Alumno + Renovación de Membresías (2026-10-16)
+**Requisito**: el cliente pidió un botón fácil para renovar membresías vencidas (los alumnos no entran a pagar). El usuario pidió además que el admin vea un popup con el perfil y la membresía activa al hacer clic en un nombre, y que el alumno pueda solicitar la renovación; si el admin renueva sin aceptar la solicitud, esta se aprueba sola.
+- **Requisito + análisis de impacto**: `contexto/requisitos/ficha-usuario-y-renovacion.md`.
+- **BD (`044_membership_renewal_requests.sql`)**: tabla `membership_renewal_requests` + RPC `request_membership_renewal`, `cancel_membership_renewal` y `reject_membership_renewal` + trigger de auto-aceptación `trg_memberships_resolve_renewals` (`AFTER INSERT ON memberships`).
+- **Código**: `src/components/admin/UserQuickView.tsx` (provider + `UserNameButton`, en 7 pantallas admin), `AssignMembershipModal` con `prefill`, `/admin/membresias` (Renovar, bloque de solicitudes, rechazo, `?tab=membresias`), `PendingTransferProvider` + `AdminSidebar` (contador), `src/components/dashboard/RenewalRequestButton.tsx` (resumen + Membresías), `POST /api/memberships/renewal-request`, `sendRenewalRequestEmail` (con `escapeHtml`).
+- **Changelog**: entrada **v1.14.0** (`contexto/migrations/045_changelog_v1_14_0.sql`).
+- **Verificación**: suite sección **AK** (12 asserts); conteo de seeds 18 → 19; `npx tsc --noEmit` limpio; lint sin errores nuevos.

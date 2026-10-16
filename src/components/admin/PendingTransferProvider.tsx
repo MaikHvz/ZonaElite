@@ -7,12 +7,15 @@ const POLL_INTERVAL_MS = 30_000;
 
 interface PendingTransferContextValue {
   count: number;
+  /** Solicitudes de renovación de membresía pendientes (v1.14.0). */
+  renewalCount: number;
   loading: boolean;
   refresh: () => void;
 }
 
 const PendingTransferContext = createContext<PendingTransferContextValue>({
   count: 0,
+  renewalCount: 0,
   loading: true,
   refresh: () => {},
 });
@@ -35,14 +38,26 @@ export async function fetchPendingTransferCount(): Promise<number> {
   return count || 0;
 }
 
+export async function fetchPendingRenewalCount(): Promise<number> {
+  const supabase = createClient();
+  const { count, error } = await supabase
+    .from("membership_renewal_requests")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "pendiente");
+  if (error) return 0;
+  return count || 0;
+}
+
 export default function PendingTransferProvider({ children }: { children: React.ReactNode }) {
   const [count, setCount] = useState(0);
+  const [renewalCount, setRenewalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const refreshRef = useRef<() => void>(() => {});
 
   const refresh = () => {
-    fetchPendingTransferCount().then((n) => {
+    Promise.all([fetchPendingTransferCount(), fetchPendingRenewalCount()]).then(([n, r]) => {
       setCount(n);
+      setRenewalCount(r);
       setLoading(false);
     });
   };
@@ -66,7 +81,7 @@ export default function PendingTransferProvider({ children }: { children: React.
   }, []);
 
   return (
-    <PendingTransferContext.Provider value={{ count, loading, refresh }}>
+    <PendingTransferContext.Provider value={{ count, renewalCount, loading, refresh }}>
       {children}
     </PendingTransferContext.Provider>
   );

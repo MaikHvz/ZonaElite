@@ -6,7 +6,9 @@ import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
 import StatusBadge from "@/components/admin/StatusBadge";
-import AssignMembershipModal from "@/components/admin/AssignMembershipModal";
+import AssignMembershipModal, { type AssignMembershipPrefill } from "@/components/admin/AssignMembershipModal";
+import { UserNameButton, ADMIN_DATA_CHANGED } from "@/components/admin/UserQuickView";
+import { usePendingTransferCount } from "@/components/admin/PendingTransferProvider";
 import AssignPersonalizedModal from "@/components/admin/AssignPersonalizedModal";
 import MembershipReceipt from "@/components/admin/MembershipReceipt";
 import type { ReceiptData } from "@/components/admin/MembershipReceipt";
@@ -16,7 +18,8 @@ import { getRemainingTokens, getEnrollmentDebt, type TokenInfo, type DebtDetail 
 import { getChileToday, addDaysChile } from "@/lib/dates";
 
 interface Plan { id: string; name: string; price: number; duration_days: number; category: string; benefits: string[]; tokens: number | null; active: boolean; featured?: boolean; }
-interface Membership { id: string; beneficiary_id: string; plan_id: string; purchased_by: string; start_date: string; end_date: string; status: string; created_at: string; membership_plans?: { name: string }; profiles?: { full_name: string }; beneficiaries?: { dependents?: { full_name: string; profiles?: { full_name: string } | null } | null; profiles?: { full_name: string } | null }; }
+interface Membership { id: string; beneficiary_id: string; plan_id: string; purchased_by: string; start_date: string; end_date: string; status: string; created_at: string; membership_plans?: { name: string }; profiles?: { full_name: string }; beneficiaries?: { profile_id?: string | null; dependents?: { full_name: string; profiles?: { full_name: string } | null } | null; profiles?: { full_name: string } | null }; }
+interface RenewalRequest { id: string; beneficiary_id: string; plan_id: string; note: string | null; created_at: string; membership_plans?: { name: string } | null; beneficiaries?: { profile_id: string | null; profiles?: { full_name: string; email: string } | null } | null; }
 interface PersonalizedPlan { id: string; name: string; price: number; total_classes: number; validity_days: number; features: string[] | null; active: boolean; created_at: string; }
 interface PersonalizedPack { id: string; beneficiary_id: string; plan_id: string; purchased_by: string; payment_id: string | null; start_date: string; end_date: string; total_classes: number; used_classes: number; status: string; created_at: string; personalized_plans?: { name: string }; profiles?: { full_name: string }; beneficiaries?: { dependents?: { full_name: string; profiles?: { full_name: string } | null } | null; profiles?: { full_name: string } | null }; }
 
@@ -29,7 +32,16 @@ export default function AdminMembresiasPage() {
   const [personalizedPlans, setPersonalizedPlans] = useState<PersonalizedPlan[]>([]);
   const [personalizedPacks, setPersonalizedPacks] = useState<PersonalizedPack[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"planes" | "membresias" | "personalizadas">("planes");
+  // ?tab=membresias (link del correo de solicitud de renovación).
+  const [tab, setTab] = useState<"planes" | "membresias" | "personalizadas">(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "membresias" ? "membresias" : "planes"
+  );
+  const [renewals, setRenewals] = useState<RenewalRequest[]>([]);
+  const [renewPrefill, setRenewPrefill] = useState<AssignMembershipPrefill | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<RenewalRequest | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [rejecting, setRejecting] = useState(false);
+  const { refresh: refreshPendingCounts } = usePendingTransferCount();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Plan | null>(null);
   const [form, setForm] = useState(emptyPlan);
@@ -75,20 +87,47 @@ export default function AdminMembresiasPage() {
 
   const load = async () => {
     const supabase = createClient();
-    const [pRes, mRes, ppRes, pkRes] = await Promise.all([
+    const [pRes, mRes, ppRes, pkRes, rRes] = await Promise.all([
       supabase.from("membership_plans").select("*").order("price"),
-      supabase.from("memberships").select("*, membership_plans(name), profiles:purchased_by(full_name), beneficiaries(dependents(full_name, profiles!tutor_id(full_name)), profiles(full_name))").order("created_at", { ascending: false }),
+      supabase.from("memberships").select("*, membership_plans(name), profiles:purchased_by(full_name), beneficiaries(profile_id, dependents(full_name, profiles!tutor_id(full_name)), profiles(full_name))").order("created_at", { ascending: false }),
       supabase.from("personalized_plans").select("*").order("price"),
       supabase.from("personalized_packs").select("*, personalized_plans(name), beneficiaries(dependents(full_name, profiles!tutor_id(full_name)), profiles(full_name))").order("created_at", { ascending: false }),
+      supabase.from("membership_renewal_requests").select("id, beneficiary_id, plan_id, note, created_at, membership_plans(name), beneficiaries(profile_id, profiles(full_name, email))").eq("status", "pendiente").order("created_at"),
     ]);
     setPlans((pRes.data as Plan[]) || []);
     setMemberships((mRes.data as Membership[]) || []);
     setPersonalizedPlans((ppRes.data as PersonalizedPlan[]) || []);
     setPersonalizedPacks((pkRes.data as PersonalizedPack[]) || []);
+    setRenewals((rRes.data as unknown as RenewalRequest[]) || []);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
+
+  // Recargar si se renueva/asigna desde la ficha rápida del alumno.
+  useEffect(() => {
+    const onChanged = () => { load(); refreshPendingCounts(); };
+    window.addEventListener(ADMIN_DATA_CHANGED, onChanged);
+    return () => window.removeEventListener(ADMIN_DATA_CHANGED, onChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleRejectRenewal = async () => {
+    if (!rejectTarget) return;
+    setRejecting(true);
+    const supabase = createClient();
+    const { error } = await supabase.rpc("reject_membership_renewal", {
+      p_request_id: rejectTarget.id,
+      p_admin_note: rejectNote,
+    });
+    setRejecting(false);
+    if (error) { setToast({ msg: error.message, type: "error" }); return; }
+    setRejectTarget(null);
+    setRejectNote("");
+    setToast({ msg: "Solicitud rechazada. Se avisó al alumno.", type: "success" });
+    await load();
+    refreshPendingCounts();
+  };
 
   const openCreate = () => { setEditing(null); setForm(emptyPlan); setNewBenefit(""); setModalOpen(true); };
   const openEdit = (p: Plan) => { setEditing(p); setForm({ name: p.name, price: p.price, duration_days: p.duration_days, category: p.category, benefits: Array.isArray(p.benefits) ? p.benefits : [], tokens: p.tokens, active: p.active, featured: p.featured ?? false }); setNewBenefit(""); setModalOpen(true); };
@@ -406,6 +445,23 @@ export default function AdminMembresiasPage() {
     vencidas: memberships.filter((m) => m.status === "vencida" || m.end_date < today).length,
   };
 
+  // Renovar: la membresía vencida más reciente de un alumno sin otra activa.
+  const beneficiariesWithActive = new Set(
+    memberships.filter((m) => m.status === "activa" && m.end_date >= today).map((m) => m.beneficiary_id)
+  );
+  const latestByBeneficiary = new Map<string, Membership>();
+  for (const m of memberships) {
+    if (m.status === "cancelada") continue;
+    const prev = latestByBeneficiary.get(m.beneficiary_id);
+    if (!prev || m.end_date > prev.end_date) latestByBeneficiary.set(m.beneficiary_id, m);
+  }
+  const canRenew = (m: Membership) =>
+    (m.status === "vencida" || m.end_date < today) &&
+    m.status !== "cancelada" &&
+    !beneficiariesWithActive.has(m.beneficiary_id) &&
+    latestByBeneficiary.get(m.beneficiary_id)?.id === m.id &&
+    !!m.beneficiaries?.profile_id;
+
   const filteredMemberships = filter === "todas" ? memberships : memberships.filter((m) => {
     switch (filter) {
       case "activas": return m.status === "activa" && m.end_date >= today;
@@ -469,6 +525,11 @@ export default function AdminMembresiasPage() {
             {t !== "planes" && (
               <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${tab === t ? "bg-white/20 text-white" : "bg-on-surface/10 text-on-surface-variant"}`}>
                 {t === "membresias" ? memberships.length : personalizedPacks.length}
+              </span>
+            )}
+            {t === "membresias" && renewals.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500 text-white" title="Solicitudes de renovación pendientes">
+                {renewals.length}
               </span>
             )}
           </button>
@@ -583,7 +644,9 @@ export default function AdminMembresiasPage() {
           columns={[
             { key: "beneficiary_id", label: "Beneficiario", render: (p) => (
               <div>
-                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{getPackBeneficiaryName(p)}</p>
+                <UserNameButton beneficiaryId={p.beneficiary_id} className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                  {getPackBeneficiaryName(p)}
+                </UserNameButton>
               </div>
             )},
             { key: "plan_id", label: "Plan", render: (p) => p.personalized_plans?.name || "—" },
@@ -615,6 +678,47 @@ export default function AdminMembresiasPage() {
         </>
       ) : (
         <>
+        {renewals.length > 0 && (
+          <div className="mb-6 bg-amber-500/5 border border-amber-500/20 rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-500/10">
+              <span className="material-symbols-outlined text-amber-400 text-[20px]">autorenew</span>
+              <h3 className="font-[family-name:var(--font-headline-md)] text-[14px] text-on-surface uppercase">
+                Solicitudes de renovación ({renewals.length})
+              </h3>
+            </div>
+            <div className="divide-y divide-on-surface/5">
+              {renewals.map((r) => (
+                <div key={r.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0">
+                    <UserNameButton beneficiaryId={r.beneficiary_id} className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface">
+                      {r.beneficiaries?.profiles?.full_name || "Alumno"}
+                    </UserNameButton>
+                    <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
+                      {r.membership_plans?.name || "Plan"} · pedida el {new Date(r.created_at).toLocaleDateString("es-CL")}
+                      {r.note ? ` · "${r.note}"` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => r.beneficiaries?.profile_id && setRenewPrefill({ profileId: r.beneficiaries.profile_id, planId: r.plan_id, renewal: true })}
+                      disabled={!r.beneficiaries?.profile_id}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider disabled:opacity-40 cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">autorenew</span>
+                      Renovar
+                    </button>
+                    <button
+                      onClick={() => { setRejectTarget(r); setRejectNote(""); }}
+                      className="px-3 py-1.5 rounded-lg bg-on-surface/10 text-on-surface-variant font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider hover:bg-on-surface/15 cursor-pointer"
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2 mb-4">
           {([
             { key: "todas", label: "Todas" },
@@ -652,13 +756,28 @@ export default function AdminMembresiasPage() {
           columns={[
             { key: "beneficiary_id", label: "Beneficiario", render: (m) => (
               <div>
-                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{getBeneficiaryName(m)}</p>
+                <UserNameButton beneficiaryId={m.beneficiary_id} className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                  {getBeneficiaryName(m)}
+                </UserNameButton>
               </div>
             )},
             { key: "plan_id", label: "Plan", render: (m) => m.membership_plans?.name || "—" },
             { key: "start_date", label: "Inicio", render: (m) => new Date(m.start_date).toLocaleDateString("es-CL") },
             { key: "end_date", label: "Fin", render: (m) => new Date(m.end_date).toLocaleDateString("es-CL") },
-            { key: "status", label: "Estado", render: (m) => <StatusBadge status={m.status} /> },
+            { key: "status", label: "Estado", render: (m) => (
+              <div className="flex flex-col items-start gap-1.5">
+                <StatusBadge status={m.status === "activa" && m.end_date < today ? "vencida" : m.status} />
+                {canRenew(m) && (
+                  <button
+                    onClick={() => setRenewPrefill({ profileId: m.beneficiaries!.profile_id!, planId: m.plan_id, renewal: true })}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">autorenew</span>
+                    Renovar membresía
+                  </button>
+                )}
+              </div>
+            )},
             { key: "tokens", label: "Tokens", render: (m) => {
               if (m.status !== "activa") return <span className="text-on-surface-variant/40 text-[11px]">—</span>;
               const plan = plans.find((p) => p.id === m.plan_id);
@@ -1071,7 +1190,42 @@ export default function AdminMembresiasPage() {
       <DeleteConfirm open={!!cancelTarget} title="Cancelar Membresía" message={`¿Estás seguro de cancelar la membresía de "${cancelTarget ? getBeneficiaryName(cancelTarget) : ""}"? Esta acción no se puede deshacer.`} onConfirm={handleCancelMembership} onCancel={() => setCancelTarget(null)} loading={cancelling} />
 
       {/* Assign modals */}
-      <AssignMembershipModal open={assignOpen} onClose={() => setAssignOpen(false)} onSaved={load} />
+      <AssignMembershipModal open={assignOpen} onClose={() => setAssignOpen(false)} onSaved={() => { load(); refreshPendingCounts(); }} />
+
+      {/* Renovar: el trigger de la migración 044 aprueba sola la solicitud pendiente del alumno. */}
+      <AssignMembershipModal
+        open={!!renewPrefill}
+        prefill={renewPrefill}
+        onClose={() => setRenewPrefill(null)}
+        onSaved={() => {
+          load();
+          refreshPendingCounts();
+          setToast({ msg: "Membresía renovada. Si había una solicitud pendiente, quedó aprobada.", type: "success" });
+        }}
+      />
+
+      <FormModal open={!!rejectTarget} title="Rechazar solicitud de renovación" onClose={() => setRejectTarget(null)}>
+        <div className="space-y-4">
+          <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
+            {rejectTarget?.beneficiaries?.profiles?.full_name || "El alumno"} recibirá una notificación con el motivo.
+          </p>
+          <textarea
+            value={rejectNote}
+            onChange={(e) => setRejectNote(e.target.value)}
+            rows={3}
+            placeholder="Motivo (opcional, visible para el alumno)"
+            className="w-full bg-surface-container border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface placeholder:text-on-surface/30 focus:outline-none focus:border-primary/50"
+          />
+          <div className="flex justify-end gap-3 pt-2 border-t border-on-surface/5">
+            <button onClick={() => setRejectTarget(null)} className="px-4 py-2.5 rounded-lg border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[14px] cursor-pointer">
+              Cancelar
+            </button>
+            <button onClick={handleRejectRenewal} disabled={rejecting} className="px-4 py-2.5 rounded-lg bg-red-500/80 text-white text-[14px] disabled:opacity-50 cursor-pointer">
+              {rejecting ? "Rechazando..." : "Rechazar"}
+            </button>
+          </div>
+        </div>
+      </FormModal>
       <AssignPersonalizedModal open={assignPackOpen} onClose={() => setAssignPackOpen(false)} onSaved={load} />
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
     </div>

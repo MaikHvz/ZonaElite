@@ -4,6 +4,7 @@ import AdminGuard from "@/components/admin/AdminGuard";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import PendingTransferBanner from "@/components/admin/PendingTransferBanner";
 import PendingTransferProvider from "@/components/admin/PendingTransferProvider";
+import { UserQuickViewProvider } from "@/components/admin/UserQuickView";
 import { signOut } from "@/lib/supabase/auth";
 import { useSession } from "@/providers/SessionProvider";
 import Link from "next/link";
@@ -72,7 +73,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           </header>
           <PendingTransferBanner />
-          <main className="flex-1 p-4 md:p-6 overflow-auto">{children}</main>
+          {/* Ficha rápida de alumno: cualquier <UserNameButton> la abre (v1.14.0). */}
+          <UserQuickViewProvider>
+            <main className="flex-1 p-4 md:p-6 overflow-auto">{children}</main>
+          </UserQuickViewProvider>
         </div>
       </div>
       </PendingTransferProvider>

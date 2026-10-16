@@ -160,6 +160,88 @@ export async function sendTransferRequestEmail(data: TransferRequestEmailData) {
   });
 }
 
+export interface RenewalRequestEmailData {
+  to: string;
+  userName: string;
+  planName: string;
+  note?: string | null;
+  reviewUrl: string;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Aviso a los administradores: un alumno pidió renovar su membresía vencida.
+// Nombre y nota los escribe el alumno: se escapan antes de ir al HTML.
+export async function sendRenewalRequestEmail(data: RenewalRequestEmailData) {
+  const academyName = "ZONAELITE";
+  const { to, reviewUrl } = data;
+  const userName = escapeHtml(data.userName);
+  const planName = escapeHtml(data.planName);
+  const note = data.note ? escapeHtml(data.note) : null;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin:0; padding:0; background:#131313; font-family:'Segoe UI',Arial,sans-serif; }
+    .container { max-width:560px; margin:0 auto; padding:32px 24px; }
+    .header { text-align:center; padding:32px 0 24px; }
+    .header h1 { color:#ffb4ac; font-size:28px; font-weight:900; letter-spacing:2px; margin:0; text-transform:uppercase; }
+    .card { background:#1e1e1e; border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:32px; margin:16px 0; }
+    .card h2 { color:#ffffff; font-size:20px; margin:0 0 16px; }
+    .card p { color:rgba(255,255,255,0.7); font-size:14px; line-height:1.6; margin:0 0 12px; }
+    .credentials { background:rgba(255,180,172,0.08); border:1px solid rgba(255,180,172,0.2); border-radius:12px; padding:20px; margin:20px 0; }
+    .credentials .label { color:rgba(255,255,255,0.5); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+    .credentials .value { color:#ffffff; font-size:16px; font-weight:600; margin-bottom:16px; word-break:break-word; }
+    .credentials .value:last-child { margin-bottom:0; }
+    .btn { display:inline-block; background:linear-gradient(135deg,#ff544c,#ffb4ac); color:#131313; font-weight:700; text-decoration:none; padding:14px 32px; border-radius:12px; font-size:14px; text-transform:uppercase; letter-spacing:1px; margin-top:8px; }
+    .footer { text-align:center; padding:24px 0; color:rgba(255,255,255,0.3); font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>${academyName}</h1>
+    </div>
+    <div class="card">
+      <h2>Solicitud de renovación de membresía</h2>
+      <p>Un alumno con la membresía vencida pidió renovarla. Al renovarla desde el panel, la solicitud se aprueba sola.</p>
+      <div class="credentials">
+        <div class="label">Alumno</div>
+        <div class="value">${userName}</div>
+        <div class="label">Plan</div>
+        <div class="value">${planName}</div>
+        ${note ? `<div class="label">Nota del alumno</div><div class="value">${note}</div>` : ""}
+      </div>
+      <div style="text-align:center;">
+        <a href="${reviewUrl}" class="btn">Revisar Solicitud</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>${academyName} — Academia de Artes Marciales, La Serena, Chile</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  await transporter.sendMail({
+    from: FROM_EMAIL,
+    to,
+    subject: `${academyName} — Solicitud de renovación de membresía (${data.userName})`,
+    html,
+  });
+}
+
 export interface TransferReviewEmailData {
   to: string;
   userName: string;

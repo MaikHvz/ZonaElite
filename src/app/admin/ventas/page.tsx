@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
+import { UserNameButton } from "@/components/admin/UserQuickView";
 import { exportProfessionalExcel, type ProfessionalSheetConfig } from "@/lib/excel";
 
 interface Payment {
@@ -649,9 +650,13 @@ export default function AdminVentasPage() {
             key: "beneficiary_id",
             label: "Beneficiario",
             render: (p) => (
-              <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+              <UserNameButton
+                beneficiaryId={p.beneficiary_id}
+                profileId={p.beneficiary_id ? null : p.user_id}
+                className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface"
+              >
                 {getBeneficiaryName(p)}
-              </span>
+              </UserNameButton>
             ),
           },
           {
@@ -780,7 +785,13 @@ export default function AdminVentasPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant">Beneficiario</span>
-                    <span className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface">{getBeneficiaryName(p)}</span>
+                    <UserNameButton
+                      beneficiaryId={p.beneficiary_id}
+                      profileId={p.beneficiary_id ? null : p.user_id}
+                      className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface"
+                    >
+                      {getBeneficiaryName(p)}
+                    </UserNameButton>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant">ID usuario</span>
@@ -1081,7 +1092,7 @@ function SolicitudesSection({
                       {p.concept || "—"}
                     </p>
                     <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant">
-                      {getUserName(p)} {getUserEmail(p) && `· ${getUserEmail(p)}`}
+                      <UserNameButton profileId={p.user_id}>{getUserName(p)}</UserNameButton> {getUserEmail(p) && `· ${getUserEmail(p)}`}
                     </p>
                     <p className="font-[family-name:var(--font-body-sm)] text-[12px] text-on-surface-variant/70">
                       {getBeneficiaryName(p)} · {new Date(p.created_at).toLocaleDateString("es-CL")}{" "}

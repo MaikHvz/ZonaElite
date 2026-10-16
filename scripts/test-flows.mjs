@@ -1653,7 +1653,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 18);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 19);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -2825,6 +2825,95 @@ ok("AJ: el espejo refleja 042/043",
   /CREATE POLICY "dependents_admin_read" ON public\.dependents/.test(schemaAj) &&
   /ALTER TABLE public\.beneficiaries ALTER COLUMN profile_id SET NOT NULL/.test(schemaAj) &&
   (schemaAj.match(/'v1\.13\.0'/g) || []).length === 1);
+
+// ============================================================
+// AK. Ficha rápida del alumno + renovación de membresías (migración 044, v1.14.0)
+// ============================================================
+section("AK. Ficha rápida del alumno y renovación de membresías");
+
+const migration044 = readFileSync(join(ROOT, "contexto", "migrations", "044_membership_renewal_requests.sql"), "utf8");
+const migration045 = readFileSync(join(ROOT, "contexto", "migrations", "045_changelog_v1_14_0.sql"), "utf8");
+const schemaAk = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const quickViewAk = srcAj("components", "admin", "UserQuickView.tsx");
+const assignAk = srcAj("components", "admin", "AssignMembershipModal.tsx");
+const membresiasAk = srcAj("app", "admin", "membresias", "page.tsx");
+const renewalBtnAk = srcAj("components", "dashboard", "RenewalRequestButton.tsx");
+const renewalApiAk = srcAj("app", "api", "memberships", "renewal-request", "route.ts");
+const emailAk = srcAj("lib", "email.ts");
+const triggerFnAk = (migration044.match(/CREATE OR REPLACE FUNCTION public\.resolve_renewal_requests_on_membership[\s\S]*?\n\$\$;/) || [""])[0];
+const requestFnAk = (migration044.match(/CREATE OR REPLACE FUNCTION public\.request_membership_renewal[\s\S]*?\n\$\$;/) || [""])[0];
+
+ok("AK: 044 crea la tabla con una sola solicitud pendiente por alumno y RLS solo lectura",
+  /CREATE TABLE IF NOT EXISTS public\.membership_renewal_requests/.test(migration044) &&
+  /CHECK \(status IN \('pendiente', 'aprobada', 'rechazada', 'cancelada'\)\)/.test(migration044) &&
+  /CREATE UNIQUE INDEX IF NOT EXISTS membership_renewal_one_pending_idx[\s\S]*?WHERE status = 'pendiente'/.test(migration044) &&
+  /CREATE POLICY "membership_renewal_select_own_or_admin"[\s\S]*?FOR SELECT USING \(public\.owns_beneficiary\(beneficiary_id\) OR public\.is_admin\(\)\)/.test(migration044) &&
+  !/CREATE POLICY "membership_renewal[^"]*"[\s\S]{0,120}?FOR (INSERT|UPDATE|DELETE|ALL)/.test(migration044));
+ok("AK: pedir renovación exige dueño, sin membresía activa, sin pendiente y avisa al staff",
+  /IF NOT public\.owns_beneficiary\(p_beneficiary_id\) THEN/.test(requestFnAk) &&
+  /m\.status = 'activa'[\s\S]*?m\.end_date >= public\.chile_today\(\)[\s\S]*?Ya tienes una membresía activa/.test(requestFnAk) &&
+  /Ya enviaste una solicitud de renovación/.test(requestFnAk) &&
+  /No tienes una membresía anterior para renovar/.test(requestFnAk) &&
+  /INSERT INTO public\.notifications \(type, subject, content, target, sent_by, sent_at\)[\s\S]*?'sistema'[\s\S]*?'staff'/.test(requestFnAk));
+ok("AK: auto-aceptación: trigger AFTER INSERT en memberships aprueba las pendientes y notifica",
+  /CREATE TRIGGER trg_memberships_resolve_renewals\s+AFTER INSERT ON public\.memberships/.test(migration044) &&
+  /IF NEW\.status <> 'activa' THEN\s+RETURN NEW;/.test(triggerFnAk) &&
+  /SET status = 'aprobada',\s+resolved_membership_id = NEW\.id/.test(triggerFnAk) &&
+  /WHERE beneficiary_id = NEW\.beneficiary_id\s+AND status = 'pendiente'/.test(triggerFnAk) &&
+  /'Membresía renovada'/.test(triggerFnAk) &&
+  !/INSERT INTO public\.memberships|UPDATE public\.memberships/.test(triggerFnAk));
+ok("AK: rechazar es solo admin y deja motivo; las RPC no son ejecutables por anon",
+  /CREATE OR REPLACE FUNCTION public\.reject_membership_renewal[\s\S]*?IF NOT public\.is_admin\(\) THEN/.test(migration044) &&
+  ["request_membership_renewal\\(uuid, text\\)", "cancel_membership_renewal\\(uuid\\)", "reject_membership_renewal\\(uuid, text\\)"]
+    .every((sig) => new RegExp(`REVOKE ALL ON FUNCTION public\\.${sig} FROM anon`).test(migration044)) &&
+  /REVOKE ALL ON FUNCTION public\.resolve_renewal_requests_on_membership\(\) FROM anon, authenticated/.test(migration044));
+ok("AK: 045 es seed v1.14.0 y el espejo refleja 044/045",
+  /'v1\.14\.0'/.test(migration045) && /ON CONFLICT \(version\) DO NOTHING/.test(migration045) &&
+  (schemaAk.match(/CREATE TABLE IF NOT EXISTS public\.membership_renewal_requests/g) || []).length === 1 &&
+  /CREATE TRIGGER trg_memberships_resolve_renewals/.test(schemaAk) &&
+  (schemaAk.match(/'v1\.14\.0'/g) || []).length === 1);
+ok("AK: la API llama al RPC con la sesión del usuario y avisa a los admins en segundo plano",
+  /const supabase = await createClient\(\)/.test(renewalApiAk) &&
+  /supabase\.rpc\("request_membership_renewal"/.test(renewalApiAk) &&
+  /after\(\(\) => notifyAdmins\(/.test(renewalApiAk) &&
+  /sendRenewalRequestEmail\(/.test(renewalApiAk) &&
+  /function escapeHtml\(/.test(emailAk) &&
+  /const note = data\.note \? escapeHtml\(data\.note\) : null;/.test(emailAk));
+ok("AK: el alumno ve Solicitar renovación solo con la membresía vencida y sin otra activa",
+  /else if \(!hasActive && rows\.length > 0\)/.test(renewalBtnAk) &&
+  /fetch\("\/api\/memberships\/renewal-request"/.test(renewalBtnAk) &&
+  /rpc\("cancel_membership_renewal"/.test(renewalBtnAk) &&
+  /<RenewalRequestButton\s+variant="inline"/.test(srcAj("components", "dashboard", "AlertBanner.tsx")) &&
+  /<RenewalRequestButton \/>/.test(srcAj("app", "dashboard", "membresias", "page.tsx")));
+ok("AK: Asignar membresía acepta prefill (alumno + plan) para renovar",
+  /export interface AssignMembershipPrefill \{[\s\S]*?profileId: string;[\s\S]*?planId\?: string \| null;[\s\S]*?renewal\?: boolean;/.test(assignAk) &&
+  /await selectProfileAndBeneficiary\(profile as Profile\)/.test(assignAk) &&
+  /prefill\?\.renewal \? "Renovar Membresía" : "Asignar Membresía"/.test(assignAk));
+ok("AK: Membresías admin: Renovar en la vencida más reciente sin otra activa + solicitudes pendientes",
+  /const canRenew = \(m: Membership\) =>[\s\S]*?!beneficiariesWithActive\.has\(m\.beneficiary_id\)[\s\S]*?latestByBeneficiary\.get\(m\.beneficiary_id\)\?\.id === m\.id/.test(membresiasAk) &&
+  /Renovar membresía/.test(membresiasAk) &&
+  /from\("membership_renewal_requests"\)[\s\S]*?\.eq\("status", "pendiente"\)/.test(membresiasAk) &&
+  /rpc\("reject_membership_renewal"/.test(membresiasAk) &&
+  /<AssignMembershipModal\s+open=\{!!renewPrefill\}\s+prefill=\{renewPrefill\}/.test(membresiasAk));
+ok("AK: la ficha rápida muestra membresía activa (tokens) o renovar, y se monta en el layout admin",
+  /rpc\("get_remaining_tokens"/.test(quickViewAk) &&
+  /from\("membership_renewal_requests"\)/.test(quickViewAk) &&
+  /Renovar membresía/.test(quickViewAk) &&
+  /window\.dispatchEvent\(new Event\(ADMIN_DATA_CHANGED\)\)/.test(quickViewAk) &&
+  /<UserQuickViewProvider>/.test(srcAj("app", "admin", "layout.tsx")));
+ok("AK: los nombres de alumnos son clickeables en las pantallas admin",
+  [
+    ["app", "admin", "usuarios", "page.tsx"],
+    ["app", "admin", "membresias", "page.tsx"],
+    ["app", "admin", "inscripciones", "page.tsx"],
+    ["app", "admin", "ventas", "page.tsx"],
+    ["app", "admin", "deudas", "page.tsx"],
+    ["app", "admin", "asistencia", "page.tsx"],
+    ["components", "admin", "EventAttendeesModal.tsx"],
+  ].every((p) => /<UserNameButton /.test(srcAj(...p))));
+ok("AK: el menú muestra el contador de solicitudes de renovación en Membresías",
+  /from\("membership_renewal_requests"\)[\s\S]*?\.eq\("status", "pendiente"\)/.test(srcAj("components", "admin", "PendingTransferProvider.tsx")) &&
+  /link\.href === "\/admin\/membresias" && renewalCount > 0/.test(srcAj("components", "admin", "AdminSidebar.tsx")));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

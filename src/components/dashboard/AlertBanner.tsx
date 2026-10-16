@@ -5,6 +5,7 @@ import {
   daysRemaining,
 } from "@/lib/membership-status";
 import type { MembershipData } from "@/lib/supabase/dashboard";
+import RenewalRequestButton from "@/components/dashboard/RenewalRequestButton";
 
 export default function AlertBanner({
   memberships,
@@ -35,12 +36,18 @@ export default function AlertBanner({
               : `Tienes ${expired.length} membresías vencidas`}
           </p>
         </div>
-        <Link
-          href="/#membresias"
-          className="shrink-0 btn-primary-gradient font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-white px-4 py-2 rounded-lg shadow-[0_0_12px_rgba(255,84,76,0.2)]"
-        >
-          Renovar
-        </Link>
+        {/* v1.14.0: solicitud de renovación al admin; si no aplica, link a planes. */}
+        <RenewalRequestButton
+          variant="inline"
+          fallback={
+            <Link
+              href="/#membresias"
+              className="shrink-0 btn-primary-gradient font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-white px-4 py-2 rounded-lg shadow-[0_0_12px_rgba(255,84,76,0.2)]"
+            >
+              Renovar
+            </Link>
+          }
+        />
       </div>
     );
   }

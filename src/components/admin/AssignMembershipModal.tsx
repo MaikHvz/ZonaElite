@@ -9,10 +9,20 @@ interface Plan { id: string; name: string; price: number; duration_days: number;
 interface Profile { id: string; full_name: string; email: string; }
 interface Beneficiary { id: string; profile_id: string | null; }
 
+// Renovar (v1.14.0): precarga alumno y plan. Al insertar la membresía, el
+// trigger trg_memberships_resolve_renewals aprueba sola cualquier solicitud
+// de renovación pendiente del alumno.
+export interface AssignMembershipPrefill {
+  profileId: string;
+  planId?: string | null;
+  renewal?: boolean;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
+  prefill?: AssignMembershipPrefill | null;
 }
 
 const emptyForm = {
@@ -25,7 +35,7 @@ const emptyForm = {
   notes: "",
 };
 
-export default function AssignMembershipModal({ open, onClose, onSaved }: Props) {
+export default function AssignMembershipModal({ open, onClose, onSaved, prefill }: Props) {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -37,18 +47,8 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
   const [existingMembership, setExistingMembership] = useState<{ id: string; planName: string; endDate: string } | null>(null);
   const [showOverwriteConfirm, setShowOverwriteConfirm] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    const supabase = createClient();
-    supabase.from("membership_plans").select("id, name, price, duration_days, category").eq("active", true).order("price").then(({ data }) => {
-      setPlans((data as Plan[]) || []);
-    });
-    setForm(emptyForm);
-    setSelectedProfile(null);
-    setResults([]);
-    setBeneficiaries([]);
-    setReceiptFile(null);
-  }, [open]);
+  const prefillProfileId = prefill?.profileId ?? null;
+  const prefillPlanId = prefill?.planId ?? null;
 
   const searchUsers = useCallback(async () => {
     const q = form.search.trim();
@@ -102,6 +102,7 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
     return b?.id || "";
   };
 
+
   const checkExistingMembership = async (beneficiaryId: string) => {
     if (!beneficiaryId) {
       setExistingMembership(null);
@@ -131,6 +132,42 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
       setExistingMembership(null);
     }
   };
+
+  // Al abrir: limpia el formulario y, si hay prefill (Renovar), precarga
+  // alumno y plan. Va después de selectProfileAndBeneficiary y
+  // checkExistingMembership porque las usa.
+  useEffect(() => {
+    if (!open) return;
+    const supabase = createClient();
+    let cancelled = false;
+    setForm(emptyForm);
+    setSelectedProfile(null);
+    setResults([]);
+    setBeneficiaries([]);
+    setReceiptFile(null);
+
+    (async () => {
+      const { data } = await supabase.from("membership_plans").select("id, name, price, duration_days, category").eq("active", true).order("price");
+      const planList = (data as Plan[]) || [];
+      if (cancelled) return;
+      setPlans(planList);
+      if (!prefillProfileId) return;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .eq("id", prefillProfileId)
+        .maybeSingle();
+      if (!profile || cancelled) return;
+      await selectProfileAndBeneficiary(profile as Profile);
+      // Solo se precarga si el plan anterior sigue activo; si no, el admin elige.
+      const plan = planList.find((p) => p.id === prefillPlanId);
+      if (plan && !cancelled) setForm((prev) => ({ ...prev, planId: plan.id, amount: plan.price }));
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefillProfileId, prefillPlanId]);
 
   const selectedPlan = plans.find((p) => p.id === form.planId);
 
@@ -210,8 +247,17 @@ export default function AssignMembershipModal({ open, onClose, onSaved }: Props)
   };
 
   return (
-    <FormModal open={open} title="Asignar Membresía" onClose={onClose}>
+    <FormModal open={open} title={prefill?.renewal ? "Renovar Membresía" : "Asignar Membresía"} onClose={onClose}>
       <div className="space-y-4">
+        {prefill?.renewal && (
+          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 flex items-start gap-2">
+            <span className="material-symbols-outlined text-primary text-[18px] mt-0.5">autorenew</span>
+            <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant">
+              Renovación: se precargan el alumno y su plan anterior (si sigue activo). Si el alumno tenía una
+              solicitud de renovación pendiente, se aprobará automáticamente al guardar.
+            </p>
+          </div>
+        )}
         {/* Buscar usuario */}
         <div>
           <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Buscar usuario *</label>

@@ -221,6 +221,7 @@ Formato: **Rutas UI** · **APIs** · **Tablas / RPC** · **Archivos clave** · *
 - **Una cuenta por persona (v1.11.0, migración 037):** índices únicos sobre `normalize_rut(rut)` y `canonical_email(email)` (Gmail sin puntos ni `+etiqueta`). `create-user` consulta `find_account_conflicts` y responde 409 (bloquea por RUT o correo; advierte por nombre + fecha de nacimiento). **Una cuenta por alumno (v1.13.0):** ver §4.1. No crear funcionalidades nuevas basadas en `dependents`. Plan e historial en `contexto/requisitos/cuenta-unica-por-alumno.md`.
 
 ### M3. Usuarios, fichas y migración de cargas
+- **Ficha rápida (v1.14.0):** en el admin, los nombres de alumnos son `<UserNameButton profileId|beneficiaryId>` (`src/components/admin/UserQuickView.tsx`, provider en `admin/layout`): popup con datos, membresía activa (días y clases) o la última vencida con "Renovar", matrícula, packs y solicitud pendiente. Al renovar desde ahí emite `zonaelite:admin-data-changed` para que las páginas recarguen. Usar `UserNameButton` en cualquier lista admin nueva que muestre alumnos.
 - **Admin `/admin/usuarios`:** lista plana de cuentas (nombre, rol, categoría por fecha de nacimiento, teléfono, RUT, estado), búsqueda por nombre/email/RUT, cambiar rol, activar/desactivar, **crear usuario** (`POST /api/admin/create-user`: chequeo de duplicados, contraseña temporal + correo de bienvenida, beneficiario y audit), "Ver Ficha" (`VerFichaModal`: datos, medidas y apoderado), perfil deportivo (`SportProfileModal`), export Excel con categoría y apoderado. Botón "Migrar Cargas".
 - **Admin `/admin/migracion-cargas` (v1.12.0):** cargas pendientes (`get_pending_dependents`) con su historial; asistente para crear la cuenta del alumno (o usar una vacía) y migrar (`migrate_dependent_to_profile`); pestaña Migradas con "Revertir". Tras aplicar la 042, migrar y revertir quedan deshabilitados.
 - **Alumno `/dashboard/ficha` ("Mi ficha", reemplaza "Mis Cargas"):** `TutorSportCard` (perfil deportivo propio) + `MedicalInfoCard` + `PhysicalInfoCard` (guarda en el perfil) + `EmergencyContactCard`. `/dashboard/cargas` y `/dashboard/cargas/[id]/medico` redirigen aquí.
@@ -240,6 +241,7 @@ Formato: **Rutas UI** · **APIs** · **Tablas / RPC** · **Archivos clave** · *
 - **Admin `/admin/membresias`:** tabs **Planes** (CRUD `membership_plans`: precio, `duration_days`, categoría, `benefits` jsonb, `tokens`, `featured`) · **Membresías** (filtros activas/próximas a vencer/vencidas, asignación manual `AssignMembershipModal` → crea membresía + pago `transferencia/pagado`, editar `end_date`, cancelar, recibo PDF `MembershipReceipt`) · **Personalizadas** (packs, ver M8).
 - **Usuario `/dashboard/membresias`:** resumen de cobertura por beneficiario (matrícula + membresía + tokens), compra vía `CheckoutModal`.
 - **Reglas:** crear membresía (Flow, transferencia o admin) **cancela todas las activas** del beneficiario y crea la nueva con `start_date = hoy Chile`; dedup de 10 min; índice `idx_memberships_one_active` + retry en `23505`.
+- **Renovación (v1.14.0, migración 044):** en Membresías → Membresías, la vencida más reciente de un alumno sin otra activa muestra **Renovar membresía** (`AssignMembershipModal` con `prefill`: alumno + plan). El alumno puede **Solicitar renovación** (`RenewalRequestButton` → `POST /api/memberships/renewal-request` → RPC `request_membership_renewal`; correo a los admins). Las solicitudes (`membership_renewal_requests`, una pendiente por alumno) se ven arriba de la pestaña, con contador en el menú; el admin renueva o rechaza (`reject_membership_renewal`). **Auto-aceptación:** el trigger `trg_memberships_resolve_renewals` (`AFTER INSERT ON memberships`, activa) aprueba sola cualquier solicitud pendiente del beneficiario, sea cual sea la vía de asignación.
 
 ### M7. Matrícula (inscripción a la academia)
 - **Admin `/admin/inscripciones`:** tabs Planes (CRUD `enrollment_plans`) · Inscripciones (lista, filtros, asignación manual).
@@ -423,7 +425,7 @@ Todas las policies tienen rol `public`; el filtro es `auth.uid()`/`is_admin()`/`
 ## 7. Migraciones y versionado
 
 - Carpeta `contexto/migrations/`, numeradas `001…034`, **idempotentes**, aplicadas **manualmente** en el SQL Editor de Supabase. Cada feature con cambios de BD agrega su migración **y** replica el DDL en `documentacion/squema-sql-actualizado.sql` (la suite lo verifica).
-- Ojo: hay números repetidos (`018_*`, `019_*`, `020_*` tienen dos archivos cada uno: feature + changelog). La próxima migración libre es **044** (042/043 escritas, se aplican al terminar la migración de cargas).
+- Ojo: hay números repetidos (`018_*`, `019_*`, `020_*` tienen dos archivos cada uno: feature + changelog). La próxima migración libre es **046** (042/043 se aplican al terminar la migración de cargas; 044/045 antes del próximo deploy).
 - Cada feature registra su changelog con una migración `NNN_changelog_vX_Y_Z.sql`. Historial:
 
 | Versión | Feature | Migraciones |
@@ -448,6 +450,7 @@ Todas las policies tienen rol `public`; el filtro es `auth.uid()`/`is_admin()`/`
 | — | Permisos de funciones SECURITY DEFINER (stock, `find_account_conflicts`, `notify_token_return`) — aplicada 2026-10-16 | 039 |
 | v1.12.0 | Migración de cargas a cuentas propias (re-anclaje, `dependents_archive`, apoderado, cargas congeladas) — aplicada 2026-10-16 | 040, 041 |
 | v1.13.0 | Una cuenta por alumno (retiro de cargas en UI y admin) — **042 solo con 0 cargas pendientes**; 043 con ella | 042, 043 |
+| v1.14.0 | Ficha rápida del alumno + renovación de membresías (solicitudes y auto-aceptación) — **pendiente de aplicar; antes del deploy** | 044, 045 |
 
 Anteriores (001–010): tokens, membresía activa única, `chile_today` en RLS, `enroll_class`, ventana de tokens, deudas + RLS, `location_url`, reglamento, packs personalizados, horarios personalizados. `028`: FK `personalized_packs.purchased_by`.
 

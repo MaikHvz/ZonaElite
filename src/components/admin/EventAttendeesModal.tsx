@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import FormModal from "@/components/admin/FormModal";
 import Toast from "@/components/admin/Toast";
+import { UserNameButton } from "@/components/admin/UserQuickView";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 import { eventTypeIcon, type EventAttendee } from "@/components/EventEnrollModal";
 
@@ -203,7 +204,9 @@ export default function EventAttendeesModal({
                       <span className="material-symbols-outlined text-white text-[16px]">person</span>
                     </div>
                     <div className="min-w-0">
-                      <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">{a.full_name}</p>
+                      <UserNameButton beneficiaryId={a.beneficiary_id} className="block font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">
+                        {a.full_name}
+                      </UserNameButton>
                       <p className="font-[family-name:var(--font-body-sm)] text-[11px] text-on-surface-variant/60">
                         Inscrito el {formatRegisteredAt(a.created_at)}
                       </p>

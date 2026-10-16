@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
+import { UserNameButton } from "@/components/admin/UserQuickView";
 import { getSupabaseErrorMessage } from "@/lib/admin-helpers";
 
 interface DebtRow {
@@ -198,9 +199,9 @@ export default function AdminDeudasPage() {
                 <div className="flex items-center justify-between px-5 py-3 border-b border-on-surface/5">
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-primary text-[18px]">person</span>
-                    <span className="font-[family-name:var(--font-headline-md)] text-[14px] text-on-surface uppercase">
+                    <UserNameButton beneficiaryId={beneficiaryId} className="font-[family-name:var(--font-headline-md)] text-[14px] text-on-surface uppercase">
                       {name}
-                    </span>
+                    </UserNameButton>
                     {anyPending && (
                       <span className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">
                         {rows.filter((r) => r.status === "pendiente").length} pendientes

@@ -7,6 +7,7 @@ import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import VerFichaModal, { type StudentFicha } from "@/components/admin/VerFichaModal";
 import { categoryFromBirth, categoryLabel } from "@/lib/category";
+import { UserNameButton } from "@/components/admin/UserQuickView";
 import SportProfileModal from "@/components/admin/SportProfileModal";
 import StatusBadge from "@/components/admin/StatusBadge";
 import Toast from "@/components/admin/Toast";
@@ -428,7 +429,9 @@ export default function AdminUsuariosPage() {
                 <span className="material-symbols-outlined text-[16px] text-primary">person</span>
               </div>
               <div>
-                <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{u.full_name}</p>
+                <UserNameButton profileId={u.id} className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                  {u.full_name}
+                </UserNameButton>
                 <p className="font-[family-name:var(--font-body-md)] text-[11px] text-on-surface-variant">{u.email}</p>
               </div>
             </div>

@@ -15,6 +15,7 @@ import {
 } from "@/lib/supabase/dashboard";
 import { exportProfessionalExcel, type ProfessionalSheetConfig } from "@/lib/excel";
 import { categoryFromBirth } from "@/lib/category";
+import { UserNameButton } from "@/components/admin/UserQuickView";
 
 const DAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -889,7 +890,9 @@ export default function AdminAsistenciaPage() {
                     <div key={r.beneficiary_id} className="p-3 rounded-xl border border-on-surface/5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{r.full_name}</p>
+                          <UserNameButton beneficiaryId={r.beneficiary_id} className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+                            {r.full_name}
+                          </UserNameButton>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider ${r.category === "nino" ? "text-blue-400" : r.category === "juvenil" ? "text-amber-400" : "text-on-surface-variant/60"}`}>
                               {r.category === "nino" ? "Niño" : r.category === "juvenil" ? "Juvenil" : "Adulto"}
@@ -1255,7 +1258,9 @@ export default function AdminAsistenciaPage() {
                                               <span className="material-symbols-outlined text-white text-[14px]">person</span>
                                             </div>
                                             <div className="min-w-0">
-                                              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">{b.full_name}</p>
+                                              <UserNameButton beneficiaryId={b.id} className="block font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">
+                                                {b.full_name}
+                                              </UserNameButton>
                                               <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider ${b.category === "nino" ? "text-blue-400" : b.category === "juvenil" ? "text-amber-400" : "text-on-surface-variant/60"}`}>
                                                 {b.category === "nino" ? "Niño" : b.category === "juvenil" ? "Juvenil" : "Adulto"}
                                               </span>
@@ -1588,9 +1593,9 @@ export default function AdminAsistenciaPage() {
                                         <div key={a.beneficiary_id} className="flex items-center gap-3 p-3 bg-green-500/5 border border-green-500/15 rounded-lg">
                                           <span className="material-symbols-outlined text-green-400 text-[18px]">check_circle</span>
                                           <div>
-                                            <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface block">
+                                            <UserNameButton beneficiaryId={a.beneficiary_id} className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface block">
                                               {a.full_name}
-                                            </span>
+                                            </UserNameButton>
                                             <span className="font-[family-name:var(--font-label-sm)] text-[9px] uppercase text-on-surface-variant">
                                               Presente ✓
                                             </span>
@@ -1674,7 +1679,9 @@ export default function AdminAsistenciaPage() {
                                             <span className="material-symbols-outlined text-white text-[14px]">person</span>
                                           </div>
                                           <div className="min-w-0">
-                                            <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">{b.full_name}</p>
+                                            <UserNameButton beneficiaryId={b.id} className="block font-[family-name:var(--font-body-md)] text-[13px] text-on-surface truncate">
+                                              {b.full_name}
+                                            </UserNameButton>
                                             <span className={`font-[family-name:var(--font-label-sm)] text-[9px] uppercase tracking-wider ${b.category === "nino" ? "text-blue-400" : b.category === "juvenil" ? "text-amber-400" : "text-on-surface-variant/60"}`}>
                                               {b.category === "nino" ? "Niño" : b.category === "juvenil" ? "Juvenil" : "Adulto"}
                                             </span>

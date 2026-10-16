@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getChileToday, addDaysChile } from "@/lib/dates";
 import { extendOrCreateEnrollment } from "@/lib/enrollments";
 import { categoryFromBirth } from "@/lib/category";
+import { UserNameButton } from "@/components/admin/UserQuickView";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
 import DeleteConfirm from "@/components/admin/DeleteConfirm";
@@ -311,7 +312,9 @@ export default function AdminInscripcionesPage() {
       key: "beneficiary",
       label: "Beneficiario",
       render: (enrollment: AcademyEnrollment) => (
-        <span className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">{getBeneficiaryName(enrollment)}</span>
+        <UserNameButton beneficiaryId={enrollment.beneficiary_id} className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface">
+          {getBeneficiaryName(enrollment)}
+        </UserNameButton>
       ),
     },
     { key: "enrollment_plans", label: "Plan", render: (enrollment: AcademyEnrollment) => enrollment.enrollment_plans?.name || "—" },
