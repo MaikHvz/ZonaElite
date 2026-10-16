@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
@@ -277,8 +276,7 @@ export default function AdminUsuariosPage() {
 
   const load = async () => {
     const supabase = createClient();
-    // Una cuenta por alumno: la lista son solo cuentas. Las cargas aún sin
-    // migrar se gestionan en /admin/migracion-cargas.
+    // Una cuenta por alumno: la lista son solo cuentas (sistema de cargas retirado).
     const [uRes, rRes] = await Promise.all([
       supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("roles").select("*").order("id"),
@@ -395,14 +393,6 @@ export default function AdminUsuariosPage() {
             <option value="ano">Este Año</option>
             <option value="historico">Histórico Completo</option>
           </select>
-          {/* Una cuenta por alumno (migración 040): ya no se crean cargas; las existentes se migran. */}
-          <Link
-            href="/admin/migracion-cargas"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase"
-          >
-            <span className="material-symbols-outlined text-[18px]">move_up</span>
-            Migrar Cargas
-          </Link>
           <button
             onClick={() => setCreateModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase"

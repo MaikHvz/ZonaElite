@@ -1735,11 +1735,11 @@ ok("U: DataTable acepta searchKey string | string[] y busca en cualquiera",
   /const keys = Array\.isArray\(searchKey\) \? searchKey : \[searchKey\];[\s\S]*?keys\.some\(/.test(dataTableT));
 
 // V. Crear y asignar carga desde admin/usuarios
-// Migración 040: ya no se crean cargas; el botón pasó a "Migrar Cargas".
-// La edición de cargas existentes (siguiente assert) se mantiene.
-ok("V: admin/usuarios reemplaza Crear y Asignar Carga por el acceso a la migración",
-  /href="\/admin\/migracion-cargas"[\s\S]*?Migrar Cargas/.test(adminUsuariosT) &&
-  !/Crear y Asignar Carga/.test(adminUsuariosT));
+// Las cargas se eliminaron sin migrar (2026-10-16): no hay botón de crear
+// cargas ni de migrarlas.
+ok("V: admin/usuarios no ofrece crear ni migrar cargas",
+  !/Crear y Asignar Carga/.test(adminUsuariosT) &&
+  !/migracion-cargas/.test(adminUsuariosT));
 // Fase 6: openEdit edita solo la cuenta (rol/estado); la creación y edición
 // de cargas (CreateDependentModal + APIs) se retiró (ver sección AJ).
 ok("V: openEdit edita la cuenta sin ramas de cargas",
@@ -2745,7 +2745,8 @@ ok("AI: el panel crea la cuenta con create-user (con chequeo de duplicados) y mi
   /rpc\("revert_dependent_migration"/.test(migrationPageAi) &&
   /Usar esta cuenta/.test(migrationPageAi) &&
   !/\.from\("(beneficiaries|dependents|memberships)"\)[\s\S]{0,80}?\.(insert|update|delete)\(/.test(migrationPageAi) &&
-  /href: "\/admin\/migracion-cargas"/.test(sidebarAi));
+  // Las cargas se eliminaron sin migrar: el panel queda sin acceso desde el menú.
+  !/migracion-cargas/.test(sidebarAi));
 ok("AI: el dashboard ya no ofrece agregar cargas y el perfil edita el apoderado",
   !/AddDependentModal/.test(cargasPageAi) &&
   /redirect\("\/dashboard\/ficha"\)/.test(cargasPageAi) &&
@@ -2821,6 +2822,15 @@ ok("AJ: 042 deshabilita migrar/revertir con mensaje y 043 es seed v1.13.0",
   /El sistema de cargas fue retirado: ya no hay cargas que migrar/.test(migration042) &&
   /las migraciones ya no se pueden revertir/.test(migration042) &&
   /'v1\.13\.0'/.test(migration043) && /ON CONFLICT \(version\) DO NOTHING/.test(migration043));
+const deleteScriptAj = readFileSync(join(ROOT, "contexto", "scripts-datos", "2026-10-16_eliminar_cargas.sql"), "utf8");
+ok("AJ: el script de borrado respalda antes de borrar y libera las FK NO ACTION",
+  deleteScriptAj.indexOf("INSERT INTO public.dependents_deleted_backup") > 0 &&
+  deleteScriptAj.indexOf("INSERT INTO public.dependents_deleted_backup") < deleteScriptAj.indexOf("DELETE FROM public.dependents;") &&
+  /UPDATE public\.payments\s+SET membership_id = NULL/.test(deleteScriptAj) &&
+  deleteScriptAj.indexOf("DELETE FROM public.event_attendees") < deleteScriptAj.indexOf("DELETE FROM public.dependents;") &&
+  !/DELETE FROM public\.payments/.test(deleteScriptAj) &&
+  /CREATE POLICY "dependents_deleted_backup_admin_read"[\s\S]*?USING \(public\.is_admin\(\)\)/.test(deleteScriptAj) &&
+  /BEGIN;[\s\S]*COMMIT;/.test(deleteScriptAj));
 ok("AJ: el espejo refleja 042/043",
   /CREATE POLICY "dependents_admin_read" ON public\.dependents/.test(schemaAj) &&
   /ALTER TABLE public\.beneficiaries ALTER COLUMN profile_id SET NOT NULL/.test(schemaAj) &&
