@@ -304,3 +304,19 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Dashboard**: `CompleteProfileBanner` pide completar el RUT y la fecha de nacimiento a los perfiles antiguos.
 
 ---
+
+## 18. Migración de Cargas a Cuentas Propias (IMPLEMENTADO - v1.12.0)
+
+> Estado: **implementado en código (2026-10-16)**, suite A-AI en verde (653 tests; se mantiene el fallo preexistente dependiente de la fecha). Migraciones `040_dependent_migration.sql` y `041_changelog_v1_12_0.sql` (**pendientes de aplicar; aplicarlas ANTES de desplegar**, porque `/perfil` lee las columnas `guardian_*`). Fases 2–4 del plan `contexto/requisitos/cuenta-unica-por-alumno.md`. Antes, la 039 cerró permisos de funciones SECURITY DEFINER (stock, `find_account_conflicts`, `notify_token_return`).
+
+**Problema**: cada alumno debe tener su propia cuenta, pero 12 cargas tienen historial (membresías, matrículas, packs, asistencia, pagos, eventos, ficha médica, perfil deportivo) que no se puede perder.
+
+**Solución**:
+- **Re-anclaje, no copia**: todo el historial cuelga de `beneficiaries.id`. `migrate_dependent_to_profile(dependent, profile)` (solo admin, transaccional, `FOR UPDATE`) borra el beneficiario vacío de la cuenta destino (exige que no tenga datos, `beneficiary_has_data`), re-ancla el beneficiario de la carga (`profile_id = cuenta`, `dependent_id = NULL`), completa los campos vacíos del perfil con los datos de la carga (RUT, nacimiento, dirección, medidas) y, si es menor, guarda al tutor como apoderado (`profiles.guardian_name/phone/email`). Después copia la carga en `dependents_archive`, la borra de `dependents` (ya sin CASCADE sobre el historial), deja `audit_logs` y notifica al tutor y al alumno.
+- **Revertir**: `revert_dependent_migration(archive)` reinserta la carga con su id original, descarta el beneficiario que crea `trg_dependents_create_beneficiary`, re-ancla el historial a la carga y devuelve a la cuenta un beneficiario vacío. Se bloquea si la cuenta registró historial nuevo desde la migración.
+- **Congelamiento**: la policy `dependents_owner_or_admin` (ALL) se reemplaza por `dependents_tutor_read`, `dependents_tutor_update` y `dependents_admin_all`, así que el tutor ya no crea ni borra cargas. `/dashboard/cargas` muestra un aviso en lugar de "Agregar carga", y `/admin/usuarios` cambia "Crear y Asignar Carga" por "Migrar Cargas".
+- **Panel `/admin/migracion-cargas`**: pestaña Pendientes (`get_pending_dependents()`: carga, tutor e historial resumido) con un asistente de 3 pasos: 1) crear la cuenta del alumno con `/api/admin/create-user` (datos precargados y chequeo de duplicados; si hay coincidencia, "Usar esta cuenta") o elegir una cuenta existente vacía, 2) revisar qué se traslada y los datos del apoderado, 3) migrar. Pestaña Migradas con historial y botón "Revertir".
+- **Perfil**: `/perfil` muestra y edita los datos del apoderado.
+- **Pendiente (fase 5)**: las pantallas de compra, inscripción, QR, eventos y asignación siguen aceptando cargas no migradas. Se simplifican a una persona por cuenta cuando no quede ninguna.
+
+---

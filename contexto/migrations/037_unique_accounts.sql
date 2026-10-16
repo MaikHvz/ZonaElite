@@ -182,5 +182,9 @@ AS $$
      AND lower(trim(p.full_name)) = lower(trim(coalesce(p_full_name, '')));
 $$;
 
+-- Supabase otorga EXECUTE por defecto a anon/authenticated de forma
+-- directa (default privileges), no vía PUBLIC: hay que revocarlo
+-- explícitamente o la función queda expuesta con datos de terceros.
 REVOKE ALL ON FUNCTION public.find_account_conflicts(text, text, text, date) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.find_account_conflicts(text, text, text, date) FROM anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.find_account_conflicts(text, text, text, date) TO service_role;

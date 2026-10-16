@@ -351,3 +351,12 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Espejo SQL**: bloque 037 + seed v1.11.0; la definición antigua de `handle_new_user` se reemplazó por la vigente.
 - **Changelog**: entrada **v1.11.0** (`contexto/migrations/038_changelog_v1_11_0.sql`).
 - **Verificación**: suite sección **AG** (12 asserts); `T: esquema documentado refleja el seed v1.1.0` pasó de 15 a 16 seeds; la aserción `T: perfil agrega campo RUT` se actualizó al nuevo guardado formateado.
+- **Aplicado** en producción el 2026-10-16. Corrección posterior `039_function_grants_hardening.sql` (aplicada): Supabase da EXECUTE directo a anon/authenticated, así que `find_account_conflicts`, `decrement/increment_product_stock` y `notify_token_return` (este último ahora con guard `is_staff()`) quedaban expuestas. Suite sección **AH**.
+
+## 34. Migración de Cargas a Cuentas Propias (2026-10-16)
+**Requisito**: las 12 cargas existentes deben quedar guardadas y el administrador debe poder asignar todo su historial (membresías, asistencia, etc.) a cuentas propias que él crea, sin perder nada. Fases 2–4 del plan `contexto/requisitos/cuenta-unica-por-alumno.md`.
+- **BD (`040_dependent_migration.sql`)**: columnas `profiles.guardian_name/phone/email`; tabla `dependents_archive` (RLS admin); policies de `dependents` sin INSERT/DELETE para tutores; helpers internos `beneficiary_data_summary` / `beneficiary_has_data`; RPC `get_pending_dependents`, `migrate_dependent_to_profile` y `revert_dependent_migration` (admin, re-anclaje del beneficiario, reversibles).
+- **Código**: `src/app/admin/migracion-cargas/page.tsx` (asistente y historial), `AdminSidebar` (link), `/admin/usuarios` ("Migrar Cargas"), `/dashboard/cargas` (sin "Agregar carga", con aviso), `guide-data.ts` (paso del tour actualizado), `/perfil` + `getProfileForEdit`/`updateProfile` (apoderado).
+- **Espejo SQL**: bloque 040 + seed v1.12.0.
+- **Changelog**: entrada **v1.12.0** (`contexto/migrations/041_changelog_v1_12_0.sql`).
+- **Verificación**: suite sección **AI** (11 asserts); se actualizaron `V: admin/usuarios ... Crear y Asignar Carga` (ahora verifica el acceso a la migración), `Y: getProfileForEdit ... address` (acepta columnas nuevas) y el conteo de seeds (16 → 17).

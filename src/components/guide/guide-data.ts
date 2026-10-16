@@ -147,9 +147,9 @@ export const GUIDE_TOURS: Record<string, GuideTourDef> = {
       },
       {
         targetSelector: "[data-guide='cargas-agregar']",
-        title: "Agregar nueva carga",
+        title: "Cada alumno con su cuenta",
         description:
-          "Haz clic aquí para registrar un nuevo dependiente. Necesitarás su nombre, RUT, fecha de nacimiento y categoría (niño, juvenil o adulto).",
+          "Ya no se agregan cargas nuevas: cada alumno (también los niños) tiene su propia cuenta con su correo. Tus cargas actuales se trasladarán a la cuenta de cada uno con todo su historial.",
         icon: "person_add",
         position: "bottom",
       },

@@ -28,6 +28,9 @@ export default function PerfilPage() {
   const [birthDate, setBirthDate] = useState("");
   const [rut, setRut] = useState("");
   const [address, setAddress] = useState("");
+  const [guardianName, setGuardianName] = useState("");
+  const [guardianPhone, setGuardianPhone] = useState("");
+  const [guardianEmail, setGuardianEmail] = useState("");
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [dominantHand, setDominantHand] = useState("");
@@ -52,6 +55,9 @@ export default function PerfilPage() {
           setBirthDate(data.birth_date || "");
           setRut(data.rut || "");
           setAddress(data.address || "");
+          setGuardianName(data.guardian_name || "");
+          setGuardianPhone(data.guardian_phone || "");
+          setGuardianEmail(data.guardian_email || "");
           setWeight(data.weight != null ? String(data.weight) : "");
           setHeight(data.height != null ? String(data.height) : "");
           setDominantHand(data.dominant_hand || "");
@@ -86,6 +92,9 @@ export default function PerfilPage() {
       birth_date: birthDate || undefined,
       rut: rut.trim() ? formatRut(rut) : undefined,
       address: address || undefined,
+      guardian_name: guardianName.trim() || null,
+      guardian_phone: guardianPhone.trim() || null,
+      guardian_email: guardianEmail.trim() || null,
       weight: weight.trim() ? parseMedida(weight) : null,
       height: height.trim() ? parseMedida(height) : null,
       dominant_hand: dominantHand || null,
@@ -254,6 +263,36 @@ export default function PerfilPage() {
                 placeholder="Calle, número, comuna"
                 className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
               />
+            </div>
+
+            {/* Apoderado (migración 040): obligatorio en la práctica para menores de edad. */}
+            <div>
+              <label className="font-[family-name:var(--font-label-sm)] text-[10px] md:text-[11px] uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                Apoderado (si eres menor de edad)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <input
+                  type="text"
+                  value={guardianName}
+                  onChange={(e) => setGuardianName(e.target.value)}
+                  placeholder="Nombre del apoderado"
+                  className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
+                />
+                <input
+                  type="tel"
+                  value={guardianPhone}
+                  onChange={(e) => setGuardianPhone(e.target.value)}
+                  placeholder="Teléfono"
+                  className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
+                />
+                <input
+                  type="email"
+                  value={guardianEmail}
+                  onChange={(e) => setGuardianEmail(e.target.value)}
+                  placeholder="Correo"
+                  className="w-full bg-background/80 border border-on-surface/10 rounded-xl px-4 py-3 font-[family-name:var(--font-body-md)] text-[14px] text-on-surface placeholder:text-on-surface/30 input-glow transition-all duration-300"
+                />
+              </div>
             </div>
 
             <div data-guide="perfil-fisico" className="grid grid-cols-1 sm:grid-cols-3 gap-4">

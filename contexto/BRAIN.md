@@ -221,7 +221,7 @@ Formato: **Rutas UI** · **APIs** · **Tablas / RPC** · **Archivos clave** · *
 ### M2. Autenticación y perfil
 - **UI:** `/auth` (tabs login/registro; acepta `?redirect=`), `/auth/confirm`, `/auth/update-password`, `/perfil` (nombre, teléfono, nacimiento, RUT, dirección, peso/altura/mano, cambio de contraseña).
 - **Signup:** `/auth` pide nombre, **RUT** y **fecha de nacimiento** (obligatorios), correo y contraseña → `rpc("check_registration_conflict")` → `supabase.auth.signUp` con `full_name`, `rut`, `birth_date` en metadata → trigger `trg_on_auth_user_created` (en `auth.users`) → `handle_new_user()` inserta `profiles` con esos datos (role_id por default 4) → trigger `trg_profiles_create_beneficiary` crea el beneficiario.
-- **Una cuenta por persona (v1.11.0, migración 037):** índices únicos sobre `normalize_rut(rut)` y `canonical_email(email)` (Gmail sin puntos ni `+etiqueta`). `create-user` consulta `find_account_conflicts` y responde 409 (bloquea por RUT o correo; advierte por nombre + fecha de nacimiento). **En curso:** eliminación del sistema de cargas, donde cada alumno, incluidos los niños, tendrá su propia cuenta (plan en `contexto/requisitos/cuenta-unica-por-alumno.md`). No crear funcionalidades nuevas basadas en `dependents`.
+- **Una cuenta por persona (v1.11.0, migración 037):** índices únicos sobre `normalize_rut(rut)` y `canonical_email(email)` (Gmail sin puntos ni `+etiqueta`). `create-user` consulta `find_account_conflicts` y responde 409 (bloquea por RUT o correo; advierte por nombre + fecha de nacimiento). **En curso:** eliminación del sistema de cargas, donde cada alumno, incluidos los niños, tendrá su propia cuenta (plan en `contexto/requisitos/cuenta-unica-por-alumno.md`). No crear funcionalidades nuevas basadas en `dependents`. Desde v1.12.0 no se crean cargas nuevas: el admin migra las existentes en `/admin/migracion-cargas` (RPC `migrate_dependent_to_profile`, que re-ancla el beneficiario sin copiar historial; las migradas quedan en `dependents_archive` y se pueden revertir). Los menores guardan los datos de su apoderado en `profiles.guardian_*`. **Nunca borrar una fila de `dependents` directamente: `beneficiaries.dependent_id` es ON DELETE CASCADE y arrastra todo el historial.**
 
 ### M3. Usuarios, cargas y fichas
 - **Admin `/admin/usuarios`:** lista titulares con sus cargas agrupadas, columna RUT, búsqueda por nombre/email/RUT, cambiar rol, activar/desactivar, **crear usuario** (`POST /api/admin/create-user`: crea auth user con contraseña aleatoria + email de bienvenida + beneficiario + audit), **crear y asignar carga** (`CreateDependentModal` → `POST /api/admin/create-dependent`), editar carga (`POST /api/admin/update-dependent`), "Ver Ficha" (`VerFichaModal`, solo lectura), perfil deportivo (`SportProfileModal`), export Excel (mes/año/histórico).
@@ -425,7 +425,7 @@ Todas las policies tienen rol `public`; el filtro es `auth.uid()`/`is_admin()`/`
 ## 7. Migraciones y versionado
 
 - Carpeta `contexto/migrations/`, numeradas `001…034`, **idempotentes**, aplicadas **manualmente** en el SQL Editor de Supabase. Cada feature con cambios de BD agrega su migración **y** replica el DDL en `documentacion/squema-sql-actualizado.sql` (la suite lo verifica).
-- Ojo: hay números repetidos (`018_*`, `019_*`, `020_*` tienen dos archivos cada uno: feature + changelog). La próxima migración libre es **039** (reservada para la BD de migración de cargas).
+- Ojo: hay números repetidos (`018_*`, `019_*`, `020_*` tienen dos archivos cada uno: feature + changelog). La próxima migración libre es **042**.
 - Cada feature registra su changelog con una migración `NNN_changelog_vX_Y_Z.sql`. Historial:
 
 | Versión | Feature | Migraciones |
@@ -446,7 +446,9 @@ Todas las policies tienen rol `public`; el filtro es `auth.uid()`/`is_admin()`/`
 | v1.9.0 | Contraseña de sesión QR | 031, 032 |
 | v1.10.0 | Lista de asistencia a eventos | 033, 034 |
 | v1.10.1 | Endurecimiento de seguridad (RLS, storage, CHECK, monto Flow) — aplicada 2026-10-16 | 035, 036 |
-| v1.11.0 | Una cuenta por persona (RUT único, correo canónico) — **pendiente de aplicar** | 037, 038 |
+| v1.11.0 | Una cuenta por persona (RUT único, correo canónico) — aplicada 2026-10-16; índices únicos pendientes hasta resolver el duplicado de Hilder (re-ejecutar 037) | 037, 038 |
+| — | Permisos de funciones SECURITY DEFINER (stock, `find_account_conflicts`, `notify_token_return`) — aplicada 2026-10-16 | 039 |
+| v1.12.0 | Migración de cargas a cuentas propias (re-anclaje, `dependents_archive`, apoderado, cargas congeladas) — **pendiente de aplicar; antes del deploy** | 040, 041 |
 
 Anteriores (001–010): tokens, membresía activa única, `chile_today` en RLS, `enroll_class`, ventana de tokens, deudas + RLS, `location_url`, reglamento, packs personalizados, horarios personalizados. `028`: FK `personalized_packs.purchased_by`.
 
@@ -477,7 +479,7 @@ Anteriores (001–010): tokens, membresía activa única, `chile_today` en RLS, 
 2. Cambios de BD → nueva migración numerada idempotente en `contexto/migrations/` + espejo 1:1 en `documentacion/squema-sql-actualizado.sql` + sección en `scripts/test-flows.mjs`. **Antes de diseñar**, verificar el estado real de la tabla en Supabase (policies/CHECK/triggers), porque el espejo puede mentir. Al crear policies nuevas, **eliminar también las permisivas existentes** con otros nombres (se combinan por OR).
 3. Fechas: solo helpers de `src/lib/dates.ts` / `chile_today()`.
 4. `getAdminClient()` es **server-only** (solo dentro de `src/app/api/**`). Nunca importarlo en componentes.
-5. Operaciones con reglas de negocio o concurrencia → RPC `SECURITY DEFINER` (patrón: auth dentro, lock `FOR UPDATE`, idempotente, `REVOKE ALL FROM PUBLIC` + `GRANT EXECUTE TO authenticated`) o route handler con validación de `role_id`. No abrir policies de escritura nuevas para "hacer funcionar" algo desde el cliente.
+5. Operaciones con reglas de negocio o concurrencia → RPC `SECURITY DEFINER` (patrón: auth dentro, lock `FOR UPDATE`, idempotente, `REVOKE ALL FROM PUBLIC` **+ `REVOKE ALL FROM anon, authenticated`** (Supabase les da EXECUTE directo por defecto; revocar solo `PUBLIC` no basta, ver migración 039) + `GRANT EXECUTE` solo al rol que corresponda) o route handler con validación de `role_id`. No abrir policies de escritura nuevas para "hacer funcionar" algo desde el cliente.
 6. Pagos: nunca confiar en el retorno del navegador; toda asignación debe ser idempotente (Flow puede llamar el callback más de una vez y `verify` reintenta). No recrear `force-confirm`/`debug`.
 7. Clases personalizadas, eventos y tienda son **módulos desacoplados**: no deben tocar `memberships`, tokens, `class_enrollments` ni `attendance` de clases normales (salvo la asistencia manual de personalizadas, que reutiliza `attendance`).
 8. Desinscribir de una sesión → siempre RPC `cancel_class_enrollment`. Cerrar sesión QR → siempre `/api/admin/close-session`.

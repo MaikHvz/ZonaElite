@@ -482,7 +482,7 @@ export async function getProfileForEdit(userId: string) {
     const supabase = createClient();
     const { data } = await supabase
       .from("profiles")
-      .select("full_name, phone, birth_date, rut, address, weight, height, dominant_hand")
+      .select("full_name, phone, birth_date, rut, address, weight, height, dominant_hand, guardian_name, guardian_phone, guardian_email")
       .eq("id", userId)
       .single();
     return data as {
@@ -494,6 +494,9 @@ export async function getProfileForEdit(userId: string) {
       weight: number | null;
       height: number | null;
       dominant_hand: string | null;
+      guardian_name: string | null;
+      guardian_phone: string | null;
+      guardian_email: string | null;
     } | null;
   });
 }
@@ -509,6 +512,9 @@ export async function updateProfile(
     weight?: number | null;
     height?: number | null;
     dominant_hand?: string | null;
+    guardian_name?: string | null;
+    guardian_phone?: string | null;
+    guardian_email?: string | null;
   }
 ) {
   const result = await safeQuery(async () => {

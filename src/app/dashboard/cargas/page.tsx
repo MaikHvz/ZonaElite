@@ -8,7 +8,6 @@ import {
 } from "@/lib/supabase/dashboard";
 import DependentCard from "@/components/dashboard/DependentCard";
 import TutorSportCard from "@/components/dashboard/TutorSportCard";
-import AddDependentModal from "@/components/dashboard/AddDependentModal";
 import EditDependentModal from "@/components/dashboard/EditDependentModal";
 import { MembershipCardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import GuideHelpButton from "@/components/guide/GuideHelpButton";
@@ -17,7 +16,6 @@ export default function CargasPage() {
   const { user } = useSession();
   const [dependents, setDependents] = useState<DependentData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [editingDependent, setEditingDependent] = useState<DependentData | null>(null);
 
   const fetchDependents = useCallback(async () => {
@@ -44,16 +42,20 @@ export default function CargasPage() {
         </div>
         <div className="flex items-center gap-3">
           <GuideHelpButton tourId="cargas" pill />
-          <button
-            id="add-dependent-btn"
-            data-guide="cargas-agregar"
-            onClick={() => setShowModal(true)}
-            className="shrink-0 flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-5 py-2.5 rounded-lg transition-opacity hover:opacity-90 cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            Agregar carga
-          </button>
         </div>
+      </div>
+
+      {/* Una cuenta por alumno (migración 040): ya no se crean cargas nuevas. */}
+      <div
+        data-guide="cargas-agregar"
+        className="glass-card !rounded-xl bg-gradient-to-r from-blue-950/30 to-transparent border-l-[3px] !border-l-blue-500 p-4 flex items-start gap-3"
+      >
+        <span className="material-symbols-outlined text-blue-400 text-[20px] shrink-0">info</span>
+        <p className="font-[family-name:var(--font-body-md)] text-[13px] md:text-[14px] text-on-surface">
+          Ahora cada alumno tiene su propia cuenta. Para inscribir a un hijo o familiar, crea una cuenta con su
+          correo desde <strong>Registrarse</strong> o pide a la academia que la cree. Las cargas que ya tienes se
+          trasladarán a la cuenta de cada alumno con todo su historial.
+        </p>
       </div>
 
       {loading ? (
@@ -74,15 +76,9 @@ export default function CargasPage() {
               <p className="font-[family-name:var(--font-body-md)] text-on-surface-variant mb-2">
                 No tienes dependientes registrados
               </p>
-              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant/60 mb-4">
-                Agrega una carga para inscribir a un familiar o dependiente
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant/60">
+                Cada alumno se inscribe con su propia cuenta.
               </p>
-              <button
-                onClick={() => setShowModal(true)}
-                className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-primary border border-primary/30 px-6 py-2 rounded-lg hover:bg-primary/10 transition-colors cursor-pointer"
-              >
-                Agregar primera carga
-              </button>
             </div>
           ) : (
             <div id="tour-dependents-list" data-guide="cargas-card" className="space-y-4">
@@ -96,15 +92,6 @@ export default function CargasPage() {
             </div>
           )}
         </>
-      )}
-
-      {user && (
-        <AddDependentModal
-          open={showModal}
-          onClose={() => setShowModal(false)}
-          onAdded={fetchDependents}
-          tutorId={user.id}
-        />
       )}
 
       <EditDependentModal

@@ -1656,7 +1656,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 16);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 17);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -1737,8 +1737,11 @@ ok("U: DataTable acepta searchKey string | string[] y busca en cualquiera",
   /const keys = Array\.isArray\(searchKey\) \? searchKey : \[searchKey\];[\s\S]*?keys\.some\(/.test(dataTableT));
 
 // V. Crear y asignar carga desde admin/usuarios
-ok("V: admin/usuarios tiene botón Crear y Asignar Carga",
-  /setEditingDependent\(null\); setDependentModalOpen\(true\)[\s\S]*?Crear y Asignar Carga/.test(adminUsuariosT));
+// Migración 040: ya no se crean cargas; el botón pasó a "Migrar Cargas".
+// La edición de cargas existentes (siguiente assert) se mantiene.
+ok("V: admin/usuarios reemplaza Crear y Asignar Carga por el acceso a la migración",
+  /href="\/admin\/migracion-cargas"[\s\S]*?Migrar Cargas/.test(adminUsuariosT) &&
+  !/Crear y Asignar Carga/.test(adminUsuariosT));
 ok("V: openEdit de carga abre el modal en modo edición (sin early return)",
   /if \(u\._isDependent\) \{[\s\S]*?setEditingDependent\(\{[\s\S]*?tutor_id: u\._tutorId \|\| "",[\s\S]*?\}\);\s*setDependentModalOpen\(true\);[\s\S]*?return;[\s\S]*?\}\s*setEditing\(u\);/.test(adminUsuariosT));
 ok("V: página renderiza CreateDependentModal con tutors (no dependientes)",
@@ -1868,7 +1871,8 @@ ok("Y: espejo refleja el seed v1.2.1",
 ok("Y: dashboard.ts DependentData tipa address",
   /interface DependentData \{[\s\S]*?address: string \| null;/.test(dashboardLibT));
 ok("Y: dashboard.ts getProfileForEdit y updateProfile soportan address",
-  /\.select\("full_name, phone, birth_date, rut, address"\)/.test(dashboardLibT.replace("full_name, phone, birth_date, rut, address, weight, height, dominant_hand", "full_name, phone, birth_date, rut, address")) &&
+  // Las columnas siguientes (datos físicos v1.3.0, apoderado v1.12.0) se agregaron después.
+  /\.select\("full_name, phone, birth_date, rut, address(, [a-z_]+)*"\)/.test(dashboardLibT) &&
   /updates: \{[\s\S]*?address\?: string;[\s\S]*?weight\?: number \| null;[\s\S]*?height\?: number \| null;[\s\S]*?dominant_hand\?: string \| null;[\s\S]*?\}/.test(dashboardLibT));
 ok("Y: dashboard.ts getUserMemberships incluye address en dependents",
   /\.select\("id, full_name, birth_date, category, address, beneficiaries\(id\)"\)/.test(dashboardLibT));
@@ -2655,6 +2659,9 @@ ok("AG: check_registration_conflict solo devuelve un código y es accesible al r
   /GRANT EXECUTE ON FUNCTION public\.check_registration_conflict\(text, text\) TO anon, authenticated/.test(migration037));
 ok("AG: find_account_conflicts (con datos de la otra cuenta) es solo para service_role",
   /REVOKE ALL ON FUNCTION public\.find_account_conflicts\(text, text, text, date\) FROM PUBLIC/.test(migration037) &&
+  // Supabase da EXECUTE directo a anon/authenticated (default privileges): revocar FROM PUBLIC no basta.
+  /REVOKE ALL ON FUNCTION public\.find_account_conflicts\(text, text, text, date\) FROM anon, authenticated/.test(migration037) &&
+  /REVOKE ALL ON FUNCTION public\.find_account_conflicts\(text, text, text, date\) FROM anon, authenticated/.test(schemaAg) &&
   /GRANT EXECUTE ON FUNCTION public\.find_account_conflicts\(text, text, text, date\) TO service_role/.test(migration037) &&
   !/find_account_conflicts[^;]*TO (anon|authenticated)/.test(migration037) &&
   /'name_birth'/.test(migration037));
@@ -2694,6 +2701,117 @@ ok("AG: el perfil valida el RUT y traduce el índice único",
   /Ese RUT ya está registrado en otra cuenta/.test(dashboardLibAg));
 ok("AG: el dashboard avisa a perfiles sin RUT o fecha de nacimiento",
   /<CompleteProfileBanner \/>/.test(dashboardPageAg));
+
+// ============================================================
+// AH. Permisos de funciones SECURITY DEFINER (migración 039)
+// ============================================================
+section("AH. Permisos de funciones (anon/authenticated por defecto en Supabase)");
+
+const migration039 = readFileSync(join(ROOT, "contexto", "migrations", "039_function_grants_hardening.sql"), "utf8");
+const schemaAh = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const storeLibAh = readFileSync(join(ROOT, "src", "lib", "store.ts"), "utf8");
+const browserRpcAh = [
+  ...listFiles(join(ROOT, "src", "components")),
+  ...listFiles(join(ROOT, "src", "app")).filter((f) => !/[\\/]api[\\/]/.test(f)),
+].map((f) => readFileSync(f, "utf8")).join("\n");
+
+ok("AH: find_account_conflicts y el stock quedan solo para service_role",
+  ["find_account_conflicts\\(text, text, text, date\\)", "decrement_product_stock\\(uuid, integer\\)", "increment_product_stock\\(uuid, integer\\)"]
+    .every((sig) =>
+      new RegExp(`REVOKE ALL ON FUNCTION public\\.${sig} FROM anon, authenticated`).test(migration039) &&
+      new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${sig} TO service_role`).test(migration039)));
+ok("AH: notify_token_return exige is_staff() y no es ejecutable por anon",
+  /CREATE OR REPLACE FUNCTION public\.notify_token_return\([\s\S]*?IF NOT public\.is_staff\(\) THEN[\s\S]*?RAISE EXCEPTION/.test(migration039) &&
+  /REVOKE ALL ON FUNCTION public\.notify_token_return\(uuid, text, date, text\) FROM anon/.test(migration039));
+ok("AH: el espejo refleja 039 (incluida notify_token_return, que faltaba)",
+  /GRANT EXECUTE ON FUNCTION public\.decrement_product_stock\(uuid, integer\) TO service_role/.test(schemaAh) &&
+  /GRANT EXECUTE ON FUNCTION public\.increment_product_stock\(uuid, integer\) TO service_role/.test(schemaAh) &&
+  (schemaAh.match(/CREATE OR REPLACE FUNCTION public\.notify_token_return\(/g) || []).length === 1);
+ok("AH: ningún código de browser llama a las RPC que pasaron a service_role",
+  !/rpc\("(decrement_product_stock|increment_product_stock|find_account_conflicts)"/.test(browserRpcAh) &&
+  /rpc\("decrement_product_stock"/.test(storeLibAh));
+
+// ============================================================
+// AI. Migración de cargas a cuentas propias (migración 040, v1.12.0)
+// ============================================================
+section("AI. Migración de cargas a cuentas propias (re-anclaje de beneficiario)");
+
+const migration040 = readFileSync(join(ROOT, "contexto", "migrations", "040_dependent_migration.sql"), "utf8");
+const migration041 = readFileSync(join(ROOT, "contexto", "migrations", "041_changelog_v1_12_0.sql"), "utf8");
+const schemaAi = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const migrationPageAi = readFileSync(join(ROOT, "src", "app", "admin", "migracion-cargas", "page.tsx"), "utf8");
+const sidebarAi = readFileSync(join(ROOT, "src", "components", "admin", "AdminSidebar.tsx"), "utf8");
+const cargasPageAi = readFileSync(join(ROOT, "src", "app", "dashboard", "cargas", "page.tsx"), "utf8");
+const perfilAi = readFileSync(join(ROOT, "src", "app", "perfil", "page.tsx"), "utf8");
+const migrateFnAi = (migration040.match(/CREATE OR REPLACE FUNCTION public\.migrate_dependent_to_profile[\s\S]*?\n\$\$;/) || [""])[0];
+const revertFnAi = (migration040.match(/CREATE OR REPLACE FUNCTION public\.revert_dependent_migration[\s\S]*?\n\$\$;/) || [""])[0];
+
+ok("AI: 040 agrega datos del apoderado y el archivo de cargas (RLS solo admin)",
+  /ADD COLUMN IF NOT EXISTS guardian_name text/.test(migration040) &&
+  /ADD COLUMN IF NOT EXISTS guardian_phone text/.test(migration040) &&
+  /ADD COLUMN IF NOT EXISTS guardian_email text/.test(migration040) &&
+  /CREATE TABLE IF NOT EXISTS public\.dependents_archive/.test(migration040) &&
+  /ALTER TABLE public\.dependents_archive ENABLE ROW LEVEL SECURITY/.test(migration040) &&
+  /CREATE POLICY "dependents_archive_admin_all"[\s\S]*?USING \(public\.is_admin\(\)\)/.test(migration040));
+ok("AI: el tutor ya no puede crear ni borrar cargas (el borrado arrasa el historial por CASCADE)",
+  /DROP POLICY IF EXISTS "dependents_owner_or_admin" ON public\.dependents/.test(migration040) &&
+  /CREATE POLICY "dependents_tutor_read" ON public\.dependents\s+FOR SELECT/.test(migration040) &&
+  /CREATE POLICY "dependents_tutor_update" ON public\.dependents\s+FOR UPDATE/.test(migration040) &&
+  !/CREATE POLICY "dependents_tutor_[a-z]+" ON public\.dependents\s+FOR (INSERT|DELETE|ALL)/.test(migration040) &&
+  /CREATE POLICY "dependents_admin_all" ON public\.dependents\s+FOR ALL USING \(public\.is_admin\(\)\)/.test(migration040));
+ok("AI: migrar exige admin, cuenta de alumno, no el tutor y cuenta destino vacía",
+  /IF NOT public\.is_admin\(\) THEN/.test(migrateFnAi) &&
+  /v_target\.role_id <> 4/.test(migrateFnAi) &&
+  /v_target\.id = v_dep\.tutor_id/.test(migrateFnAi) &&
+  /public\.beneficiary_has_data\(v_target_bid\)/.test(migrateFnAi) &&
+  /FOR UPDATE/.test(migrateFnAi));
+ok("AI: migrar re-ancla el beneficiario en el orden seguro (borra el vacío, re-ancla, luego archiva y borra la carga)",
+  migrateFnAi.indexOf("DELETE FROM public.beneficiaries WHERE id = v_target_bid") > 0 &&
+  migrateFnAi.indexOf("DELETE FROM public.beneficiaries WHERE id = v_target_bid") <
+    migrateFnAi.indexOf("SET profile_id = p_profile_id, dependent_id = NULL") &&
+  migrateFnAi.indexOf("SET profile_id = p_profile_id, dependent_id = NULL") <
+    migrateFnAi.indexOf("INSERT INTO public.dependents_archive") &&
+  migrateFnAi.indexOf("INSERT INTO public.dependents_archive") <
+    migrateFnAi.indexOf("DELETE FROM public.dependents WHERE id = v_dep.id"));
+ok("AI: migrar no copia historial (ningún INSERT/UPDATE sobre las tablas de historial)",
+  !/(INSERT INTO|UPDATE) public\.(memberships|academy_enrollments|personalized_packs|class_enrollments|attendance|debts|payments|event_attendees|medical_records|sport_profiles|sports_podiums)\b/.test(migrateFnAi));
+ok("AI: migrar completa el perfil solo en campos vacíos, guarda apoderado de menores y valida el RUT",
+  /coalesce\(p\.birth_date, v_dep\.birth_date\)/.test(migrateFnAi) &&
+  /v_is_minor := v_dep\.category IN \('nino', 'juvenil'\)/.test(migrateFnAi) &&
+  /guardian_name\s+= CASE WHEN v_is_minor/.test(migrateFnAi) &&
+  /El RUT de la carga ya pertenece a otra cuenta/.test(migrateFnAi) &&
+  /'migrate_dependent'/.test(migrateFnAi) &&
+  /INSERT INTO public\.user_notifications/.test(migrateFnAi));
+ok("AI: revertir reinserta la carga, descarta el beneficiario del trigger y exige que no haya historial nuevo",
+  /IF NOT public\.is_admin\(\) THEN/.test(revertFnAi) &&
+  /v_arc\.reverted_at IS NOT NULL/.test(revertFnAi) &&
+  /\(v_now->>v_key\)::int > coalesce\(\(v_arc\.moved_summary->>v_key\)::int, 0\)/.test(revertFnAi) &&
+  revertFnAi.indexOf("INSERT INTO public.dependents") < revertFnAi.indexOf("b.dependent_id = v_arc.dependent_id AND b.id <> v_arc.beneficiary_id") &&
+  /SET profile_id = NULL, dependent_id = v_arc\.dependent_id/.test(revertFnAi) &&
+  /INSERT INTO public\.beneficiaries \(profile_id\) VALUES \(v_arc\.migrated_to_profile_id\)/.test(revertFnAi));
+ok("AI: las RPC no son ejecutables por anon y los helpers internos tampoco por authenticated",
+  ["get_pending_dependents\\(\\)", "migrate_dependent_to_profile\\(uuid, uuid\\)", "revert_dependent_migration\\(uuid\\)"]
+    .every((sig) => new RegExp(`REVOKE ALL ON FUNCTION public\\.${sig} FROM anon`).test(migration040)) &&
+  /REVOKE ALL ON FUNCTION public\.beneficiary_data_summary\(uuid\) FROM anon, authenticated/.test(migration040) &&
+  /REVOKE ALL ON FUNCTION public\.beneficiary_has_data\(uuid\) FROM anon, authenticated/.test(migration040));
+ok("AI: 041 es seed de changelog v1.12.0 y el espejo refleja 040/041 sin duplicar",
+  /'v1\.12\.0'/.test(migration041) && /ON CONFLICT \(version\) DO NOTHING/.test(migration041) &&
+  (schemaAi.match(/CREATE OR REPLACE FUNCTION public\.migrate_dependent_to_profile\(/g) || []).length === 1 &&
+  (schemaAi.match(/CREATE OR REPLACE FUNCTION public\.revert_dependent_migration\(/g) || []).length === 1 &&
+  (schemaAi.match(/CREATE TABLE IF NOT EXISTS public\.dependents_archive/g) || []).length === 1 &&
+  (schemaAi.match(/'v1\.12\.0'/g) || []).length === 1);
+ok("AI: el panel crea la cuenta con create-user (con chequeo de duplicados) y migra/revierte por RPC",
+  /rpc\("get_pending_dependents"\)/.test(migrationPageAi) &&
+  /fetch\("\/api\/admin\/create-user"/.test(migrationPageAi) &&
+  /rpc\("migrate_dependent_to_profile"/.test(migrationPageAi) &&
+  /rpc\("revert_dependent_migration"/.test(migrationPageAi) &&
+  /Usar esta cuenta/.test(migrationPageAi) &&
+  !/\.from\("(beneficiaries|dependents|memberships)"\)[\s\S]{0,80}?\.(insert|update|delete)\(/.test(migrationPageAi) &&
+  /href: "\/admin\/migracion-cargas"/.test(sidebarAi));
+ok("AI: el dashboard ya no ofrece agregar cargas y el perfil edita el apoderado",
+  !/AddDependentModal/.test(cargasPageAi) &&
+  /data-guide="cargas-agregar"/.test(cargasPageAi) &&
+  /guardian_name: guardianName\.trim\(\) \|\| null/.test(perfilAi));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

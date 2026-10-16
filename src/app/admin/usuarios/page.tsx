@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import DataTable from "@/components/admin/DataTable";
 import FormModal from "@/components/admin/FormModal";
@@ -490,13 +491,14 @@ export default function AdminUsuariosPage() {
             <option value="ano">Este Año</option>
             <option value="historico">Histórico Completo</option>
           </select>
-          <button
-            onClick={() => { setEditingDependent(null); setDependentModalOpen(true); }}
+          {/* Una cuenta por alumno (migración 040): ya no se crean cargas; las existentes se migran. */}
+          <Link
+            href="/admin/migracion-cargas"
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase"
           >
-            <span className="material-symbols-outlined text-[18px]">child_care</span>
-            Crear y Asignar Carga
-          </button>
+            <span className="material-symbols-outlined text-[18px]">move_up</span>
+            Migrar Cargas
+          </Link>
           <button
             onClick={() => setCreateModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors text-[13px] font-[family-name:var(--font-headline-md)] uppercase"

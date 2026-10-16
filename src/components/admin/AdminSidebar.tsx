@@ -13,6 +13,7 @@ const sidebarLinks = [
   { href: "/admin/tipos-clase", label: "Tipos de Clase", icon: "category" },
   { href: "/admin/asistencia", label: "Asistencia", icon: "fact_check" },
   { href: "/admin/usuarios", label: "Usuarios", icon: "group" },
+  { href: "/admin/migracion-cargas", label: "Migración de cargas", icon: "move_up" },
   { href: "/admin/membresias", label: "Membresías", icon: "card_membership" },
   { href: "/admin/inscripciones", label: "Inscripciones", icon: "badge" },
   { href: "/admin/deudas", label: "Deudas", icon: "account_balance_wallet" },

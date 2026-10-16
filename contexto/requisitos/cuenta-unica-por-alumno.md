@@ -1,6 +1,8 @@
 # Plan: Una cuenta única por alumno (eliminar el sistema de cargas) + anti-duplicados
 
-**Fecha:** 2026-10-16 · **Estado:** fase 1 (anti-duplicados) **implementada en código** (migraciones 037/038 pendientes de aplicar); fases 0 y 2–7 pendientes · **Fases de la guía:** 1 (requisito) + 2 (análisis de impacto)
+**Fecha:** 2026-10-16 · **Estado:** fase 0 ✅ (cargas de prueba borradas, duplicado de Hilder resuelto) · fase 1 ✅ aplicada (037/038/039, índices únicos creados) · **fases 2–4 implementadas en código** (migraciones 040/041 pendientes de aplicar): BD de migración, panel `/admin/migracion-cargas`, congelamiento de cargas nuevas y datos del apoderado en `/perfil` · fases 5–7 pendientes · **Fases de la guía:** 1 (requisito) + 2 (análisis de impacto)
+
+> **Implementación real de la fase 2 (difiere del borrador de abajo):** en vez de `dependent_migrations` con un snapshot jsonb, la carga migrada se copia completa en la tabla **`dependents_archive`** (las columnas de `dependents` + `beneficiary_id`, `migrated_to_profile_id`, `migrated_by`, `migrated_at`, `moved_summary`, `reverted_*`). RPC: `get_pending_dependents()`, `migrate_dependent_to_profile(dependent, profile)` y `revert_dependent_migration(archive)`, todas con `is_admin()` dentro y llamadas desde el browser del admin. No hace falta la API `migrate-dependent`: la cuenta se crea con `/api/admin/create-user`, reutilizando su chequeo de duplicados. Hallazgo: `beneficiaries.dependent_id` es **ON DELETE CASCADE**, así que la RPC desengancha el beneficiario antes de borrar la carga, y la 040 quita a los tutores el permiso DELETE sobre `dependents`.
 
 > **Decisiones confirmadas por el usuario (2026-10-16):**
 > - **D1:** el padre entra con el correo y la contraseña de la cuenta del hijo para pagar o inscribirlo, **o** el administrador le asigna la membresía. No hay "pagar por otro alumno".
@@ -10,7 +12,9 @@
 > - **D5:** **sí**, se borran las 3 cargas de prueba de la cuenta "maickol Hernandez" (Kai, john valenzuela, Maickol chiquito; ninguna tiene datos). La cuarta carga de esa cuenta ("alemendra muñoz", con perfil deportivo y podios) **no** entra en el borrado.
 > - **D6 (Hilder) y D7:** pendientes. D6 bloquea la creación del índice de RUT único (la migración 037 lo omite con un WARNING hasta resolverlo).
 >
-> **Numeración:** 037/038 = anti-duplicados (fase 1). La BD de migración de cargas (fase 2) pasa a **039**.
+> **Numeración:** 037/038 = anti-duplicados (fase 1, **aplicadas 2026-10-16**; índices únicos aún sin crear por el duplicado de Hilder). 039 = corrección de permisos de funciones. La BD de migración de cargas (fase 2) pasa a **040**.
+>
+> **Lección (aplica a la fase 2):** Supabase otorga EXECUTE a `anon`/`authenticated` directamente; toda RPC nueva debe hacer `REVOKE ... FROM anon, authenticated` explícito además de `FROM PUBLIC`, y validar permisos dentro.
 **Pedido del cliente (9 y 13 oct):** "cada alumno tenga su propia cuenta y que no se carguen a mano"; el admin quiere "tener a toda la gente registrada"; las inscripciones a eventos deben hacerse con la cuenta propia de cada alumno para que nadie se inscriba con un nombre ajeno.
 
 ---
@@ -82,7 +86,7 @@ Restricciones reales que hay que respetar (verificadas en BD):
 - `UNIQUE (beneficiaries.profile_id)`: el trigger `trg_profiles_create_beneficiary` ya le creó a la cuenta nueva un beneficiario vacío `B_nuevo` → **hay que borrarlo antes** de re-anclar `B`. Solo se permite si `B_nuevo` no tiene ningún dato.
 - `trg_dependents_create_beneficiary`: al revertir (reinsertar la carga) crea un beneficiario automático que también hay que borrar antes de re-anclar.
 
-### 3.2 BD (nueva migración `039_single_account_migration.sql`)
+### 3.2 BD (nueva migración `040_single_account_migration.sql`)
 
 1. **Tabla `dependent_migrations`** (auditoría + reversión): `id`, `dependent_id`, `dependent_snapshot jsonb` (fila completa de la carga), `beneficiary_id`, `tutor_id`, `profile_id` (cuenta nueva), `migrated_by`, `migrated_at`, `reverted_at`, `reverted_by`. RLS: solo admin.
 2. **Columnas nuevas en `profiles`**: `guardian_name`, `guardian_phone`, `guardian_email` (si se aprueba D4). La categoría **no** se guarda: se deriva de `birth_date` (ya existe `compute_category_from_birth()` en la BD; falta un helper TS compartido).
@@ -167,7 +171,7 @@ Implementación real: `normalize_rut()` y `canonical_email()` IMMUTABLE; índice
 |------|---------|--------------------|
 | **0. Preparación** | Decisiones D1–D7. Respaldo de `dependents`, `beneficiaries` y `profiles` (export desde Supabase). Borrar las cargas de prueba (D5). Resolver Hilder (D6) | Decisiones escritas; quedan solo las cargas reales |
 | **1. Anti-duplicados** | 3.6 completo: `normalize_rut`, índices únicos, RUT y nacimiento en el registro, validación en `create-user` | No se puede crear un segundo perfil con el mismo RUT ni con un correo Gmail equivalente |
-| **2. BD de migración** | Migración 039: `dependent_migrations`, RPC migrar y revertir, columnas de apoderado, congelar `dependents` INSERT | RPC probado con una carga de prueba: migrar → verificar historial → revertir → migrar |
+| **2. BD de migración** | Migración 040: `dependent_migrations`, RPC migrar y revertir, columnas de apoderado, congelar `dependents` INSERT | RPC probado con una carga de prueba: migrar → verificar historial → revertir → migrar |
 | **3. Panel admin** | `/admin/migracion-cargas` + API de 2 pasos + pestaña de duplicados | El admin migra las 15 cargas. El tutor deja de verlas y el alumno ve todo su historial |
 | **4. Congelar en UI** | Ocultar "Agregar carga" (dashboard) y "Crear y asignar carga" (admin); aviso en "Cargas": "las cargas pasan a cuentas propias" | No se crean cargas nuevas |
 | **5. UI de cuenta única** | Módulos de la tabla 4 marcados "5", uno por PR, con su test | Cada flujo (comprar, inscribirse, QR, eventos, ficha, dashboard, asignación admin) funciona con una sola persona por cuenta |
