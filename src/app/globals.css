@@ -111,28 +111,45 @@ body {
     drop-shadow(0 0 22px rgba(255, 170, 40, 0.35));
 }
 
-/* Destello dorado sobre "TU" (entre la T y la U) */
-@keyframes sparkle-twinkle {
-  0%, 100% { opacity: 0.85; transform: translate(-50%, -50%) scale(0.9) rotate(0deg); }
-  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) rotate(8deg); }
+/* Destello dorado sobre "TU": reflejo de luz cálida tipo lens flare,
+   con halo difuso, estela horizontal fina y núcleo brillante */
+@keyframes sparkle-glow {
+  0%, 100% { opacity: 0.8; transform: translate(-50%, -50%) scale(0.96, 0.94); }
+  35% { opacity: 1; transform: translate(-50%, -50%) scale(1.04, 1); }
+  60% { opacity: 0.88; transform: translate(-50%, -50%) scale(0.99, 0.97); }
+}
+
+@keyframes sparkle-streak {
+  0%, 100% { opacity: 0.75; transform: translate(-50%, -50%) scaleX(0.9); }
+  35% { opacity: 1; transform: translate(-50%, -50%) scaleX(1.08); }
+  60% { opacity: 0.85; transform: translate(-50%, -50%) scaleX(0.97); }
 }
 
 .title-sparkle {
   position: absolute;
-  left: 54%;
-  top: 0.38em;
-  width: 0.9em;
-  height: 0.9em;
+  left: 50%;
+  top: 0.12em;
+  width: 2.4em;
+  height: 1em;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  background: radial-gradient(
-    circle,
-    #fffbe6 0%,
-    rgba(255, 217, 119, 0.95) 7%,
-    rgba(240, 168, 48, 0.4) 20%,
-    transparent 45%
-  );
-  animation: sparkle-twinkle 3s ease-in-out infinite;
+  mix-blend-mode: screen;
+  /* Halo difuso, más ancho que alto, como el bloom de un foco */
+  background:
+    radial-gradient(
+      ellipse 22% 26% at 50% 50%,
+      rgba(255, 246, 214, 0.9) 0%,
+      rgba(255, 210, 120, 0.55) 35%,
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse 50% 50% at 50% 50%,
+      rgba(255, 180, 70, 0.45) 0%,
+      rgba(240, 130, 40, 0.18) 45%,
+      transparent 100%
+    );
+  filter: blur(0.04em);
+  animation: sparkle-glow 4.5s ease-in-out infinite;
 }
 
 .title-sparkle::before,
@@ -141,30 +158,51 @@ body {
   position: absolute;
   left: 50%;
   top: 50%;
-  height: 0.035em;
   border-radius: 9999px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    #f0a830 30%,
-    #fff4c4 50%,
-    #f0a830 70%,
-    transparent
-  );
-}
-
-.title-sparkle::before {
-  width: 100%;
   transform: translate(-50%, -50%);
 }
 
+/* Estela horizontal larga que se desvanece hacia los lados */
+.title-sparkle::before {
+  width: 160%;
+  height: 0.028em;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 170, 60, 0.25) 22%,
+    rgba(255, 228, 160, 0.85) 44%,
+    #fffaf0 50%,
+    rgba(255, 228, 160, 0.85) 56%,
+    rgba(255, 170, 60, 0.25) 78%,
+    transparent 100%
+  );
+  box-shadow: 0 0 0.08em rgba(255, 200, 100, 0.7);
+  animation: sparkle-streak 4.5s ease-in-out infinite;
+}
+
+/* Núcleo caliente con un rayo vertical corto y tenue */
 .title-sparkle::after {
-  width: 65%;
-  transform: translate(-50%, -50%) rotate(90deg);
+  width: 0.22em;
+  height: 0.5em;
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      #ffffff 0%,
+      rgba(255, 244, 210, 0.95) 18%,
+      rgba(255, 210, 120, 0.4) 40%,
+      transparent 70%
+    ) center / 0.22em 0.22em no-repeat,
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(255, 236, 190, 0.55) 50%,
+      transparent 100%
+    ) center / 0.018em 100% no-repeat;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .title-sparkle {
+  .title-sparkle,
+  .title-sparkle::before {
     animation: none;
   }
 }
