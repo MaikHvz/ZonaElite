@@ -61,7 +61,14 @@ export default function Hero() {
       <div className="relative z-10 w-full max-w-[1280px] mx-auto px-5 md:px-6 mt-16 md:mt-0">
         <div className="max-w-4xl">
           <h1 className="font-[family-name:var(--font-display-xl)] text-[44px] leading-[46px] sm:text-[68px] sm:leading-[68px] md:text-[104px] md:leading-[98px] uppercase tracking-tighter mb-6">
-            <span className="block text-gold-metal">DOMINA TU CUERPO.</span>
+            <span className="block text-gold-metal">
+              DOMINA{" "}
+              <span className="relative">
+                TU
+                <span aria-hidden className="title-sparkle" />
+              </span>{" "}
+              CUERPO.
+            </span>
             <span className="block text-fire">FORTALECE TU MENTE.</span>
           </h1>
 

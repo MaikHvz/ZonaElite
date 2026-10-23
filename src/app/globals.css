@@ -111,6 +111,64 @@ body {
     drop-shadow(0 0 22px rgba(255, 170, 40, 0.35));
 }
 
+/* Destello dorado sobre "TU" (entre la T y la U) */
+@keyframes sparkle-twinkle {
+  0%, 100% { opacity: 0.85; transform: translate(-50%, -50%) scale(0.9) rotate(0deg); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) rotate(8deg); }
+}
+
+.title-sparkle {
+  position: absolute;
+  left: 54%;
+  top: 0.38em;
+  width: 0.9em;
+  height: 0.9em;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    #fffbe6 0%,
+    rgba(255, 217, 119, 0.95) 7%,
+    rgba(240, 168, 48, 0.4) 20%,
+    transparent 45%
+  );
+  animation: sparkle-twinkle 3s ease-in-out infinite;
+}
+
+.title-sparkle::before,
+.title-sparkle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 0.035em;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #f0a830 30%,
+    #fff4c4 50%,
+    #f0a830 70%,
+    transparent
+  );
+}
+
+.title-sparkle::before {
+  width: 100%;
+  transform: translate(-50%, -50%);
+}
+
+.title-sparkle::after {
+  width: 65%;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-sparkle {
+    animation: none;
+  }
+}
+
 /* Titular rojo/naranja incandescente */
 .text-fire {
   background: linear-gradient(
