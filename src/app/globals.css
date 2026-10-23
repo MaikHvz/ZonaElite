@@ -128,27 +128,27 @@ body {
 .title-sparkle {
   position: absolute;
   left: 50%;
-  top: 0.12em;
-  width: 2.4em;
-  height: 1em;
+  top: 0.5em;
+  width: 2.6em;
+  height: 1.1em;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  mix-blend-mode: screen;
   /* Halo difuso, más ancho que alto, como el bloom de un foco */
   background:
     radial-gradient(
-      ellipse 22% 26% at 50% 50%,
-      rgba(255, 246, 214, 0.9) 0%,
-      rgba(255, 210, 120, 0.55) 35%,
+      ellipse 20% 24% at 50% 50%,
+      rgba(255, 250, 230, 1) 0%,
+      rgba(255, 220, 140, 0.8) 30%,
+      rgba(255, 190, 90, 0.3) 65%,
       transparent 100%
     ),
     radial-gradient(
       ellipse 50% 50% at 50% 50%,
-      rgba(255, 180, 70, 0.45) 0%,
-      rgba(240, 130, 40, 0.18) 45%,
+      rgba(255, 185, 80, 0.6) 0%,
+      rgba(245, 140, 45, 0.25) 45%,
       transparent 100%
     );
-  filter: blur(0.04em);
+  filter: blur(0.03em);
   animation: sparkle-glow 4.5s ease-in-out infinite;
 }
 
@@ -164,8 +164,8 @@ body {
 
 /* Estela horizontal larga que se desvanece hacia los lados */
 .title-sparkle::before {
-  width: 160%;
-  height: 0.028em;
+  width: 190%;
+  height: 0.032em;
   background: linear-gradient(
     90deg,
     transparent 0%,
