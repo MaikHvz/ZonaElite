@@ -233,7 +233,7 @@ body {
   }
 }
 
-/* Resplandor de fuego que "respira" en la esquina inferior derecha */
+/* Aura sutil que "respira" detrás del maestro (lado derecho) */
 @keyframes fire-flicker {
   0%, 100% { opacity: 0.75; }
   20% { opacity: 0.95; }
@@ -243,11 +243,10 @@ body {
 
 .hero-fire-flicker {
   background: radial-gradient(
-      60% 55% at 100% 85%,
-      rgba(255, 90, 20, 0.35),
-      transparent 70%
-    ),
-    radial-gradient(45% 35% at 70% 105%, rgba(229, 38, 27, 0.3), transparent 70%);
+    35% 50% at 92% 40%,
+    rgba(255, 110, 30, 0.14),
+    transparent 70%
+  );
   mix-blend-mode: screen;
   animation: fire-flicker 3.5s ease-in-out infinite;
   pointer-events: none;

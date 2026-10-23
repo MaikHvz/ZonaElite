@@ -380,7 +380,7 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Verificación**: suite sección **AK** (12 asserts); conteo de seeds 18 → 19; `npx tsc --noEmit` limpio; lint sin errores nuevos.
 
 ## 37. Rediseño Visual "Fuego y Oro" (2026-10-23)
-**Requisito**: mejorar la UX/UI tomando como referencia `idea.jpeg`: foto de fondo cinematográfica con fuego y chispas, titular dorado + rojo incandescente, CTA principal rojo→naranja con glow, CTA secundario con borde dorado, y toques de dorado y rojo en la barra de navegación y el botón Perfil.
+**Requisito**: mejorar la UX/UI tomando como referencia `idea.jpeg`: foto de fondo con contraste cinematográfico en tono natural y un aura de fuego sutil detrás del maestro (el usuario descartó una primera versión toda en naranja), titular dorado + rojo incandescente, CTA principal rojo→naranja con glow, CTA secundario con borde dorado, y toques de dorado y rojo en la barra de navegación y el botón Perfil.
 - **Requisito + análisis de impacto**: `contexto/requisitos/rediseno-fuego-oro.md`.
 - **Código**: `src/components/Hero.tsx`, `src/components/Navbar.tsx`, `src/app/globals.css` (tokens + clases), `public/hero-fire.jpg`, `public/hero-fire-mobile.jpg`, `scripts/grade-hero-image.py`.
 - **Changelog**: entrada **v1.15.0** (`contexto/migrations/046_changelog_v1_15_0.sql`), sin cambios de esquema.

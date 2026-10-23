@@ -357,7 +357,7 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 **Problema**: el hero y la barra de navegación tenían poco contraste y poca energía frente a la referencia `idea.jpeg`.
 
 **Solución**:
-- **Fondo**: `public/hero-fire.jpg` (escritorio, 16:9) y `public/hero-fire-mobile.jpg` (móvil, vertical), generados con `scripts/grade-hero-image.py` desde `public/original.jpg`: gradient map de fuego, contraste en curva S, penumbra a la izquierda, halos naranjas, rim light, viñeta y chispas. Sobre la foto: `hero-fire-overlay` (legibilidad), `hero-fire-flicker` (resplandor animado) y brasas `ember ember-fire` deterministas.
+- **Fondo**: `public/hero-fire.jpg` (escritorio, 16:9) y `public/hero-fire-mobile.jpg` (móvil, vertical), generados con `scripts/grade-hero-image.py` desde `public/original.jpg`: tono natural con contraste en curva S, penumbra a la izquierda y en el techo, viñeta y un aura naranja sutil detrás del maestro, con chispas cerca de él. Sobre la foto: `hero-fire-overlay` (legibilidad), `hero-fire-flicker` (aura animada suave) y brasas `ember ember-fire` deterministas a la derecha.
 - **Hero**: titular `text-gold-metal` / `text-fire`, CTAs `btn-fire` / `btn-gold-outline`, checks dorados.
 - **Navbar**: logotipo `text-brand-fire`, links en Anton (hover dorado, activo en `ember`), línea inferior `nav-fire-line`, Perfil `btn-gold`, Únete `btn-fire`.
 - **Global**: tokens de marca en `@theme` y `.btn-primary-gradient` en rojo→naranja.

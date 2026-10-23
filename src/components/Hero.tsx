@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 // Brasas ascendentes (deterministas para no romper la hidratación).
-// Se concentran en la mitad derecha, donde la foto tiene el fuego.
-const embers = Array.from({ length: 22 }, (_, i) => ({
-  left: `${i % 3 === 0 ? (i * 37) % 100 : 45 + ((i * 29) % 55)}%`,
+// Se concentran a la derecha, en el aura detrás del maestro.
+const embers = Array.from({ length: 16 }, (_, i) => ({
+  left: `${i % 4 === 0 ? (i * 37) % 100 : 60 + ((i * 29) % 40)}%`,
   size: 3 + ((i * 7) % 6),
   duration: 6 + ((i * 5) % 8),
   delay: (i * 0.6) % 9,
