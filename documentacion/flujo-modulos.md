@@ -349,3 +349,18 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Reversión**: `DROP TRIGGER trg_memberships_resolve_renewals ON public.memberships; DROP TABLE public.membership_renewal_requests;` y revertir los componentes.
 
 ---
+
+## 21. Rediseño Visual "Fuego y Oro" (IMPLEMENTADO - v1.15.0)
+
+> Estado: **implementado en código (2026-10-23)**. Suite A-AL: 661 OK; sigue el fallo preexistente que depende de la fecha. `npx tsc --noEmit` limpio. Migración `046_changelog_v1_15_0.sql` (solo seed, **pendiente de aplicar**). Requisito e impacto en `contexto/requisitos/rediseno-fuego-oro.md`.
+
+**Problema**: el hero y la barra de navegación tenían poco contraste y poca energía frente a la referencia `idea.jpeg`.
+
+**Solución**:
+- **Fondo**: `public/hero-fire.jpg` (escritorio, 16:9) y `public/hero-fire-mobile.jpg` (móvil, vertical), generados con `scripts/grade-hero-image.py` desde `public/original.jpg`: gradient map de fuego, contraste en curva S, penumbra a la izquierda, halos naranjas, rim light, viñeta y chispas. Sobre la foto: `hero-fire-overlay` (legibilidad), `hero-fire-flicker` (resplandor animado) y brasas `ember ember-fire` deterministas.
+- **Hero**: titular `text-gold-metal` / `text-fire`, CTAs `btn-fire` / `btn-gold-outline`, checks dorados.
+- **Navbar**: logotipo `text-brand-fire`, links en Anton (hover dorado, activo en `ember`), línea inferior `nav-fire-line`, Perfil `btn-gold`, Únete `btn-fire`.
+- **Global**: tokens de marca en `@theme` y `.btn-primary-gradient` en rojo→naranja.
+- **Reversión**: devolver `Hero.tsx` y `Navbar.tsx` a la versión anterior. Las clases nuevas de `globals.css` pueden quedar.
+
+---

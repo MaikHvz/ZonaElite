@@ -85,12 +85,13 @@ export default function Navbar() {
   return (
     <>
       <nav
-        className={`fixed top-0 w-full z-50 transition-all duration-300 border-b border-on-surface/10 ${
+        className={`fixed top-0 w-full z-50 transition-all duration-300 ${
           scrolled
-            ? "bg-surface/95 shadow-lg shadow-black/20"
-            : "bg-surface/90 shadow-md shadow-primary/10"
+            ? "bg-[#0a0705]/95 shadow-lg shadow-black/40"
+            : "bg-[#0a0705]/80 shadow-md shadow-ember/10"
         }`}
       >
+        <div className="absolute bottom-0 left-0 right-0 h-px nav-fire-line" />
         {/* Desktop */}
         <div className="hidden lg:flex justify-between items-center px-6 py-4 max-w-[1280px] mx-auto">
           <Link href="/" className="flex items-center gap-2 shrink-0">
@@ -99,7 +100,7 @@ export default function Navbar() {
               alt="ZonaElite Logo"
               className="h-10 w-10 object-contain"
             />
-            <span className="font-[family-name:var(--font-headline-md)] text-[24px] leading-[28px] uppercase tracking-tighter text-primary">
+            <span className="font-[family-name:var(--font-headline-md)] text-[24px] leading-[28px] uppercase tracking-tighter text-brand-fire">
               ZONAELITE
             </span>
           </Link>
@@ -112,7 +113,7 @@ export default function Navbar() {
                   <a
                     key={link.href}
                     href={link.href}
-                    className="text-on-surface hover:text-primary transition-colors duration-300 font-[family-name:var(--font-label-sm)] text-[12px] leading-[16px] tracking-[0.05em] uppercase whitespace-nowrap"
+                    className="text-on-surface hover:text-gold transition-colors duration-300 font-[family-name:var(--font-headline-md)] text-[15px] leading-[18px] tracking-[0.06em] uppercase whitespace-nowrap"
                   >
                     {link.label}
                   </a>
@@ -122,10 +123,10 @@ export default function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`transition-colors duration-300 font-[family-name:var(--font-label-sm)] text-[12px] leading-[16px] tracking-[0.05em] uppercase whitespace-nowrap ${
+                  className={`transition-colors duration-300 font-[family-name:var(--font-headline-md)] text-[15px] leading-[18px] tracking-[0.06em] uppercase whitespace-nowrap ${
                     pathname === link.href
-                      ? "text-primary"
-                      : "text-on-surface hover:text-primary"
+                      ? "text-ember [text-shadow:0_0_12px_rgba(255,90,31,0.6)]"
+                      : "text-on-surface hover:text-gold"
                   }`}
                 >
                   {link.label}
@@ -137,7 +138,7 @@ export default function Navbar() {
           <div className="flex items-center gap-3 shrink-0">
             <Link
               href="/carrito"
-              className="relative text-on-surface-variant hover:text-primary transition-colors"
+              className="relative text-on-surface-variant hover:text-gold transition-colors"
               title="Carrito"
             >
               <span className="material-symbols-outlined text-[22px]">shopping_cart</span>
@@ -153,7 +154,7 @@ export default function Navbar() {
               <div className="flex items-center gap-3">
                 <Link
                   href="/dashboard/notificaciones"
-                  className="relative text-on-surface-variant hover:text-primary transition-colors"
+                  className="relative text-on-surface-variant hover:text-gold transition-colors"
                   title="Notificaciones"
                 >
                   <span className="material-symbols-outlined text-[22px]">notifications</span>
@@ -165,21 +166,21 @@ export default function Navbar() {
                 </Link>
                 <Link
                   href="/dashboard"
-                  className="text-on-surface hover:text-primary transition-colors duration-300 font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider"
+                  className="text-on-surface hover:text-gold transition-colors duration-300 font-[family-name:var(--font-headline-md)] text-[15px] uppercase tracking-[0.06em]"
                 >
                   Mi Panel
                 </Link>
                 {isAdmin && (
                   <Link
                     href="/admin"
-                    className="text-on-surface hover:text-primary transition-colors duration-300 font-[family-name:var(--font-label-sm)] text-[12px] uppercase tracking-wider"
+                    className="text-on-surface hover:text-gold transition-colors duration-300 font-[family-name:var(--font-headline-md)] text-[15px] uppercase tracking-[0.06em]"
                   >
                     Admin
                   </Link>
                 )}
                 <Link
                   href="/perfil"
-                  className="flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-sm px-6 py-2 rounded-[0.25rem] hover:opacity-80 transition-opacity uppercase tracking-wider shadow-[0_0_20px_rgba(229,57,53,0.3)]"
+                  className="flex items-center gap-2 btn-gold font-[family-name:var(--font-headline-md)] text-sm px-6 py-2 rounded-[0.25rem] uppercase tracking-wider"
                 >
                   <span className="material-symbols-outlined text-lg">person</span>
                   Perfil
@@ -188,7 +189,7 @@ export default function Navbar() {
             ) : (
               <Link
                 href="/auth"
-                className="btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-sm px-6 py-2 rounded-[0.25rem] hover:opacity-80 transition-opacity uppercase tracking-wider shadow-[0_0_20px_rgba(229,57,53,0.3)]"
+                className="btn-fire text-white font-[family-name:var(--font-headline-md)] text-sm px-6 py-2 rounded-[0.25rem] uppercase tracking-wider"
               >
                 Únete Ahora
               </Link>
@@ -205,14 +206,14 @@ export default function Navbar() {
               alt="ZonaElite Logo"
               className="h-9 w-9 object-contain"
             />
-            <span className="font-[family-name:var(--font-headline-md)] text-[22px] leading-[26px] uppercase tracking-tighter text-primary">
+            <span className="font-[family-name:var(--font-headline-md)] text-[22px] leading-[26px] uppercase tracking-tighter text-brand-fire">
               ZONAELITE
             </span>
           </Link>
           <div className="flex items-center gap-3">
             <Link
               href="/carrito"
-              className="relative text-on-surface-variant hover:text-primary transition-colors"
+              className="relative text-on-surface-variant hover:text-gold transition-colors"
               title="Carrito"
             >
               <span className="material-symbols-outlined text-[22px]">shopping_cart</span>
@@ -225,7 +226,7 @@ export default function Navbar() {
             {!loading && user && (
               <Link
                 href="/dashboard/notificaciones"
-                className="relative text-on-surface-variant hover:text-primary transition-colors"
+                className="relative text-on-surface-variant hover:text-gold transition-colors"
                 title="Notificaciones"
               >
                 <span className="material-symbols-outlined text-[22px]">notifications</span>
@@ -261,14 +262,14 @@ export default function Navbar() {
               alt="ZonaElite Logo"
               className="h-8 w-8 object-contain"
             />
-            <span className="font-[family-name:var(--font-headline-md)] text-[20px] leading-[24px] uppercase tracking-tighter text-primary">
+            <span className="font-[family-name:var(--font-headline-md)] text-[20px] leading-[24px] uppercase tracking-tighter text-brand-fire">
               ZONAELITE
             </span>
           </Link>
           <div className="flex items-center gap-2">
             <Link
               href="/carrito"
-              className="relative text-on-surface-variant hover:text-primary transition-colors p-1"
+              className="relative text-on-surface-variant hover:text-gold transition-colors p-1"
               title="Carrito"
             >
               <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
@@ -281,7 +282,7 @@ export default function Navbar() {
             {!loading && user && (
               <Link
                 href="/dashboard/notificaciones"
-                className="relative text-on-surface-variant hover:text-primary transition-colors p-1"
+                className="relative text-on-surface-variant hover:text-gold transition-colors p-1"
                 title="Notificaciones"
               >
                 <span className="material-symbols-outlined text-[20px]">notifications</span>
@@ -319,8 +320,8 @@ export default function Navbar() {
         <div className="flex flex-col items-center gap-5 w-full max-w-sm">
           {navLinks.map((link, index) => {
             const isHashLink = link.href.includes("#");
-            const commonClasses = `text-on-surface hover:text-primary font-[family-name:var(--font-headline-md)] text-2xl uppercase tracking-wide transition-colors duration-200 ${
-              !isHashLink && pathname === link.href ? "text-primary" : ""
+            const commonClasses = `hover:text-gold font-[family-name:var(--font-headline-md)] text-2xl uppercase tracking-wide transition-colors duration-200 ${
+              !isHashLink && pathname === link.href ? "text-ember" : "text-on-surface"
             }`;
 
             return isHashLink ? (
@@ -352,7 +353,7 @@ export default function Navbar() {
           <Link
             href="/carrito"
             onClick={closeMobile}
-            className={`flex items-center gap-3 text-on-surface hover:text-primary font-[family-name:var(--font-headline-md)] text-xl uppercase tracking-wide transition-colors ${
+            className={`flex items-center gap-3 text-on-surface hover:text-gold font-[family-name:var(--font-headline-md)] text-xl uppercase tracking-wide transition-colors ${
               mobileOpen ? "menu-item-animate" : ""
             }`}
             style={mobileOpen ? { animationDelay: `${navLinks.length * 40}ms` } : undefined}
@@ -372,7 +373,7 @@ export default function Navbar() {
                 <Link
                   href="/dashboard"
                   onClick={closeMobile}
-                  className={`flex items-center gap-3 text-on-surface hover:text-primary font-[family-name:var(--font-headline-md)] text-xl uppercase tracking-wide transition-colors ${
+                  className={`flex items-center gap-3 text-on-surface hover:text-gold font-[family-name:var(--font-headline-md)] text-xl uppercase tracking-wide transition-colors ${
                     mobileOpen ? "menu-item-animate" : ""
                   }`}
                   style={mobileOpen ? { animationDelay: `${(navLinks.length + 1) * 40}ms` } : undefined}
@@ -384,7 +385,7 @@ export default function Navbar() {
                   <Link
                     href="/admin"
                     onClick={closeMobile}
-                    className={`flex items-center gap-3 text-on-surface hover:text-primary font-[family-name:var(--font-headline-md)] text-xl uppercase tracking-wide transition-colors ${
+                    className={`flex items-center gap-3 text-on-surface hover:text-gold font-[family-name:var(--font-headline-md)] text-xl uppercase tracking-wide transition-colors ${
                       mobileOpen ? "menu-item-animate" : ""
                     }`}
                     style={mobileOpen ? { animationDelay: `${(navLinks.length + 2) * 40}ms` } : undefined}
@@ -400,7 +401,7 @@ export default function Navbar() {
                 <Link
                   href="/perfil"
                   onClick={closeMobile}
-                  className={`flex items-center gap-2 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-lg px-8 py-3 rounded-xl uppercase tracking-wider shadow-[0_0_20px_rgba(229,57,53,0.3)] transition-opacity hover:opacity-90 ${
+                  className={`flex items-center gap-2 btn-gold font-[family-name:var(--font-headline-md)] text-lg px-8 py-3 rounded-xl uppercase tracking-wider ${
                     mobileOpen ? "menu-item-animate" : ""
                   }`}
                   style={mobileOpen ? { animationDelay: `${(navLinks.length + 3) * 40}ms` } : undefined}
@@ -423,7 +424,7 @@ export default function Navbar() {
               <Link
                 href="/auth"
                 onClick={closeMobile}
-                className={`mt-4 btn-primary-gradient text-white font-[family-name:var(--font-headline-md)] text-lg px-8 py-3 rounded-xl uppercase tracking-wider shadow-[0_0_20px_rgba(229,57,53,0.3)] transition-opacity hover:opacity-90 ${
+                className={`mt-4 btn-fire text-white font-[family-name:var(--font-headline-md)] text-lg px-8 py-3 rounded-xl uppercase tracking-wider ${
                   mobileOpen ? "menu-item-animate" : ""
                 }`}
                 style={mobileOpen ? { animationDelay: `${(navLinks.length + 1) * 40}ms` } : undefined}

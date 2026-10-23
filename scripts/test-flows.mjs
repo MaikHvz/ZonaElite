@@ -13,7 +13,7 @@
 //
 // Exit code != 0 si falla cualquier test lógico o el scan detecta defectos.
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createHmac } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -1653,7 +1653,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 19);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 20);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -2924,6 +2924,43 @@ ok("AK: los nombres de alumnos son clickeables en las pantallas admin",
 ok("AK: el menú muestra el contador de solicitudes de renovación en Membresías",
   /from\("membership_renewal_requests"\)[\s\S]*?\.eq\("status", "pendiente"\)/.test(srcAj("components", "admin", "PendingTransferProvider.tsx")) &&
   /link\.href === "\/admin\/membresias" && renewalCount > 0/.test(srcAj("components", "admin", "AdminSidebar.tsx")));
+
+// ============================================================
+// AL. Rediseño visual "fuego y oro" (hero + navbar, v1.15.0)
+// ============================================================
+section("AL. Rediseño visual fuego y oro");
+
+const migration046 = readFileSync(join(ROOT, "contexto", "migrations", "046_changelog_v1_15_0.sql"), "utf8");
+const schemaAl = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizado.sql"), "utf8");
+const heroAl = srcAj("components", "Hero.tsx");
+const navbarAl = srcAj("components", "Navbar.tsx");
+const cssAl = srcAj("app", "globals.css");
+
+ok("AL: 046 es seed v1.15.0 y el espejo lo refleja una sola vez",
+  /'v1\.15\.0'/.test(migration046) && /ON CONFLICT \(version\) DO NOTHING/.test(migration046) &&
+  (schemaAl.match(/'v1\.15\.0'/g) || []).length === 1);
+ok("AL: el hero usa las fotos gradeadas (escritorio y móvil) y existen en public/",
+  /url\('\/hero-fire\.jpg'\)/.test(heroAl) &&
+  /url\('\/hero-fire-mobile\.jpg'\)/.test(heroAl) &&
+  existsSync(join(ROOT, "public", "hero-fire.jpg")) &&
+  existsSync(join(ROOT, "public", "hero-fire-mobile.jpg")));
+ok("AL: titular dorado + rojo incandescente y CTAs fuego / borde dorado",
+  /className="block text-gold-metal">DOMINA TU CUERPO\./.test(heroAl) &&
+  /className="block text-fire">FORTALECE TU MENTE\./.test(heroAl) &&
+  /btn-fire[\s\S]*?Reservar Clase/.test(heroAl) &&
+  /btn-gold-outline[\s\S]*?Ver Horarios/.test(heroAl));
+ok("AL: las brasas del hero son deterministas (sin Math.random, no rompen la hidratación)",
+  /className="ember ember-fire"/.test(heroAl) && !/Math\.random/.test(heroAl));
+ok("AL: tokens de marca y clases definidas en globals.css (con reduced-motion)",
+  /--color-gold: #f5b942;/.test(cssAl) && /--color-ember: #ff5a1f;/.test(cssAl) &&
+  [".text-gold-metal", ".text-fire", ".text-brand-fire", ".btn-fire", ".btn-gold-outline", ".btn-gold", ".nav-fire-line", ".hero-fire-overlay", ".hero-fire-flicker", ".ember.ember-fire"]
+    .every((c) => cssAl.includes(`${c} {`)) &&
+  /@media \(prefers-reduced-motion: reduce\) \{\s+\.hero-fire-flicker \{\s+animation: none;/.test(cssAl));
+ok("AL: navbar con logotipo fuego, línea rojo→oro, Perfil dorado y Únete fuego",
+  (navbarAl.match(/text-brand-fire">\s+ZONAELITE/g) || []).length === 3 &&
+  /nav-fire-line/.test(navbarAl) &&
+  (navbarAl.match(/btn-gold font-/g) || []).length === 2 &&
+  (navbarAl.match(/btn-fire text-white/g) || []).length === 2);
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

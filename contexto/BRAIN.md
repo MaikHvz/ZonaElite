@@ -36,6 +36,8 @@
 
 **Diseño:** Material Design 3 dark (`#131313` fondo, `#ffb4ac` primary, `#ff544c` primary container). Fuentes Anton (títulos), Hanken Grotesk (cuerpo), JetBrains Mono (labels) vía `next/font/google`. Iconos **Material Symbols Outlined** (CDN). Clases utilitarias propias: `.glass-panel`, `.glass-card`, `.btn-primary-gradient`, `.hero-gradient`, `.text-glow-red`, `.fade-up` (animadas por `FadeUpObserver`).
 
+**Marca "fuego y oro" (v1.15.0):** tokens `--color-gold` (`#f5b942`), `--color-gold-light`, `--color-ember` (`#ff5a1f`), `--color-fire` (`#e5261b`) → utilidades `text-gold`, `border-ember`, etc. Clases: `.text-gold-metal` / `.text-fire` (titulares con degradado), `.text-brand-fire` (logotipo), `.btn-fire` (CTA principal rojo→naranja con glow), `.btn-gold-outline` (CTA secundario), `.btn-gold` (Perfil), `.nav-fire-line`, `.hero-fire-overlay`, `.hero-fire-flicker`, `.ember.ember-fire`. `.btn-primary-gradient` también es rojo→naranja. El fondo del hero es `public/hero-fire.jpg` / `hero-fire-mobile.jpg`, generado desde `public/original.jpg` con `scripts/grade-hero-image.py` (Pillow + numpy). Para CTAs nuevos usar `btn-fire` / `btn-gold-outline`.
+
 **Variables de entorno:**
 
 ```
@@ -451,6 +453,7 @@ Todas las policies tienen rol `public`; el filtro es `auth.uid()`/`is_admin()`/`
 | v1.12.0 | Migración de cargas a cuentas propias (re-anclaje, `dependents_archive`, apoderado, cargas congeladas) — aplicada 2026-10-16 | 040, 041 |
 | v1.13.0 | Una cuenta por alumno (retiro de cargas) — se aplica **después** de `scripts-datos/2026-10-16_eliminar_cargas.sql` (la 042 aborta si quedan cargas) | 042, 043 |
 | v1.14.0 | Ficha rápida del alumno + renovación de membresías (solicitudes y auto-aceptación) — aplicada y verificada 2026-10-16 | 044, 045 |
+| v1.15.0 | Rediseño visual "fuego y oro" (hero + navbar), solo seed de changelog — pendiente de aplicar | 046 |
 
 Anteriores (001–010): tokens, membresía activa única, `chile_today` en RLS, `enroll_class`, ventana de tokens, deudas + RLS, `location_url`, reglamento, packs personalizados, horarios personalizados. `028`: FK `personalized_packs.purchased_by`.
 

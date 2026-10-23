@@ -48,6 +48,12 @@
   --color-surface-container-lowest: #0e0e0e;
   --color-surface-container-high: #2a2a2a;
 
+  /* Acentos de marca "fuego y oro" */
+  --color-gold: #f5b942;
+  --color-gold-light: #ffd977;
+  --color-ember: #ff5a1f;
+  --color-fire: #e5261b;
+
   --font-headline-lg-mobile: "Anton", sans-serif;
   --font-display-xl: "Anton", sans-serif;
   --font-body-lg: "Hanken Grotesk", sans-serif;
@@ -80,8 +86,191 @@ body {
 }
 
 .btn-primary-gradient {
-  background: linear-gradient(135deg, #ff544c, #d32f2f, #b71c1c);
+  background: linear-gradient(135deg, #ff6a1a, #e5261b, #b71c1c);
   cursor: pointer;
+}
+
+/* ============================================================
+   Marca "fuego y oro" — hero, navbar y CTAs principales
+   ============================================================ */
+
+/* Titular dorado metálico */
+.text-gold-metal {
+  background: linear-gradient(
+    180deg,
+    #fff4c4 0%,
+    #ffd977 30%,
+    #f0a830 58%,
+    #b8741a 80%,
+    #ffcf5c 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 22px rgba(255, 170, 40, 0.35));
+}
+
+/* Titular rojo/naranja incandescente */
+.text-fire {
+  background: linear-gradient(
+    180deg,
+    #ffb347 0%,
+    #ff6a1a 38%,
+    #ef2f1c 72%,
+    #b3140f 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.55))
+    drop-shadow(0 0 26px rgba(255, 70, 20, 0.6));
+}
+
+/* Logotipo de texto en navbar */
+.text-brand-fire {
+  background: linear-gradient(180deg, #ffb347 0%, #ff5a1f 50%, #e5261b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 10px rgba(255, 90, 31, 0.45));
+}
+
+/* CTA principal: degradado rojo → naranja con glow */
+.btn-fire {
+  background: linear-gradient(135deg, #e5261b 0%, #ff4e1a 55%, #ff7a1a 100%);
+  border: 1px solid rgba(255, 190, 110, 0.55);
+  box-shadow: 0 0 24px rgba(255, 80, 30, 0.55),
+    0 10px 32px rgba(229, 38, 27, 0.45),
+    inset 0 1px 0 rgba(255, 220, 160, 0.35);
+  text-shadow: 0 1px 2px rgba(80, 0, 0, 0.6);
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
+}
+
+.btn-fire:hover {
+  transform: translateY(-2px) scale(1.02);
+  filter: brightness(1.08);
+  box-shadow: 0 0 40px rgba(255, 90, 30, 0.75),
+    0 14px 40px rgba(229, 38, 27, 0.55),
+    inset 0 1px 0 rgba(255, 220, 160, 0.45);
+}
+
+/* CTA secundario: borde dorado sutil sobre fondo oscuro */
+.btn-gold-outline {
+  background: rgba(12, 8, 5, 0.6);
+  border: 2px solid rgba(245, 185, 66, 0.85);
+  box-shadow: 0 0 18px rgba(245, 185, 66, 0.3),
+    inset 0 0 14px rgba(245, 185, 66, 0.12);
+  cursor: pointer;
+  transition: background-color 0.25s ease, box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.btn-gold-outline:hover {
+  background: rgba(245, 185, 66, 0.12);
+  border-color: #ffd977;
+  box-shadow: 0 0 28px rgba(245, 185, 66, 0.5),
+    inset 0 0 18px rgba(245, 185, 66, 0.2);
+}
+
+/* Botón dorado relleno (Perfil) */
+.btn-gold {
+  background: linear-gradient(180deg, #f9c85a 0%, #e9a42b 55%, #c47f16 100%);
+  border: 1px solid rgba(255, 230, 160, 0.7);
+  color: #1a0f02;
+  box-shadow: 0 0 20px rgba(245, 185, 66, 0.4),
+    inset 0 1px 0 rgba(255, 245, 210, 0.6);
+  cursor: pointer;
+  transition: box-shadow 0.25s ease, filter 0.25s ease;
+}
+
+.btn-gold:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 30px rgba(245, 185, 66, 0.65),
+    inset 0 1px 0 rgba(255, 245, 210, 0.7);
+}
+
+/* Línea inferior del navbar: rojo → oro */
+.nav-fire-line {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(229, 38, 27, 0.7) 25%,
+    rgba(255, 122, 26, 0.8) 50%,
+    rgba(245, 185, 66, 0.7) 75%,
+    transparent 100%
+  );
+}
+
+/* Capas sobre la foto del hero: legibilidad a la izquierda + base oscura */
+.hero-fire-overlay {
+  background: linear-gradient(
+      90deg,
+      rgba(5, 3, 2, 0.7) 0%,
+      rgba(5, 3, 2, 0.4) 35%,
+      rgba(5, 3, 2, 0.05) 62%,
+      transparent 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(5, 3, 2, 0.55) 0%,
+      transparent 20%,
+      transparent 60%,
+      rgba(19, 19, 19, 0.98) 100%
+    );
+}
+
+@media (max-width: 767px) {
+  .hero-fire-overlay {
+    background: linear-gradient(
+      180deg,
+      rgba(5, 3, 2, 0.55) 0%,
+      rgba(5, 3, 2, 0.35) 25%,
+      rgba(5, 3, 2, 0.7) 60%,
+      rgba(19, 19, 19, 1) 100%
+    );
+  }
+}
+
+/* Resplandor de fuego que "respira" en la esquina inferior derecha */
+@keyframes fire-flicker {
+  0%, 100% { opacity: 0.75; }
+  20% { opacity: 0.95; }
+  45% { opacity: 0.7; }
+  70% { opacity: 1; }
+}
+
+.hero-fire-flicker {
+  background: radial-gradient(
+      60% 55% at 100% 85%,
+      rgba(255, 90, 20, 0.35),
+      transparent 70%
+    ),
+    radial-gradient(45% 35% at 70% 105%, rgba(229, 38, 27, 0.3), transparent 70%);
+  mix-blend-mode: screen;
+  animation: fire-flicker 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Variante naranja intensa de las brasas */
+.ember.ember-fire {
+  background: radial-gradient(
+    circle,
+    rgba(255, 230, 160, 1) 0%,
+    rgba(255, 120, 30, 0.75) 45%,
+    transparent 75%
+  );
+  box-shadow: 0 0 8px rgba(255, 110, 30, 0.8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-fire-flicker {
+    animation: none;
+  }
+  .btn-fire:hover {
+    transform: none;
+  }
 }
 
 .hero-gradient {

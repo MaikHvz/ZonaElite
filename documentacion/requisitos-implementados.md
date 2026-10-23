@@ -378,3 +378,10 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Código**: `src/components/admin/UserQuickView.tsx` (provider + `UserNameButton`, en 7 pantallas admin), `AssignMembershipModal` con `prefill`, `/admin/membresias` (Renovar, bloque de solicitudes, rechazo, `?tab=membresias`), `PendingTransferProvider` + `AdminSidebar` (contador), `src/components/dashboard/RenewalRequestButton.tsx` (resumen + Membresías), `POST /api/memberships/renewal-request`, `sendRenewalRequestEmail` (con `escapeHtml`).
 - **Changelog**: entrada **v1.14.0** (`contexto/migrations/045_changelog_v1_14_0.sql`).
 - **Verificación**: suite sección **AK** (12 asserts); conteo de seeds 18 → 19; `npx tsc --noEmit` limpio; lint sin errores nuevos.
+
+## 37. Rediseño Visual "Fuego y Oro" (2026-10-23)
+**Requisito**: mejorar la UX/UI tomando como referencia `idea.jpeg`: foto de fondo cinematográfica con fuego y chispas, titular dorado + rojo incandescente, CTA principal rojo→naranja con glow, CTA secundario con borde dorado, y toques de dorado y rojo en la barra de navegación y el botón Perfil.
+- **Requisito + análisis de impacto**: `contexto/requisitos/rediseno-fuego-oro.md`.
+- **Código**: `src/components/Hero.tsx`, `src/components/Navbar.tsx`, `src/app/globals.css` (tokens + clases), `public/hero-fire.jpg`, `public/hero-fire-mobile.jpg`, `scripts/grade-hero-image.py`.
+- **Changelog**: entrada **v1.15.0** (`contexto/migrations/046_changelog_v1_15_0.sql`), sin cambios de esquema.
+- **Verificación**: suite sección **AL** (6 asserts); conteo de seeds 19 → 20; `npx tsc --noEmit` limpio; revisado con capturas headless a 1600×900 y 500×1000.
