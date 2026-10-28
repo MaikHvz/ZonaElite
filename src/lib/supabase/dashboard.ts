@@ -469,6 +469,7 @@ export interface ClassSessionData {
     discipline: { name: string } | null;
     professor: { full_name: string } | null;
     mode?: string;
+    category?: string[] | null;
   };
 }
 
@@ -499,7 +500,7 @@ export async function getUpcomingSessions() {
         `
         *,
         schedule:schedules(
-          id, day_of_week, start_time, end_time, mode,
+          id, day_of_week, start_time, end_time, mode, category,
           discipline:disciplines(name),
           professor:profiles(full_name)
         )
@@ -523,7 +524,7 @@ export async function getPastSessions(fromDate: string, toDate: string) {
         `
         *,
         schedule:schedules(
-          id, day_of_week, start_time, end_time, mode,
+          id, day_of_week, start_time, end_time, mode, category,
           discipline:disciplines(name),
           professor:profiles(full_name)
         )

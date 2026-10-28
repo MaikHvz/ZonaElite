@@ -1653,7 +1653,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 20);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 21);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -2961,6 +2961,41 @@ ok("AL: navbar con logotipo fuego, línea rojo→oro, Perfil dorado y Únete fue
   /nav-fire-line/.test(navbarAl) &&
   (navbarAl.match(/btn-gold font-/g) || []).length === 2 &&
   (navbarAl.match(/btn-fire text-white/g) || []).length === 2);
+
+// ============================================================
+// AM. El QR de asistencia identifica la clase (v1.16.0)
+// ============================================================
+section("AM. QR de asistencia con la clase");
+
+const migration047 = readFileSync(join(ROOT, "contexto", "migrations", "047_changelog_v1_16_0.sql"), "utf8");
+const asistenciaAm = srcAj("app", "admin", "asistencia", "page.tsx");
+const checkinAm = srcAj("app", "checkin", "[sessionId]", "page.tsx");
+const dashboardAm = srcAj("lib", "supabase", "dashboard.ts");
+const { isSessionOver } = await import("../src/lib/dates.ts");
+const { sortScheduleCategories, scheduleCategoryLabel } = await import("../src/lib/category.ts");
+
+ok("AM: 047 es seed v1.16.0 y el espejo lo refleja una sola vez",
+  /'v1\.16\.0'/.test(migration047) && /ON CONFLICT \(version\) DO NOTHING/.test(migration047) &&
+  (schemaAl.match(/'v1\.16\.0'/g) || []).length === 1);
+ok("AM: isSessionOver compara con la hora de Chile (día anterior, antes/después del término)",
+  isSessionOver("2026-10-27", "20:00", "2026-10-28", "08:00") === true &&
+  isSessionOver("2026-10-28", "20:00:00", "2026-10-28", "19:59") === false &&
+  isSessionOver("2026-10-28", "20:00:00", "2026-10-28", "20:00") === true &&
+  isSessionOver("2026-10-29", "20:00", "2026-10-28", "23:00") === false);
+ok("AM: categorías del horario ordenadas niños → juveniles → adultos, sin duplicados",
+  sortScheduleCategories(["adultos", "ninos", "adultos"]).join() === "ninos,adultos" &&
+  sortScheduleCategories(null).length === 0 &&
+  scheduleCategoryLabel("juveniles") === "Juveniles");
+ok("AM: las sesiones admin traen schedules.category",
+  (dashboardAm.match(/start_time, end_time, mode, category,/g) || []).length === 2);
+ok("AM: la pantalla QR muestra la clase y avisa si terminó",
+  /QR de asistencia para/.test(asistenciaAm) &&
+  /isSessionOver\(s\.session_date, s\.schedule\?\.end_time\)/.test(asistenciaAm) &&
+  /Esta clase ya terminó/.test(asistenciaAm));
+ok("AM: el check-in muestra la clase y avisa si terminó o no es su categoría (sin bloquear)",
+  /schedules\(start_time, end_time, category, disciplines\(name\)\)/.test(checkinAm) &&
+  /\{classCard\}/.test(checkinAm) && /\{sessionOver && \(/.test(checkinAm) &&
+  /\{categoryMismatch && myCategory && \(/.test(checkinAm));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

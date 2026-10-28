@@ -364,3 +364,14 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Reversión**: devolver `Hero.tsx` y `Navbar.tsx` a la versión anterior. Las clases nuevas de `globals.css` pueden quedar.
 
 ---
+
+## 22. QR de Asistencia con Identificación de la Clase (IMPLEMENTADO - v1.16.0)
+
+> Estado: **implementado en código (2026-10-28)**. Suite A-AM: 666 OK; fallan el test preexistente que depende de la fecha y el `AL` del titular (el destello del h1 partió "DOMINA TU CUERPO." en spans). Sin cambios de esquema. Migración `047_changelog_v1_16_0.sql` (solo seed, **pendiente de aplicar**). Requisito e impacto en `contexto/requisitos/qr-identificacion-clase.md`.
+
+**Problema**: si el profesor olvida finalizar la asistencia y cambia de clase, los alumnos de la clase nueva escanean el QR de la anterior y quedan marcados (e inscritos, con token o deuda) en la sesión equivocada.
+
+**Solución**:
+- **Pantalla QR (`/admin/asistencia`)**: sobre el QR, cabecera "QR de asistencia para" con la disciplina en grande, fecha, horario, profesor y chips de categoría (`schedules.category`: Niños / Juveniles / Adultos). Si la sesión activa ya terminó (`isSessionOver`: día anterior, o hoy con la hora de Chile ≥ `end_time`), aviso rojo para finalizarla antes de abrir la siguiente. Un reloj por minuto refresca el aviso.
+- **Check-in (`/checkin/[sessionId]`)**: la consulta de la sesión trae `schedules(start_time, end_time, category, disciplines(name))`. Tarjeta de la clase antes de confirmar, aviso si la clase ya terminó y aviso si la categoría del alumno (`categoryFromBirth`) no está en la clase. Ambos avisos son **informativos**: `/api/checkin` no cambia. El resultado repite el nombre y horario de la clase.
+- **Helpers**: `getChileNowTime()` e `isSessionOver()` en `src/lib/dates.ts`; `SCHEDULE_CATEGORIES`, `scheduleCategoryLabel()` y `sortScheduleCategories()` en `src/lib/category.ts`. `getUpcomingSessions` / `getPastSessions` seleccionan `schedules.category` (`ClassSessionData.schedule.category`).

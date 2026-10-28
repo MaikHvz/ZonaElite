@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "@/providers/SessionProvider";
 import { createClient } from "@/lib/supabase/client";
-import { getChileToday, addDaysChile, chileDateToUtc, chileMonthStartDate } from "@/lib/dates";
+import { getChileToday, addDaysChile, chileDateToUtc, chileMonthStartDate, isSessionOver } from "@/lib/dates";
 import { QRCodeSVG } from "qrcode.react";
 import {
   getUpcomingSessions,
@@ -14,7 +14,7 @@ import {
   type AttendanceBeneficiary,
 } from "@/lib/supabase/dashboard";
 import { exportProfessionalExcel, type ProfessionalSheetConfig } from "@/lib/excel";
-import { categoryFromBirth } from "@/lib/category";
+import { categoryFromBirth, scheduleCategoryLabel, sortScheduleCategories } from "@/lib/category";
 import { UserNameButton } from "@/components/admin/UserQuickView";
 
 const DAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -24,6 +24,12 @@ const STATUS_OPTIONS = [
   { value: "ausente", label: "Ausente", icon: "close", color: "bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30" },
   { value: "justificado", label: "Justificado", icon: "info", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/30" },
 ] as const;
+
+const SCHEDULE_CATEGORY_CHIP: Record<string, string> = {
+  ninos: "bg-blue-500/10 text-blue-400 border-blue-500/30",
+  juveniles: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  adultos: "bg-green-500/10 text-green-400 border-green-500/30",
+};
 
 interface SessionWithCount extends ClassSessionData {
   enrolledCount?: number;
@@ -108,6 +114,13 @@ export default function AdminAsistenciaPage() {
 
   const [removeTarget, setRemoveTarget] = useState<{ beneficiary_id: string; full_name: string } | null>(null);
   const [removing, setRemoving] = useState(false);
+
+  // Reloj por minuto: detecta cuando la clase con QR activo ya terminó
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setClockTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
@@ -1367,6 +1380,8 @@ export default function AdminAsistenciaPage() {
                       const startTime = s.schedule?.start_time?.slice(0, 5) || "";
                       const endTime = s.schedule?.end_time?.slice(0, 5) || "";
                       const isActive = s.status === "activa";
+                      const categories = sortScheduleCategories(s.schedule?.category);
+                      const isOver = isActive && isSessionOver(s.session_date, s.schedule?.end_time);
 
                       return (
                         <div key={s.id} className={`bg-surface-container border rounded-xl transition-all ${isExpanded ? "border-primary/30" : "border-on-surface/5 hover:border-on-surface/15"}`}>
@@ -1431,6 +1446,43 @@ export default function AdminAsistenciaPage() {
                                           Configuración
                                         </a>{" "}
                                         para que un alumno no pueda ver el QR ni cerrar la sesión.
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Qué clase recibe los check-ins */}
+                                  <div className="mb-4 text-center">
+                                    <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">
+                                      QR de asistencia para
+                                    </p>
+                                    <p className="font-[family-name:var(--font-headline-md)] text-[26px] leading-tight text-on-surface uppercase mt-1">
+                                      {discName}
+                                    </p>
+                                    <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mt-1">
+                                      {isToday ? "Hoy" : formatDate(s.session_date)} · {startTime} - {endTime} · {profName}
+                                    </p>
+                                    {categories.length > 0 && (
+                                      <div className="flex flex-wrap justify-center gap-2 mt-3">
+                                        {categories.map((c) => (
+                                          <span
+                                            key={c}
+                                            className={`font-[family-name:var(--font-headline-md)] text-[13px] uppercase tracking-wide px-3 py-1 rounded-full border ${SCHEDULE_CATEGORY_CHIP[c] || "bg-on-surface/10 text-on-surface-variant border-on-surface/20"}`}
+                                          >
+                                            {scheduleCategoryLabel(c)}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {isOver && (
+                                    <div className="w-full mb-4 flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                                      <span className="material-symbols-outlined text-red-400 text-[18px]">schedule</span>
+                                      <p className="font-[family-name:var(--font-body-md)] text-[12px] text-red-200">
+                                        <strong>Esta clase ya terminó</strong>
+                                        {s.session_date === getChileToday() && endTime ? ` (a las ${endTime})` : ""} y el QR sigue
+                                        activo. Si ya comenzó otra clase, finaliza esta asistencia y activa el QR de la clase nueva
+                                        para que los alumnos no queden marcados en la clase equivocada.
                                       </p>
                                     </div>
                                   )}

@@ -385,3 +385,10 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Código**: `src/components/Hero.tsx`, `src/components/Navbar.tsx`, `src/app/globals.css` (tokens + clases), `public/hero-fire.jpg`, `public/hero-fire-mobile.jpg`, `scripts/grade-hero-image.py`.
 - **Changelog**: entrada **v1.15.0** (`contexto/migrations/046_changelog_v1_15_0.sql`), sin cambios de esquema.
 - **Verificación**: suite sección **AL** (6 asserts); conteo de seeds 19 → 20; `npx tsc --noEmit` limpio; revisado con capturas headless a 1600×900 y 500×1000.
+
+## 38. QR de Asistencia con Identificación de la Clase (2026-10-28)
+**Requisito**: dar más feedback en el QR de asistencia por clase: mostrar el nombre de la clase y si es para niños, juveniles, adultos o varias categorías, por si el profesor olvida apagar el QR y cambia de clase.
+- **Requisito + análisis de impacto**: `contexto/requisitos/qr-identificacion-clase.md`.
+- **Código**: `src/app/admin/asistencia/page.tsx` (cabecera de la clase + aviso de clase terminada), `src/app/checkin/[sessionId]/page.tsx` (tarjeta de la clase, avisos de clase terminada y de categoría), `src/lib/dates.ts` (`getChileNowTime`, `isSessionOver`), `src/lib/category.ts` (etiquetas y orden de `schedules.category`), `src/lib/supabase/dashboard.ts` (`schedules.category` en las sesiones admin).
+- **Changelog**: entrada **v1.16.0** (`contexto/migrations/047_changelog_v1_16_0.sql`), sin cambios de esquema.
+- **Verificación**: suite sección **AM** (6 asserts); conteo de seeds 20 → 21; lint sin errores nuevos.

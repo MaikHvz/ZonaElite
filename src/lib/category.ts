@@ -31,6 +31,28 @@ export function categoryLabel(category: string | null | undefined): string {
   return "Adulto";
 }
 
+/** Categorías de `schedules.category`, en orden de edad. */
+export const SCHEDULE_CATEGORIES = ["ninos", "juveniles", "adultos"] as const;
+
+export function scheduleCategoryLabel(category: string): string {
+  if (category === "ninos") return "Niños";
+  if (category === "juveniles") return "Juveniles";
+  if (category === "adultos") return "Adultos";
+  return category;
+}
+
+/** Ordena (niños → juveniles → adultos) y quita duplicados de `schedules.category`. */
+export function sortScheduleCategories(
+  categories: string[] | string | null | undefined
+): string[] {
+  const list = Array.isArray(categories) ? categories : categories ? [categories] : [];
+  const order = (c: string) => {
+    const i = (SCHEDULE_CATEGORIES as readonly string[]).indexOf(c);
+    return i === -1 ? SCHEDULE_CATEGORIES.length : i;
+  };
+  return [...new Set(list)].sort((a, b) => order(a) - order(b));
+}
+
 /** schedules.category usa plurales ('ninos' | 'juveniles' | 'adultos'). */
 export function categoryToPlural(category: string): string {
   if (category === "nino") return "ninos";

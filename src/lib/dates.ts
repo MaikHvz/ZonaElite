@@ -8,6 +8,31 @@ export function getChileToday(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: CHILE_TZ });
 }
 
+/** Hora actual en Chile como "HH:MM" (24 h). */
+export function getChileNowTime(): string {
+  return new Date().toLocaleTimeString("en-GB", {
+    timeZone: CHILE_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+}
+
+/**
+ * true si la sesión del día `sessionDate` ("YYYY-MM-DD") ya terminó según
+ * la hora de Chile (`endTime` "HH:MM" o "HH:MM:SS").
+ */
+export function isSessionOver(
+  sessionDate: string,
+  endTime: string | null | undefined,
+  today: string = getChileToday(),
+  nowTime: string = getChileNowTime()
+): boolean {
+  if (sessionDate < today) return true;
+  if (sessionDate > today || !endTime) return false;
+  return nowTime >= endTime.slice(0, 5);
+}
+
 /**
  * Suma días a una fecha string "YYYY-MM-DD" y retorna el resultado como "YYYY-MM-DD".
  * Usa mediodía para evitar problemas de DST.

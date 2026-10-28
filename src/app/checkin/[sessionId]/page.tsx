@@ -4,11 +4,28 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/providers/SessionProvider";
 import { createClient } from "@/lib/supabase/client";
+import { getChileToday, isSessionOver } from "@/lib/dates";
+import {
+  categoryFromBirth,
+  categoryLabel,
+  categoryToPlural,
+  scheduleCategoryLabel,
+  sortScheduleCategories,
+  type StudentCategory,
+} from "@/lib/category";
 
 interface Beneficiary {
   id: string;
   name: string;
   is_self: boolean;
+}
+
+interface SessionInfo {
+  date: string;
+  discipline: string;
+  startTime: string;
+  endTime: string;
+  categories: string[];
 }
 
 interface CheckinResult {
@@ -36,6 +53,8 @@ export default function CheckinPage({
   const [error, setError] = useState<string | null>(null);
   const [sessionActive, setSessionActive] = useState<boolean | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
+  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
+  const [myCategory, setMyCategory] = useState<StudentCategory | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -50,7 +69,7 @@ export default function CheckinPage({
 
     supabase
       .from("class_sessions")
-      .select("id, status")
+      .select("id, status, session_date, schedules(start_time, end_time, category, disciplines(name))")
       .eq("id", sessionId)
       .single()
       .then(({ data, error }) => {
@@ -59,6 +78,22 @@ export default function CheckinPage({
           setLoadingSession(false);
           return;
         }
+        const schedule = (Array.isArray(data.schedules) ? data.schedules[0] : data.schedules) as {
+          start_time?: string;
+          end_time?: string;
+          category?: string[] | null;
+          disciplines?: { name?: string } | { name?: string }[] | null;
+        } | null;
+        const discipline = Array.isArray(schedule?.disciplines)
+          ? schedule?.disciplines[0]
+          : schedule?.disciplines;
+        setSessionInfo({
+          date: data.session_date,
+          discipline: discipline?.name || "Clase",
+          startTime: schedule?.start_time?.slice(0, 5) || "",
+          endTime: schedule?.end_time?.slice(0, 5) || "",
+          categories: sortScheduleCategories(schedule?.category),
+        });
         setSessionActive(data.status === "activa");
         setLoadingSession(false);
       });
@@ -81,9 +116,10 @@ export default function CheckinPage({
       if (ownBen) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("full_name")
+          .select("full_name, birth_date")
           .eq("id", user.id)
           .single();
+        setMyCategory(categoryFromBirth(profile?.birth_date));
         all.push({
           id: ownBen.id,
           name: profile?.full_name || "Yo",
@@ -149,6 +185,54 @@ export default function CheckinPage({
     }
   };
 
+  const sessionOver = sessionInfo
+    ? isSessionOver(sessionInfo.date, sessionInfo.endTime)
+    : false;
+  const categoryMismatch =
+    !!sessionInfo &&
+    !!myCategory &&
+    sessionInfo.categories.length > 0 &&
+    !sessionInfo.categories.includes(categoryToPlural(myCategory));
+
+  const classCard = sessionInfo && (
+    <div className="mb-6 p-5 rounded-2xl bg-surface-container-low border border-primary/20 text-center">
+      <p className="font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider text-on-surface-variant">
+        Clase
+      </p>
+      <p className="font-[family-name:var(--font-headline-md)] text-[24px] leading-tight text-on-surface uppercase mt-1">
+        {sessionInfo.discipline}
+      </p>
+      <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant mt-1">
+        {sessionInfo.date === getChileToday()
+          ? "Hoy"
+          : new Date(sessionInfo.date + "T12:00:00").toLocaleDateString("es-CL", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+        {sessionInfo.startTime && ` · ${sessionInfo.startTime} - ${sessionInfo.endTime}`}
+      </p>
+      {sessionInfo.categories.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-2 mt-3">
+          {sessionInfo.categories.map((c) => (
+            <span
+              key={c}
+              className={`font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                c === "ninos"
+                  ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                  : c === "juveniles"
+                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                    : "bg-green-500/10 text-green-400 border-green-500/30"
+              }`}
+            >
+              {scheduleCategoryLabel(c)}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   if (authLoading || loadingSession) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -169,9 +253,10 @@ export default function CheckinPage({
           <h1 className="font-[family-name:var(--font-headline-md)] text-[24px] text-on-surface uppercase mb-3">
             {error}
           </h1>
-          <p className="font-[family-name:var(--font-body-md)] text-[15px] text-on-surface-variant">
+          <p className="font-[family-name:var(--font-body-md)] text-[15px] text-on-surface-variant mb-6">
             Esta sesión de clase no está recibiendo check-ins en este momento.
           </p>
+          {classCard}
         </div>
       </div>
     );
@@ -194,6 +279,12 @@ export default function CheckinPage({
             <h1 className="font-[family-name:var(--font-headline-md)] text-[24px] text-on-surface uppercase">
               Resultado del check-in
             </h1>
+            {sessionInfo && (
+              <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface-variant mt-1">
+                {sessionInfo.discipline}
+                {sessionInfo.startTime && ` · ${sessionInfo.startTime} - ${sessionInfo.endTime}`}
+              </p>
+            )}
           </div>
 
           <div className="space-y-3 mb-8">
@@ -320,9 +411,32 @@ export default function CheckinPage({
             Check-in de asistencia
           </h1>
           <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface-variant">
-            Selecciona quiénes asistieron y confirma
+            Revisa que sea tu clase y confirma
           </p>
         </div>
+
+        {classCard}
+
+        {sessionOver && (
+          <div className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+            <span className="material-symbols-outlined text-yellow-400 text-[18px]">schedule</span>
+            <p className="font-[family-name:var(--font-body-md)] text-[13px] text-yellow-200">
+              Esta clase ya terminó. Si estás en otra clase, avisa al profesor antes de marcar: puede
+              que el QR de la clase anterior siga activo.
+            </p>
+          </div>
+        )}
+
+        {categoryMismatch && myCategory && (
+          <div className="mb-4 flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+            <span className="material-symbols-outlined text-yellow-400 text-[18px]">warning</span>
+            <p className="font-[family-name:var(--font-body-md)] text-[13px] text-yellow-200">
+              Esta clase es para {sessionInfo!.categories.map(scheduleCategoryLabel).join(", ").toLowerCase()} y
+              tu categoría es {categoryLabel(myCategory).toLowerCase()}. Verifica con el profesor que sea la
+              clase correcta.
+            </p>
+          </div>
+        )}
 
         {beneficiaries.length === 0 ? (
           <div className="text-center py-8">
