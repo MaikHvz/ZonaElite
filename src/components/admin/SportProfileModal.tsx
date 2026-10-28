@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { deleteImage } from "@/lib/supabase/storage";
+import { getChileToday } from "@/lib/dates";
 import BeltBanner from "@/components/dashboard/BeltBanner";
 import PodiumFormModal from "./PodiumFormModal";
 import {
@@ -24,6 +25,21 @@ interface SportProfileModalProps {
   onSaved: () => void;
   beneficiaryId: string | null;
   studentName: string;
+}
+
+interface TrophyRow {
+  id: string;
+  title: string;
+  description: string | null;
+  awarded_on: string;
+  discipline_id: string | null;
+  disciplines: { name: string } | null;
+}
+
+interface AthleteProfileRow {
+  profile_id: string;
+  alias: string;
+  hidden_by_admin: boolean;
 }
 
 interface GradeRow {
@@ -59,6 +75,15 @@ export default function SportProfileModal({
   const [podiumModalOpen, setPodiumModalOpen] = useState(false);
   const [editingPodium, setEditingPodium] = useState<SportPodiumData | null>(null);
 
+  // Trofeos y perfil de atleta (v1.17.0)
+  const [trophies, setTrophies] = useState<TrophyRow[]>([]);
+  const [athleteProfile, setAthleteProfile] = useState<AthleteProfileRow | null>(null);
+  const [trophyFormOpen, setTrophyFormOpen] = useState(false);
+  const [trophyTitle, setTrophyTitle] = useState("");
+  const [trophyDate, setTrophyDate] = useState("");
+  const [trophyDisciplineId, setTrophyDisciplineId] = useState("");
+  const [trophyDescription, setTrophyDescription] = useState("");
+
   const handleEsc = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape" && !saving) onClose();
@@ -85,7 +110,7 @@ export default function SportProfileModal({
     setError(null);
     try {
       const supabase = createClient();
-      const [discRes, gradesRes, profilesRes, podiumsRes] = await Promise.all([
+      const [discRes, gradesRes, profilesRes, podiumsRes, trophiesRes, benRes] = await Promise.all([
         supabase
           .from("disciplines")
           .select("id, name, color_hex")
@@ -109,9 +134,19 @@ export default function SportProfileModal({
           )
           .eq("beneficiary_id", beneficiaryId)
           .order("event_date", { ascending: false }),
+        supabase
+          .from("athlete_trophies")
+          .select("id, title, description, awarded_on, discipline_id, disciplines(name)")
+          .eq("beneficiary_id", beneficiaryId)
+          .order("awarded_on", { ascending: false }),
+        supabase
+          .from("beneficiaries")
+          .select("profile_id")
+          .eq("id", beneficiaryId)
+          .maybeSingle(),
       ]);
 
-      if (discRes.error || gradesRes.error || profilesRes.error || podiumsRes.error) {
+      if (discRes.error || gradesRes.error || profilesRes.error || podiumsRes.error || trophiesRes.error) {
         throw new Error("Error al cargar el perfil deportivo");
       }
 
@@ -160,6 +195,23 @@ export default function SportProfileModal({
           } as SportPodiumData;
         })
       );
+      setTrophies(
+        ((trophiesRes.data || []) as Array<Omit<TrophyRow, "disciplines"> & { disciplines: unknown }>).map((t) => {
+          const disc = Array.isArray(t.disciplines) ? t.disciplines[0] : t.disciplines;
+          return { ...t, disciplines: (disc as { name: string } | null | undefined) ?? null };
+        })
+      );
+      const profileId = (benRes.data?.profile_id as string | null | undefined) ?? null;
+      if (profileId) {
+        const { data: ap } = await supabase
+          .from("athlete_profiles")
+          .select("profile_id, alias, hidden_by_admin")
+          .eq("profile_id", profileId)
+          .maybeSingle();
+        setAthleteProfile((ap as AthleteProfileRow | null) ?? null);
+      } else {
+        setAthleteProfile(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar el perfil deportivo");
     } finally {
@@ -271,6 +323,77 @@ export default function SportProfileModal({
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al eliminar el podio");
+    }
+  };
+
+  const openTrophyForm = () => {
+    setError(null);
+    setTrophyTitle("");
+    setTrophyDate(getChileToday());
+    setTrophyDisciplineId("");
+    setTrophyDescription("");
+    setTrophyFormOpen(true);
+  };
+
+  const saveTrophy = async () => {
+    if (!beneficiaryId || !trophyTitle.trim() || !trophyDate) {
+      setError("Indica el nombre y la fecha del trofeo");
+      return;
+    }
+    try {
+      setSaving(true);
+      setError(null);
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { error: dbError } = await supabase.from("athlete_trophies").insert({
+        beneficiary_id: beneficiaryId,
+        title: trophyTitle.trim(),
+        awarded_on: trophyDate,
+        discipline_id: trophyDisciplineId || null,
+        description: trophyDescription.trim() || null,
+        awarded_by: user?.id ?? null,
+      });
+      if (dbError) throw dbError;
+      setTrophyFormOpen(false);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al guardar el trofeo");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteTrophy = async (trophy: TrophyRow) => {
+    if (!window.confirm(`¿Eliminar el trofeo "${trophy.title}"?`)) return;
+    try {
+      setError(null);
+      const supabase = createClient();
+      const { error: dbError } = await supabase.from("athlete_trophies").delete().eq("id", trophy.id);
+      if (dbError) throw dbError;
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al eliminar el trofeo");
+    }
+  };
+
+  const toggleAthleteHidden = async () => {
+    if (!athleteProfile) return;
+    try {
+      setSaving(true);
+      setError(null);
+      const supabase = createClient();
+      const { error: dbError } = await supabase
+        .from("athlete_profiles")
+        .update({ hidden_by_admin: !athleteProfile.hidden_by_admin })
+        .eq("profile_id", athleteProfile.profile_id);
+      if (dbError) throw dbError;
+      setAthleteProfile({ ...athleteProfile, hidden_by_admin: !athleteProfile.hidden_by_admin });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al cambiar la visibilidad del perfil");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -595,6 +718,168 @@ export default function SportProfileModal({
                 </div>
               )}
             </div>
+            {/* Trofeos (reconocimientos de la academia) */}
+            <div className="pt-2 border-t border-on-surface/5">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase">
+                    Trofeos
+                  </h3>
+                  <p className="text-[12px] text-on-surface-variant mt-0.5">
+                    {trophies.length > 0
+                      ? `${trophies.length} reconocimiento${trophies.length === 1 ? "" : "s"}`
+                      : "Campeón absoluto, mejor técnica, alumno del año…"}
+                  </p>
+                </div>
+                {!trophyFormOpen && (
+                  <button
+                    onClick={openTrophyForm}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors text-[12px] font-[family-name:var(--font-headline-md)] uppercase cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add</span>
+                    Otorgar
+                  </button>
+                )}
+              </div>
+
+              {trophyFormOpen && (
+                <div className="bg-surface-container border border-primary/20 rounded-xl p-4 space-y-4 mb-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Trofeo</label>
+                      <input
+                        value={trophyTitle}
+                        onChange={(e) => setTrophyTitle(e.target.value)}
+                        maxLength={80}
+                        placeholder="Ej: Mejor técnica 2026"
+                        className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Fecha</label>
+                      <input
+                        type="date"
+                        value={trophyDate}
+                        onChange={(e) => setTrophyDate(e.target.value)}
+                        className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Disciplina (opcional)</label>
+                      <select
+                        value={trophyDisciplineId}
+                        onChange={(e) => setTrophyDisciplineId(e.target.value)}
+                        className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 cursor-pointer"
+                      >
+                        <option value="">General</option>
+                        {disciplines.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant mb-1.5">Descripción (opcional)</label>
+                      <textarea
+                        value={trophyDescription}
+                        onChange={(e) => setTrophyDescription(e.target.value)}
+                        maxLength={300}
+                        rows={2}
+                        className="w-full bg-surface-container-lowest border border-on-surface/10 rounded-lg px-4 py-2.5 text-[14px] text-on-surface focus:outline-none focus:border-primary/50 resize-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => setTrophyFormOpen(false)}
+                      disabled={saving}
+                      className="px-4 py-2 rounded-lg border border-on-surface/10 text-on-surface-variant hover:bg-on-surface/5 transition-colors text-[13px] cursor-pointer disabled:opacity-40"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={saveTrophy}
+                      disabled={saving || !trophyTitle.trim() || !trophyDate}
+                      className="px-4 py-2 rounded-lg btn-primary-gradient text-white text-[13px] disabled:opacity-50 cursor-pointer"
+                    >
+                      {saving ? "Guardando..." : "Otorgar trofeo"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {trophies.length > 0 && (
+                <div className="space-y-2">
+                  {trophies.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center gap-3 bg-surface-container border border-on-surface/5 rounded-xl p-3"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center shrink-0 text-[18px]">
+                        🏆
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface truncate">
+                          {t.title}
+                        </p>
+                        <p className="font-[family-name:var(--font-body-md)] text-[12px] text-on-surface-variant truncate">
+                          {formatPodiumDate(t.awarded_on)}
+                          {t.disciplines?.name ? ` · ${t.disciplines.name}` : ""}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => deleteTrophy(t)}
+                        className="p-2 rounded-lg text-on-surface-variant hover:text-red-400 transition-colors cursor-pointer shrink-0"
+                        title="Eliminar trofeo"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Perfil de atleta (comunidad) */}
+            {athleteProfile && (
+              <div className="pt-2 border-t border-on-surface/5">
+                <h3 className="font-[family-name:var(--font-headline-md)] text-[16px] text-on-surface uppercase mb-3">
+                  Perfil de atleta
+                </h3>
+                <div className="flex flex-wrap items-center gap-3 bg-surface-container border border-on-surface/5 rounded-xl p-3">
+                  <div className="min-w-0 flex-1">
+                    <a
+                      href={`/atletas/${athleteProfile.alias}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-[family-name:var(--font-body-md)] text-[14px] text-gold hover:text-gold-light"
+                    >
+                      /atletas/{athleteProfile.alias}
+                    </a>
+                    <p className="text-[12px] text-on-surface-variant mt-0.5">
+                      {athleteProfile.hidden_by_admin
+                        ? "Oculto por la administración: solo el alumno y el staff lo ven."
+                        : "Visible para la comunidad (salvo que el alumno lo haga privado)."}
+                    </p>
+                  </div>
+                  <button
+                    onClick={toggleAthleteHidden}
+                    disabled={saving}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-[family-name:var(--font-headline-md)] uppercase transition-colors cursor-pointer disabled:opacity-40 ${
+                      athleteProfile.hidden_by_admin
+                        ? "border-green-500/30 text-green-400 hover:bg-green-500/10"
+                        : "border-red-500/30 text-red-400 hover:bg-red-500/10"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">
+                      {athleteProfile.hidden_by_admin ? "visibility" : "visibility_off"}
+                    </span>
+                    {athleteProfile.hidden_by_admin ? "Mostrar" : "Ocultar"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

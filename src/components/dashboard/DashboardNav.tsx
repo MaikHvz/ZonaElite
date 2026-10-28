@@ -11,6 +11,7 @@ const tabs = [
   { label: "Pagos", href: "/dashboard/pagos", icon: "payments" },
   { label: "Mi Tienda", href: "/dashboard/tienda", icon: "storefront" },
   { label: "Mi ficha", href: "/dashboard/ficha", icon: "medical_information" },
+  { label: "Perfil de atleta", href: "/atletas/yo", icon: "sports_martial_arts" },
   { label: "Asistencia", href: "/dashboard/asistencia", icon: "fact_check" },
   { label: "Alertas", href: "/dashboard/notificaciones", icon: "notifications" },
   { label: "Reglamento", href: "/dashboard/reglamento", icon: "rule" },

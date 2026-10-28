@@ -392,3 +392,12 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Código**: `src/app/admin/asistencia/page.tsx` (cabecera de la clase + aviso de clase terminada), `src/app/checkin/[sessionId]/page.tsx` (tarjeta de la clase, avisos de clase terminada y de categoría), `src/lib/dates.ts` (`getChileNowTime`, `isSessionOver`), `src/lib/category.ts` (etiquetas y orden de `schedules.category`), `src/lib/supabase/dashboard.ts` (`schedules.category` en las sesiones admin).
 - **Changelog**: entrada **v1.16.0** (`contexto/migrations/047_changelog_v1_16_0.sql`), sin cambios de esquema.
 - **Verificación**: suite sección **AM** (6 asserts); conteo de seeds 20 → 21; lint sin errores nuevos.
+
+## 39. Perfil de Atleta tipo Instagram — fase 1 (2026-10-28)
+**Requisito**: perfil por alumno al estilo Instagram, con buena UX/UI, buscador de perfiles, personalización y trayectoria (podios, campeonatos, cinturones y trofeos). El usuario decidió: sin imágenes (publicaciones = logros en texto), sin consentimiento del apoderado y visibilidad solo para la comunidad. Esta entrega cubre la fase 1 (MVP).
+- **Requisito + análisis de impacto**: `contexto/requisitos/perfil-atleta-rankings.md`.
+- **BD**: `048_athlete_profiles.sql` (`athlete_profiles`, `athlete_trophies`, `belt_promotions`, RPC `search_athletes` / `get_athlete_profile` / `update_my_athlete_profile`, triggers de alta y de historial de cinturones, y backfill).
+- **Código**: `src/app/atletas/` (layout, buscador y perfil), `src/components/athletes/` (`AthleteAvatar`, `AchievementPostCard`, `AchievementPostModal`, `EditAthleteProfileModal`), `src/lib/athlete-profile.ts`, `src/lib/athlete-recent.ts`, `Navbar`, `DashboardNav`, `UserQuickView` y `SportProfileModal` (trofeos + ocultar).
+- **Changelog**: entrada **v1.17.0** (`contexto/migrations/049_changelog_v1_17_0.sql`).
+- **Verificación**: suite sección **AN** (13 asserts); conteo de seeds 21 → 22; `npx tsc --noEmit` limpio; lint sin errores nuevos; migración 048 probada en un PostgreSQL 18 local (idempotente, RPC, RLS, triggers y backfill).
+- **Pendiente (fase 2)**: tabla de torneos con nivel, migración de `sports_podiums`, rankings y su página, trayectoria declarada por el alumno con verificación.

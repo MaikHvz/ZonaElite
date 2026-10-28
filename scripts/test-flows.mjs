@@ -1653,7 +1653,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 21);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 22);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -2996,6 +2996,107 @@ ok("AM: el check-in muestra la clase y avisa si terminó o no es su categoría (
   /schedules\(start_time, end_time, category, disciplines\(name\)\)/.test(checkinAm) &&
   /\{classCard\}/.test(checkinAm) && /\{sessionOver && \(/.test(checkinAm) &&
   /\{categoryMismatch && myCategory && \(/.test(checkinAm));
+
+// ============================================================
+// AN. Perfil de Atleta tipo Instagram (v1.17.0, fase 1 – MVP)
+// ============================================================
+section("AN. Perfil de Atleta");
+
+const migration048 = readFileSync(join(ROOT, "contexto", "migrations", "048_athlete_profiles.sql"), "utf8");
+const migration049 = readFileSync(join(ROOT, "contexto", "migrations", "049_changelog_v1_17_0.sql"), "utf8");
+const profilePageAn = srcAj("app", "atletas", "[handle]", "page.tsx");
+const searchPageAn = srcAj("app", "atletas", "page.tsx");
+const layoutAn = srcAj("app", "atletas", "layout.tsx");
+const sportModalAn = srcAj("components", "admin", "SportProfileModal.tsx");
+const quickViewAn = srcAj("components", "admin", "UserQuickView.tsx");
+const navbarAn = srcAj("components", "Navbar.tsx");
+const dashNavAn = srcAj("components", "dashboard", "DashboardNav.tsx");
+const {
+  buildAchievementPosts, computeAthleteStats, yearsSince, isValidAlias, normalizeAlias,
+  athleteInitials, featuredDiscipline, groupTournaments, athleteProfileErrorMessage,
+} = await import("../src/lib/athlete-profile.ts");
+
+ok("AN: 049 es seed v1.17.0 y el espejo lo refleja una sola vez",
+  /'v1\.17\.0'/.test(migration049) && /ON CONFLICT \(version\) DO NOTHING/.test(migration049) &&
+  (schemaAl.match(/'v1\.17\.0'/g) || []).length === 1);
+ok("AN: el espejo refleja la 048 (tablas, RPC y trigger) una sola vez",
+  (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.athlete_profiles \(/g) || []).length === 1 &&
+  (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.athlete_trophies \(/g) || []).length === 1 &&
+  (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.belt_promotions \(/g) || []).length === 1 &&
+  (schemaAl.match(/CREATE OR REPLACE FUNCTION public\.get_athlete_profile\(/g) || []).length === 1 &&
+  (schemaAl.match(/CREATE TRIGGER trg_sport_profiles_belt_promotion/g) || []).length === 1);
+ok("AN: RLS en las tres tablas; el alumno no tiene policies de escritura (solo admin)",
+  ["athlete_profiles", "athlete_trophies", "belt_promotions"].every((t) =>
+    new RegExp(`ALTER TABLE public\\.${t} ENABLE ROW LEVEL SECURITY`).test(migration048) &&
+    new RegExp(`CREATE POLICY "${t}_admin_write" ON public\\.${t}\\s+FOR ALL USING \\(public\\.is_admin\\(\\)\\)`).test(migration048)) &&
+  !/FOR (INSERT|UPDATE|DELETE)/.test(migration048));
+ok("AN: las RPC exigen sesión y no se ejecutan como anon",
+  ["search_athletes(text, uuid, text, integer)", "get_athlete_profile(text)", "update_my_athlete_profile(text, text, text, uuid, text, text)"]
+    .every((sig) => migration048.includes(`REVOKE ALL ON FUNCTION public.${sig} FROM anon;`) &&
+      migration048.includes(`GRANT EXECUTE ON FUNCTION public.${sig} TO authenticated;`)) &&
+  (migration048.match(/RAISE EXCEPTION 'Debes iniciar sesión'/g) || []).length === 3 &&
+  /REVOKE ALL ON FUNCTION public\.ensure_athlete_profile\(uuid\) FROM anon, authenticated;/.test(migration048));
+const getProfileFnAn = migration048.slice(
+  migration048.indexOf("CREATE OR REPLACE FUNCTION public.get_athlete_profile("),
+  migration048.indexOf("CREATE OR REPLACE FUNCTION public.update_my_athlete_profile("));
+ok("AN: get_athlete_profile no expone datos sensibles y respeta privado/oculto",
+  !/'(rut|email|phone|birth_date|address|weight|height)'/.test(getProfileFnAn) &&
+  /v_ap\.hidden_by_admin OR v_ap\.visibility = 'privado'/.test(getProfileFnAn) &&
+  /'restricted', true/.test(getProfileFnAn));
+ok("AN: el alta del perfil nunca bloquea el registro (trigger con EXCEPTION)",
+  /PERFORM public\.ensure_athlete_profile\(NEW\.id\);\s+EXCEPTION WHEN OTHERS THEN\s+NULL;/.test(migration048));
+ok("AN: alias válido 3–30 (a-z 0-9 . _ -) igual que el CHECK de la BD",
+  isValidAlias("matias.perez") && isValidAlias("abc") && !isValidAlias("ab") &&
+  !isValidAlias(".matias") && !isValidAlias("Matias") && !isValidAlias("a".repeat(31)) &&
+  normalizeAlias(" Matías Pérez ") === "matias.perez" &&
+  migration048.includes("CHECK (alias ~ '^[a-z0-9][a-z0-9._-]{1,28}[a-z0-9]$')"));
+ok("AN: publicaciones de logros (campeonato/podio/torneo, cinturón, trofeo) de la más reciente a la más antigua",
+  (() => {
+    const posts = buildAchievementPosts({
+      podiums: [
+        { id: "p1", tournament: "Copa Norte", event_date: "2026-03-10", discipline: "Kenpo", category: null, position: "1", description: null },
+        { id: "p2", tournament: "Open Sur", event_date: "2026-05-01", discipline: "Kenpo", category: "Juvenil", position: "participacion", description: null },
+      ],
+      trophies: [{ id: "t1", title: "Mejor técnica", description: null, awarded_on: "2026-08-01", discipline: null }],
+      promotions: [{ id: "b1", discipline: "Kenpo", grade_name: "Amarillo", grade_color: "#ffd700", promoted_on: "2026-01-15" }],
+    });
+    return posts.map((p) => p.kind).join() === "trofeo,participacion,campeonato,cinturon" &&
+      posts[2].title === "Campeón · Copa Norte" && posts[3].color === "#ffd700" &&
+      posts[2].discipline === "Kenpo";
+  })());
+ok("AN: estadísticas (torneos únicos, medallas solo 1°–3°, trofeos) y años en la academia",
+  (() => {
+    const s = computeAthleteStats([
+      { tournament: "Copa Norte", event_date: "2026-03-10", position: "1" },
+      { tournament: "copa norte ", event_date: "2026-03-10", position: "3" },
+      { tournament: "Open Sur", event_date: "2026-05-01", position: "participacion" },
+    ], [{}]);
+    return s.tournaments === 2 && s.medals === 2 && s.gold === 1 && s.bronze === 1 && s.trophies === 1 &&
+      yearsSince("2024-10-29", "2026-10-28") === 1 && yearsSince("2024-10-28", "2026-10-28") === 2 &&
+      groupTournaments([
+        { id: "a", tournament: "Copa", event_date: "2026-01-01", discipline: null, category: null, position: "1", description: null },
+        { id: "b", tournament: "Copa", event_date: "2026-01-01", discipline: null, category: null, position: "2", description: null },
+      ]).length === 1;
+  })());
+ok("AN: iniciales, disciplina destacada y mensajes de error del RPC",
+  athleteInitials("Matías Pérez Soto") === "MS" && athleteInitials("Ana") === "A" &&
+  featuredDiscipline([
+    { discipline_id: "k", name: "Kenpo", color_hex: null, grade_name: "Verde", grade_color: "#0f0", grade_position: 4 },
+    { discipline_id: "b", name: "Boxeo", color_hex: null, grade_name: "Blanco", grade_color: "#fff", grade_position: 1 },
+  ], "b")?.name === "Boxeo" &&
+  athleteProfileErrorMessage("ALIAS_TAKEN").includes("ya está en uso"));
+ok("AN: /atletas exige sesión y usa las RPC (sin leer tablas privadas)",
+  /router\.push\(`\/auth\?redirect=\$\{encodeURIComponent\(pathname\)\}`\)/.test(layoutAn) &&
+  /rpc\("get_athlete_profile"/.test(profilePageAn) && /rpc\("search_athletes"/.test(searchPageAn) &&
+  !/from\("(profiles|sports_podiums|sport_profiles)"\)/.test(profilePageAn + searchPageAn));
+ok("AN: sin imágenes en el perfil (avatar con iniciales, sin <img> ni subida de archivos)",
+  !/<img|ImageUpload|image_url/.test(profilePageAn + searchPageAn) &&
+  !/image_url/.test(getProfileFnAn));
+ok("AN: accesos — lupa en el navbar, pestaña en el panel, ficha rápida y modal admin (trofeos + ocultar)",
+  (navbarAn.match(/href="\/atletas"/g) || []).length === 3 &&
+  /href: "\/atletas\/yo"/.test(dashNavAn) &&
+  /href=\{`\/atletas\/\$\{profile\.id\}`\}/.test(quickViewAn) &&
+  /from\("athlete_trophies"\)/.test(sportModalAn) && /hidden_by_admin: !athleteProfile\.hidden_by_admin/.test(sportModalAn));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

@@ -237,6 +237,17 @@ export function UserQuickViewProvider({ children }: { children: ReactNode }) {
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">{ROLE_LABELS[profile.role_id] || "Usuario"}</span>
                 <span className="text-[11px] px-2 py-0.5 rounded-full bg-on-surface/5 text-on-surface-variant">{categoryLabel(categoryFromBirth(profile.birth_date))}</span>
                 <StatusBadge status={profile.active ? "activo" : "cancelado"} />
+                {profile.role_id !== 1 && (
+                  <a
+                    href={`/atletas/${profile.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-auto flex items-center gap-1 text-[12px] text-gold hover:text-gold-light"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">sports_martial_arts</span>
+                    Ver perfil de atleta
+                  </a>
+                )}
               </div>
             )}
             {isLegacy && (

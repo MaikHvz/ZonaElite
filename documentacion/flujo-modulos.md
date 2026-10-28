@@ -375,3 +375,23 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Pantalla QR (`/admin/asistencia`)**: sobre el QR, cabecera "QR de asistencia para" con la disciplina en grande, fecha, horario, profesor y chips de categoría (`schedules.category`: Niños / Juveniles / Adultos). Si la sesión activa ya terminó (`isSessionOver`: día anterior, o hoy con la hora de Chile ≥ `end_time`), aviso rojo para finalizarla antes de abrir la siguiente. Un reloj por minuto refresca el aviso.
 - **Check-in (`/checkin/[sessionId]`)**: la consulta de la sesión trae `schedules(start_time, end_time, category, disciplines(name))`. Tarjeta de la clase antes de confirmar, aviso si la clase ya terminó y aviso si la categoría del alumno (`categoryFromBirth`) no está en la clase. Ambos avisos son **informativos**: `/api/checkin` no cambia. El resultado repite el nombre y horario de la clase.
 - **Helpers**: `getChileNowTime()` e `isSessionOver()` en `src/lib/dates.ts`; `SCHEDULE_CATEGORIES`, `scheduleCategoryLabel()` y `sortScheduleCategories()` en `src/lib/category.ts`. `getUpcomingSessions` / `getPastSessions` seleccionan `schedules.category` (`ClassSessionData.schedule.category`).
+
+---
+
+## 23. Perfil de Atleta tipo Instagram (IMPLEMENTADO - v1.17.0, fase 1)
+
+> Estado: **implementado en código (2026-10-28)**. Suite A-AN: 679 OK; siguen los 2 fallos preexistentes (`extend`, que depende de la fecha, y el `AL` del titular). `npx tsc --noEmit` limpio. Migraciones `048_athlete_profiles.sql` (esquema) y `049_changelog_v1_17_0.sql` (seed), **pendientes de aplicar en ese orden**. La 048 se probó en un PostgreSQL 18 local: se aplica dos veces sin errores y sus RPC, RLS y triggers se comportan como se espera. Requisito en `contexto/requisitos/perfil-atleta-rankings.md` (§0 = decisiones tomadas).
+
+**Decisiones**: sin imágenes (avatar con iniciales y el anillo del color del cinturón), sin consentimiento del apoderado, perfiles visibles **solo para la comunidad** (con sesión iniciada). Rankings y tabla de torneos quedan para la fase 2.
+
+**BD (048)**:
+- `athlete_profiles` (PK `profile_id`): `alias` único (`^[a-z0-9][a-z0-9._-]{1,28}[a-z0-9]$`), `nickname` ≤ 40, `bio` ≤ 150, `primary_discipline_id`, `cover_theme` (`fuego|oro|brasa|acero|noche`), `visibility` (`comunidad|privado`) y `hidden_by_admin`. Se crea sola: trigger `trg_profiles_create_athlete_profile` (AFTER INSERT en `profiles`, nunca bloquea el registro), backfill de las cuentas existentes y `ensure_athlete_profile()`. El alias se genera a partir del nombre sin tildes (`matias.perez`, `matias.perez2`…).
+- `athlete_trophies`: trofeos y reconocimientos que otorga el admin.
+- `belt_promotions`: historial de cinturones (UNIQUE beneficiario + grado), alimentado por el trigger `trg_sport_profiles_belt_promotion` y con backfill del grado actual.
+- RLS: lectura del dueño o del admin; escritura **solo admin**. La comunidad lee únicamente por RPC `SECURITY DEFINER` (sin EXECUTE para `anon`): `search_athletes(q, disciplina, categoría, límite)` (nombre, apodo o alias sin tildes; excluye admins, inactivos, privados y ocultos) y `get_athlete_profile(alias | uuid | 'yo')` (devuelve `restricted` si es privado u oculto; **nunca** RUT, correo, teléfono, nacimiento ni medidas). El alumno edita su perfil con `update_my_athlete_profile` (errores `ALIAS_TAKEN|ALIAS_INVALID|NICKNAME_TOO_LONG|BIO_TOO_LONG|COVER_INVALID|VISIBILITY_INVALID|DISCIPLINE_INVALID`).
+
+**App**:
+- `/atletas` (buscador): búsqueda instantánea con debounce, filtros por categoría y disciplina, perfiles recientes en `localStorage` (`src/lib/athlete-recent.ts`) y "Atletas destacados" (ordenados por medallas + trofeos).
+- `/atletas/[handle]` (perfil): portada, avatar con anillo, contadores (Torneos · Medallas · Trofeos · Años), biografía, botones Editar y Compartir, destacados por disciplina (filtran las publicaciones) y pestañas **Publicaciones** (cuadrícula 3×N de logros + visor `AchievementPostModal` con ← →), **Palmarés** y **Torneos** (línea de tiempo). `/atletas/yo` = el perfil propio. El layout `src/app/atletas/layout.tsx` exige sesión.
+- Lógica pura en `src/lib/athlete-profile.ts` (`buildAchievementPosts`, `computeAthleteStats`, `groupTournaments`, `featuredDiscipline`, validación del alias). Componentes en `src/components/athletes/`.
+- Accesos: ícono de lupa en el navbar (3 variantes), pestaña "Perfil de atleta" en el panel del alumno, "Ver perfil de atleta" en la ficha rápida del admin (`UserQuickView`) y, en `SportProfileModal`, las secciones **Trofeos** (otorgar y eliminar) y **Perfil de atleta** (ocultar o mostrar).

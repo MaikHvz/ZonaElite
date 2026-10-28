@@ -233,6 +233,7 @@ Formato: **Rutas UI** · **APIs** · **Tablas / RPC** · **Archivos clave** · *
 - **Tablas:** `belt_grades` (grados por disciplina con color, seed Blanco→Negro), `sport_profiles` (beneficiario+disciplina+grado; trigger `sport_profile_validate_grade` impide grado de otra disciplina), `sports_podiums` (torneo, fecha, posición `1|2|3|participacion`, foto en `podiums/`).
 - **RLS:** escritura **solo admin**; lectura dueño o admin. Anclado a `beneficiaries` (no al perfil) para que nadie pueda auto-asignarse grados editando su perfil.
 - **UI:** admin `SportProfileModal` + `PodiumFormModal`; usuario `BeltBanner`, `SportProfileInfo`, `PodiumStatsLine`, `TutorSportCard`. El color del cinturón viene siempre de BD.
+- **Perfil de Atleta (v1.17.0, migración 048):** perfil tipo Instagram en `/atletas/[alias|uuid|yo]` y buscador en `/atletas`, **solo con sesión** y **sin imágenes** (iniciales + anillo del color del cinturón; las "publicaciones" son logros generados a partir de `sports_podiums`, `belt_promotions` y `athlete_trophies`). Tablas `athlete_profiles` (alias, apodo, bio, disciplina principal, portada, `visibility` comunidad|privado, `hidden_by_admin`), `athlete_trophies` (las otorga el admin) y `belt_promotions` (trigger sobre `sport_profiles`). La comunidad lee **solo por RPC** `search_athletes` / `get_athlete_profile` (nunca RUT, contacto ni nacimiento); el alumno edita con `update_my_athlete_profile`; el admin otorga trofeos y oculta perfiles desde `SportProfileModal`. Lógica pura en `src/lib/athlete-profile.ts`. Rankings y torneos con nivel = fase 2 (`contexto/requisitos/perfil-atleta-rankings.md`).
 
 ### M5. Disciplinas, horarios y sesiones
 - **Admin:** `/admin/tipos-clase` (CRUD `disciplines`: nombre, `color_hex`, icono, descripción, activo), `/admin/horarios` (CRUD `schedules`: disciplina, profesor, sala, día, horas, capacidad, `category text[]`, activo, descripción, **`mode` normal|personalizado — inmutable tras crear**; planes permitidos en `class_plans` (normal) o `personalized_schedule_plans` (personalizado); vacío = todos).
@@ -357,7 +358,7 @@ Proyecto Supabase `sfkkfcticgqdqvzthimz` ("Web principal zona elite", Postgres 1
 | Dominio | Tablas |
 |---------|--------|
 | Identidad | `roles`, `profiles`, `beneficiaries`, `audit_logs` · legado: `dependents` (en retiro), `dependents_archive` (cargas migradas) |
-| Fichas | `medical_records`, `body_metrics`, `consent_forms`, `belt_grades`, `sport_profiles`, `sports_podiums` |
+| Fichas | `medical_records`, `body_metrics`, `consent_forms`, `belt_grades`, `sport_profiles`, `sports_podiums`, `athlete_profiles`, `athlete_trophies`, `belt_promotions` |
 | Clases | `disciplines`, `schedules`, `class_sessions`, `class_plans`, `class_enrollments`, `attendance`, `debts`, `qr_session_lock` |
 | Membresías / matrícula | `membership_plans`, `memberships`, `enrollment_plans`, `academy_enrollments` |
 | Personalizadas | `personalized_plans`, `personalized_packs`, `personalized_schedule_plans`, `personalized_enrollments` |
@@ -456,6 +457,7 @@ Todas las policies tienen rol `public`; el filtro es `auth.uid()`/`is_admin()`/`
 | v1.14.0 | Ficha rápida del alumno + renovación de membresías (solicitudes y auto-aceptación) — aplicada y verificada 2026-10-16 | 044, 045 |
 | v1.15.0 | Rediseño visual "fuego y oro" (hero + navbar), solo seed de changelog — pendiente de aplicar | 046 |
 | v1.16.0 | El QR de asistencia identifica la clase (disciplina, horario, categorías) y avisa si la clase ya terminó; solo seed de changelog — pendiente de aplicar | 047 |
+| v1.17.0 | Perfil de Atleta tipo Instagram (fase 1): `athlete_profiles`, `athlete_trophies`, `belt_promotions`, RPC de búsqueda y perfil — pendiente de aplicar | 048, 049 |
 
 Anteriores (001–010): tokens, membresía activa única, `chile_today` en RLS, `enroll_class`, ventana de tokens, deudas + RLS, `location_url`, reglamento, packs personalizados, horarios personalizados. `028`: FK `personalized_packs.purchased_by`.
 

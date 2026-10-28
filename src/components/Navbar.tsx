@@ -153,6 +153,13 @@ export default function Navbar() {
             user ? (
               <div className="flex items-center gap-3">
                 <Link
+                  href="/atletas"
+                  className="text-on-surface-variant hover:text-gold transition-colors"
+                  title="Buscar atletas"
+                >
+                  <span className="material-symbols-outlined text-[22px]">search</span>
+                </Link>
+                <Link
                   href="/dashboard/notificaciones"
                   className="relative text-on-surface-variant hover:text-gold transition-colors"
                   title="Notificaciones"
@@ -225,6 +232,15 @@ export default function Navbar() {
             </Link>
             {!loading && user && (
               <Link
+                href="/atletas"
+                className="text-on-surface-variant hover:text-gold transition-colors"
+                title="Buscar atletas"
+              >
+                <span className="material-symbols-outlined text-[22px]">search</span>
+              </Link>
+            )}
+            {!loading && user && (
+              <Link
                 href="/dashboard/notificaciones"
                 className="relative text-on-surface-variant hover:text-gold transition-colors"
                 title="Notificaciones"
@@ -279,6 +295,15 @@ export default function Navbar() {
                 </span>
               )}
             </Link>
+            {!loading && user && (
+              <Link
+                href="/atletas"
+                className="text-on-surface-variant hover:text-gold transition-colors p-1"
+                title="Buscar atletas"
+              >
+                <span className="material-symbols-outlined text-[20px]">search</span>
+              </Link>
+            )}
             {!loading && user && (
               <Link
                 href="/dashboard/notificaciones"
