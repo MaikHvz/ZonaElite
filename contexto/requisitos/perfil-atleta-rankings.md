@@ -7,6 +7,7 @@
 - **Sin imágenes**: no hay foto de perfil ni fotos en publicaciones. El avatar muestra las iniciales con un anillo del color del cinturón, y las publicaciones son tarjetas de logros (podios, campeonatos, cinturones, trofeos) generadas a partir de los registros del staff. Se descartan la foto de portada, el recorte de foto y la moderación de imágenes (la portada es un degradado de la paleta).
 - **Sin consentimiento del apoderado**: como no se publican imágenes, los perfiles de menores se crean igual que los de adultos. Siguen sin mostrarse edad exacta, fecha de nacimiento, RUT ni datos de contacto.
 - **D1 = Solo comunidad**: perfiles y buscador solo con sesión iniciada. Cada alumno puede poner su perfil en **Privado**.
+- **El alumno personaliza y publica por su cuenta (v1.18.0)**: publica torneos con resultado, cinturones, trofeos, hitos y publicaciones libres de texto **sin pasar por el admin**. Se publican al instante como "Publicado por el atleta" y **suman en los contadores**; lo que registra la academia lleva la insignia ✔ "Verificado por ZonaElite". Puede fijar hasta 3 publicaciones. El admin solo modera (puede borrar publicaciones u ocultar el perfil). Esto reemplaza el flujo de verificación previa de §6.1: no hay bandeja de aprobación.
 - **Alcance de la v1.17.0 = Fase 1 (MVP)**: perfil, publicaciones de logros, Palmarés, Torneos, personalización, buscador, trofeos otorgados por el admin y la opción de ocultar perfiles. La tabla de torneos con niveles y la migración de `sports_podiums` pasan a la **fase 2**, junto con los rankings (el nivel del torneo solo importa para los puntos).
 
 
@@ -231,7 +232,7 @@ La academia tiene alumnos menores de edad. El requisito debe cumplir la **Ley 19
 - **D9. Torneos externos**: ¿se pueden registrar torneos de otras organizaciones o solo los creados en el sistema?
 - **D10. Enlaces a redes externas** en el perfil: ¿se permiten? ¿También para menores?
 - **D11. Moderación**: ✅ resuelta: no hay fotos. La biografía se publica al instante y el admin puede ocultar el perfil completo.
-- **D12. Logros declarados**: ¿se muestran a otros alumnos o solo después de verificarse?
+- **D12. Logros declarados**: ✅ se muestran al instante, sin la insignia de verificado, y suman en los contadores (v1.18.0).
 
 ## 13. Fases sugeridas
 | Fase | Entrega |

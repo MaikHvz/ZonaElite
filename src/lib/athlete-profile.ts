@@ -46,6 +46,21 @@ export interface AthletePromotion {
   promoted_on: string;
 }
 
+/** Publicación propia del alumno (athlete_posts, migración 050). */
+export type OwnPostKind = "torneo" | "cinturon" | "trofeo" | "hito" | "publicacion";
+
+export interface AthleteOwnPost {
+  id: string;
+  kind: OwnPostKind;
+  title: string | null;
+  body: string | null;
+  event_date: string;
+  position: string | null;
+  discipline: string | null;
+  color: string | null;
+  created_at: string;
+}
+
 export interface AthleteProfileHeader {
   id: string;
   alias: string;
@@ -56,6 +71,8 @@ export interface AthleteProfileHeader {
   visibility: AthleteVisibility;
   hidden_by_admin: boolean;
   primary_discipline_id: string | null;
+  /** Claves de buildAchievementPosts fijadas por el alumno (máx. 3). */
+  pinned_posts?: string[];
   category: "nino" | "juvenil" | "adulto";
   member_since: string;
   active: boolean;
@@ -69,11 +86,13 @@ export type AthleteProfileResponse =
     }
   | {
       restricted: false;
+      viewer_is_admin?: boolean;
       profile: AthleteProfileHeader;
       disciplines: AthleteDiscipline[];
       podiums: AthletePodium[];
       trophies: AthleteTrophy[];
       promotions: AthletePromotion[];
+      posts?: AthleteOwnPost[];
     };
 
 export interface AthleteSearchResult {
@@ -179,20 +198,29 @@ export interface AthleteStats {
   trophies: number;
 }
 
+/**
+ * Contadores del perfil: registros de la academia + logros que publicó
+ * el alumno (torneos y trofeos propios también suman).
+ */
 export function computeAthleteStats(
   podiums: Pick<AthletePodium, "tournament" | "event_date" | "position">[],
-  trophies: unknown[]
+  trophies: unknown[],
+  ownPosts: Pick<AthleteOwnPost, "kind" | "title" | "event_date" | "position">[] = []
 ): AthleteStats {
-  const tournaments = new Set(
-    podiums.map((p) => `${p.tournament.trim().toLowerCase()}|${p.event_date}`)
-  );
+  const results = [
+    ...podiums.map((p) => ({ tournament: p.tournament, date: p.event_date, position: p.position })),
+    ...ownPosts
+      .filter((p) => p.kind === "torneo")
+      .map((p) => ({ tournament: p.title || "", date: p.event_date, position: p.position || "" })),
+  ];
+  const tournaments = new Set(results.map((r) => `${r.tournament.trim().toLowerCase()}|${r.date}`));
   let gold = 0;
   let silver = 0;
   let bronze = 0;
-  for (const p of podiums) {
-    if (p.position === "1") gold++;
-    else if (p.position === "2") silver++;
-    else if (p.position === "3") bronze++;
+  for (const r of results) {
+    if (r.position === "1") gold++;
+    else if (r.position === "2") silver++;
+    else if (r.position === "3") bronze++;
   }
   return {
     tournaments: tournaments.size,
@@ -200,17 +228,28 @@ export function computeAthleteStats(
     gold,
     silver,
     bronze,
-    trophies: trophies.length,
+    trophies: trophies.length + ownPosts.filter((p) => p.kind === "trofeo").length,
   };
 }
 
 // ---- Publicaciones de logros --------------------------------
 
-export type AchievementKind = "campeonato" | "podio" | "participacion" | "cinturon" | "trofeo";
+export type AchievementKind =
+  | "campeonato"
+  | "podio"
+  | "participacion"
+  | "cinturon"
+  | "trofeo"
+  | "hito"
+  | "publicacion";
 
 export interface AchievementPost {
   key: string;
   kind: AchievementKind;
+  /** true = registrado por la academia; false = publicado por el alumno. */
+  verified: boolean;
+  /** id en athlete_posts cuando la publicó el alumno. */
+  ownPostId: string | null;
   date: string;
   emoji: string;
   title: string;
@@ -227,13 +266,53 @@ export const ACHIEVEMENT_KIND_LABEL: Record<AchievementKind, string> = {
   participacion: "Torneo",
   cinturon: "Cinturón",
   trofeo: "Trofeo",
+  hito: "Hito",
+  publicacion: "Publicación",
 };
+
+/** Tipos que el alumno puede publicar por su cuenta. */
+export const OWN_POST_KINDS: { value: OwnPostKind; label: string; emoji: string; hint: string }[] = [
+  { value: "publicacion", label: "Publicación", emoji: "💬", hint: "Un entrenamiento, una meta, una reflexión" },
+  { value: "torneo", label: "Torneo", emoji: "🥇", hint: "Un torneo en el que compitió y su resultado" },
+  { value: "cinturon", label: "Cinturón", emoji: "🥋", hint: "Un grado obtenido (también en otra escuela)" },
+  { value: "trofeo", label: "Trofeo", emoji: "🏆", hint: "Un premio o reconocimiento" },
+  { value: "hito", label: "Hito", emoji: "⭐", hint: "Seminarios, certificaciones, logros personales" },
+];
+
+export interface OwnPostDraft {
+  kind: OwnPostKind;
+  title: string;
+  body: string;
+  event_date: string;
+  position: string;
+  discipline: string;
+  color: string;
+}
+
+/** Mismas reglas que los CHECK de athlete_posts. null = válido. */
+export function validateOwnPost(d: OwnPostDraft): string | null {
+  const title = d.title.trim();
+  const body = d.body.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.event_date)) return "Indica la fecha.";
+  if (d.kind === "publicacion") {
+    if (!body) return "Escribe el texto de la publicación.";
+  } else if (!title) {
+    return d.kind === "torneo" ? "Indica el nombre del torneo." : "Indica un título.";
+  }
+  if (title.length > 80) return "El título puede tener hasta 80 caracteres.";
+  if (body.length > 1000) return "El texto puede tener hasta 1000 caracteres.";
+  if (d.kind === "torneo" && !["1", "2", "3", "participacion"].includes(d.position)) return "Elige tu resultado.";
+  if (d.discipline.trim().length > 60) return "La disciplina puede tener hasta 60 caracteres.";
+  if (d.color && !/^#[0-9a-fA-F]{6}$/.test(d.color)) return "Color inválido.";
+  return null;
+}
 
 /** Publicaciones del perfil, de la más reciente a la más antigua. */
 export function buildAchievementPosts(data: {
   podiums: AthletePodium[];
   trophies: AthleteTrophy[];
   promotions: AthletePromotion[];
+  posts?: AthleteOwnPost[];
 }): AchievementPost[] {
   const posts: AchievementPost[] = [];
 
@@ -244,6 +323,8 @@ export function buildAchievementPosts(data: {
     posts.push({
       key: `podio-${p.id}`,
       kind,
+      verified: true,
+      ownPostId: null,
       date: p.event_date,
       emoji: meta.emoji,
       title: kind === "campeonato" ? `Campeón · ${p.tournament}` : `${meta.label} · ${p.tournament}`,
@@ -258,6 +339,8 @@ export function buildAchievementPosts(data: {
     posts.push({
       key: `cinturon-${b.id}`,
       kind: "cinturon",
+      verified: true,
+      ownPostId: null,
       date: b.promoted_on,
       emoji: "🥋",
       title: `Cinturón ${b.grade_name}`,
@@ -272,6 +355,8 @@ export function buildAchievementPosts(data: {
     posts.push({
       key: `trofeo-${t.id}`,
       kind: "trofeo",
+      verified: true,
+      ownPostId: null,
       date: t.awarded_on,
       emoji: "🏆",
       title: t.title,
@@ -282,18 +367,91 @@ export function buildAchievementPosts(data: {
     });
   }
 
+  for (const o of data.posts || []) {
+    posts.push(ownPostToAchievement(o));
+  }
+
   return posts.sort((a, b) => b.date.localeCompare(a.date) || a.key.localeCompare(b.key));
 }
 
+function ownPostToAchievement(o: AthleteOwnPost): AchievementPost {
+  const base = {
+    key: `propio-${o.id}`,
+    verified: false,
+    ownPostId: o.id,
+    date: o.event_date,
+    discipline: o.discipline,
+    detail: o.body,
+    color: null as string | null,
+  };
+  const title = (o.title || "").trim();
+  if (o.kind === "torneo") {
+    const meta = podiumPositionMeta(o.position || "participacion");
+    const kind: AchievementKind =
+      o.position === "1" ? "campeonato" : o.position === "participacion" ? "participacion" : "podio";
+    return {
+      ...base,
+      kind,
+      emoji: meta.emoji,
+      title: kind === "campeonato" ? `Campeón · ${title}` : `${meta.label} · ${title}`,
+      subtitle: o.discipline || "",
+    };
+  }
+  if (o.kind === "cinturon") {
+    return { ...base, kind: "cinturon", emoji: "🥋", title, subtitle: o.discipline || "", color: o.color };
+  }
+  if (o.kind === "trofeo") {
+    return { ...base, kind: "trofeo", emoji: "🏆", title, subtitle: o.discipline || "" };
+  }
+  if (o.kind === "hito") {
+    return { ...base, kind: "hito", emoji: "⭐", title, subtitle: o.discipline || "" };
+  }
+  const body = (o.body || "").trim();
+  return {
+    ...base,
+    kind: "publicacion",
+    emoji: "💬",
+    title: title || (body.length > 90 ? `${body.slice(0, 90).trimEnd()}…` : body),
+    subtitle: o.discipline || "",
+  };
+}
+
+/** Las fijadas primero (en el orden elegido) y luego el resto. */
+export function orderWithPinned(posts: AchievementPost[], pinned: string[] | null | undefined): AchievementPost[] {
+  const keys = (pinned || []).filter((k) => posts.some((p) => p.key === k));
+  const pinnedPosts = keys.map((k) => posts.find((p) => p.key === k)!);
+  return [...pinnedPosts, ...posts.filter((p) => !keys.includes(p.key))];
+}
+
+export type TournamentResult = AthletePodium & { verified: boolean };
+
 /** Torneos agrupados (un torneo puede tener varios resultados). */
-export function groupTournaments(podiums: AthletePodium[]): {
+export function groupTournaments(
+  podiums: AthletePodium[],
+  ownPosts: AthleteOwnPost[] = []
+): {
   key: string;
   tournament: string;
   date: string;
-  results: AthletePodium[];
+  results: TournamentResult[];
 }[] {
-  const map = new Map<string, { key: string; tournament: string; date: string; results: AthletePodium[] }>();
-  for (const p of podiums) {
+  const all: TournamentResult[] = [
+    ...podiums.map((p) => ({ ...p, verified: true })),
+    ...ownPosts
+      .filter((o) => o.kind === "torneo")
+      .map((o) => ({
+        id: o.id,
+        tournament: o.title || "",
+        event_date: o.event_date,
+        discipline: o.discipline,
+        category: null,
+        position: o.position || "participacion",
+        description: o.body,
+        verified: false,
+      })),
+  ];
+  const map = new Map<string, { key: string; tournament: string; date: string; results: TournamentResult[] }>();
+  for (const p of all) {
     const key = `${p.tournament.trim().toLowerCase()}|${p.event_date}`;
     const entry = map.get(key) || { key, tournament: p.tournament, date: p.event_date, results: [] };
     entry.results.push(p);

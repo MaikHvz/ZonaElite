@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import AthleteAvatar from "./AthleteAvatar";
 import { ACHIEVEMENT_BACKGROUND } from "./AchievementPostCard";
 import {
@@ -11,6 +11,8 @@ import {
 
 // Visor de una publicación (como abrir un post en Instagram):
 // tarjeta grande + datos, con flechas/teclado para recorrerlas.
+// El dueño fija/desfija y edita o borra lo que publicó; el admin
+// puede borrar publicaciones del alumno (moderación).
 export default function AchievementPostModal({
   posts,
   index,
@@ -19,6 +21,12 @@ export default function AchievementPostModal({
   athleteName,
   athleteAlias,
   ringColor,
+  pinnedKeys,
+  canManage,
+  canModerate,
+  onTogglePin,
+  onEdit,
+  onDelete,
 }: {
   posts: AchievementPost[];
   index: number | null;
@@ -27,8 +35,16 @@ export default function AchievementPostModal({
   athleteName: string;
   athleteAlias: string;
   ringColor: string | null;
+  pinnedKeys: string[];
+  canManage: boolean;
+  canModerate: boolean;
+  onTogglePin: (post: AchievementPost) => Promise<string | null>;
+  onEdit: (post: AchievementPost) => void;
+  onDelete: (post: AchievementPost) => Promise<string | null>;
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const open = index !== null && index >= 0 && index < posts.length;
 
   useEffect(() => {
@@ -48,6 +64,16 @@ export default function AchievementPostModal({
 
   if (!open) return null;
   const post = posts[index!];
+  const pinned = pinnedKeys.includes(post.key);
+  const isOwn = !!post.ownPostId;
+
+  const run = async (action: () => Promise<string | null>) => {
+    setBusy(true);
+    setError(null);
+    const err = await action();
+    setBusy(false);
+    if (err) setError(err);
+  };
 
   return (
     <div
@@ -87,9 +113,9 @@ export default function AchievementPostModal({
         </button>
       )}
 
-      <div className="w-full max-w-[860px] bg-surface-container-lowest rounded-xl overflow-hidden flex flex-col md:flex-row border border-on-surface/10">
+      <div className="w-full max-w-[860px] max-h-[90vh] overflow-y-auto bg-surface-container-lowest rounded-xl flex flex-col md:flex-row border border-on-surface/10">
         <div
-          className="relative md:w-[58%] aspect-square flex flex-col items-center justify-center p-8 text-center"
+          className="relative md:w-[58%] aspect-square shrink-0 flex flex-col items-center justify-center p-8 text-center"
           style={{ background: ACHIEVEMENT_BACKGROUND[post.kind] }}
         >
           {post.kind === "cinturon" && post.color && (
@@ -98,18 +124,26 @@ export default function AchievementPostModal({
               style={{ backgroundColor: post.color }}
             />
           )}
-          <span className="relative text-[72px] md:text-[96px] leading-none drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
-            {post.emoji}
-          </span>
-          <p className="relative mt-5 font-[family-name:var(--font-headline-md)] text-[22px] md:text-[28px] leading-tight uppercase text-white [text-shadow:0_2px_8px_rgba(0,0,0,0.8)]">
-            {post.title}
-          </p>
+          {post.kind === "publicacion" ? (
+            <p className="relative font-[family-name:var(--font-body-md)] text-[18px] md:text-[22px] leading-snug text-on-surface whitespace-pre-line line-clamp-[12] text-left">
+              {post.detail || post.title}
+            </p>
+          ) : (
+            <>
+              <span className="relative text-[72px] md:text-[96px] leading-none drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+                {post.emoji}
+              </span>
+              <p className="relative mt-5 font-[family-name:var(--font-headline-md)] text-[22px] md:text-[28px] leading-tight uppercase text-white [text-shadow:0_2px_8px_rgba(0,0,0,0.8)]">
+                {post.title}
+              </p>
+            </>
+          )}
         </div>
 
         <div className="md:w-[42%] flex flex-col">
           <div className="flex items-center gap-3 px-4 py-3 border-b border-on-surface/10">
             <AthleteAvatar name={athleteName} ringColor={ringColor} size="sm" />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="font-[family-name:var(--font-body-md)] text-[14px] font-semibold text-on-surface truncate">
                 {athleteAlias}
               </p>
@@ -117,25 +151,83 @@ export default function AchievementPostModal({
                 {athleteName}
               </p>
             </div>
+            {pinned && (
+              <span className="material-symbols-outlined text-[18px] text-on-surface-variant" title="Fijada">
+                push_pin
+              </span>
+            )}
           </div>
           <div className="p-4 space-y-3 flex-1">
-            <span className="inline-block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold/10 text-gold border border-gold/30">
-              {ACHIEVEMENT_KIND_LABEL[post.kind]}
-            </span>
-            <p className="font-[family-name:var(--font-body-md)] text-[15px] text-on-surface">
-              {post.title}
-            </p>
-            {post.subtitle && (
-              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">
-                {post.subtitle}
-              </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold/10 text-gold border border-gold/30">
+                {ACHIEVEMENT_KIND_LABEL[post.kind]}
+              </span>
+              {post.verified ? (
+                <span className="inline-flex items-center gap-1 font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold text-background">
+                  <span className="material-symbols-outlined text-[12px] font-bold">check</span>
+                  Verificado por ZonaElite
+                </span>
+              ) : (
+                <span className="inline-block font-[family-name:var(--font-label-sm)] text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-on-surface/10 text-on-surface-variant">
+                  Publicado por el atleta
+                </span>
+              )}
+            </div>
+            {post.kind !== "publicacion" && (
+              <p className="font-[family-name:var(--font-body-md)] text-[15px] text-on-surface">{post.title}</p>
             )}
-            {post.detail && (
+            {post.subtitle && (
+              <p className="font-[family-name:var(--font-body-md)] text-[13px] text-on-surface-variant">{post.subtitle}</p>
+            )}
+            {post.detail && post.kind !== "publicacion" && (
               <p className="font-[family-name:var(--font-body-md)] text-[14px] text-on-surface/90 whitespace-pre-line">
                 {post.detail}
               </p>
             )}
+            {error && (
+              <p className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-[12px] text-red-300">{error}</p>
+            )}
           </div>
+
+          {(canManage || (canModerate && isOwn)) && (
+            <div className="px-4 py-3 border-t border-on-surface/10 flex flex-wrap gap-2">
+              {canManage && (
+                <button
+                  onClick={() => run(() => onTogglePin(post))}
+                  disabled={busy}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface text-[13px] cursor-pointer disabled:opacity-40"
+                >
+                  <span className="material-symbols-outlined text-[16px]">push_pin</span>
+                  {pinned ? "Desfijar" : "Fijar en el perfil"}
+                </button>
+              )}
+              {canManage && isOwn && (
+                <button
+                  onClick={() => onEdit(post)}
+                  disabled={busy}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface text-[13px] cursor-pointer disabled:opacity-40"
+                >
+                  <span className="material-symbols-outlined text-[16px]">edit</span>
+                  Editar
+                </button>
+              )}
+              {isOwn && (canManage || canModerate) && (
+                <button
+                  onClick={() => {
+                    if (window.confirm(canManage ? "¿Eliminar esta publicación?" : "¿Eliminar esta publicación del alumno? (moderación)")) {
+                      run(() => onDelete(post));
+                    }
+                  }}
+                  disabled={busy}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 text-[13px] cursor-pointer disabled:opacity-40"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                  Eliminar
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="px-4 py-3 border-t border-on-surface/10 flex items-center justify-between">
             <span className="font-[family-name:var(--font-label-sm)] text-[11px] uppercase tracking-wider text-on-surface-variant">
               {formatAchievementDate(post.date)}

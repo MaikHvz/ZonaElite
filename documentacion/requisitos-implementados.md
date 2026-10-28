@@ -401,3 +401,11 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Changelog**: entrada **v1.17.0** (`contexto/migrations/049_changelog_v1_17_0.sql`).
 - **Verificación**: suite sección **AN** (13 asserts); conteo de seeds 21 → 22; `npx tsc --noEmit` limpio; lint sin errores nuevos; migración 048 probada en un PostgreSQL 18 local (idempotente, RPC, RLS, triggers y backfill).
 - **Pendiente (fase 2)**: tabla de torneos con nivel, migración de `sports_podiums`, rankings y su página, trayectoria declarada por el alumno con verificación.
+
+## 40. Publicaciones del Atleta (2026-10-28)
+**Requisito**: que los alumnos personalicen su perfil a su gusto, sin depender del administrador. Decisiones del usuario: lo que publica el alumno aparece sin la insignia de verificado (la de la academia sí la tiene) y ambos suman en los contadores; además, publicaciones libres de texto y hasta 3 publicaciones fijadas.
+- **Requisito**: `contexto/requisitos/perfil-atleta-rankings.md` (§0).
+- **BD**: `050_athlete_posts.sql` (`athlete_posts` + RLS del dueño, `athlete_profiles.pinned_posts`, RPC `set_my_pinned_posts` y reemplazo de `get_athlete_profile` / `search_athletes`).
+- **Código**: `src/components/athletes/OwnPostEditorModal.tsx` (nuevo), `AchievementPostCard` (✔ y 📌), `AchievementPostModal` (fijar, editar, eliminar y moderación), `src/app/atletas/[handle]/page.tsx`, `src/lib/athlete-profile.ts` (`AthleteOwnPost`, `validateOwnPost`, `orderWithPinned` y contadores con publicaciones propias).
+- **Changelog**: entrada **v1.18.0** (`contexto/migrations/051_changelog_v1_18_0.sql`).
+- **Verificación**: suite sección **AO** (9 asserts); conteo de seeds 22 → 23; `npx tsc --noEmit` limpio; lint sin errores nuevos; 050 probada en un PostgreSQL 18 local.

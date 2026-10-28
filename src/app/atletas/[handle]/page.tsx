@@ -13,13 +13,17 @@ import {
   coverGradient,
   featuredDiscipline,
   groupTournaments,
+  orderWithPinned,
   yearsSince,
+  type AchievementPost,
+  type AthleteOwnPost,
   type AthleteProfileResponse,
 } from "@/lib/athlete-profile";
 import AthleteAvatar from "@/components/athletes/AthleteAvatar";
 import AchievementPostCard from "@/components/athletes/AchievementPostCard";
 import AchievementPostModal from "@/components/athletes/AchievementPostModal";
 import EditAthleteProfileModal from "@/components/athletes/EditAthleteProfileModal";
+import OwnPostEditorModal from "@/components/athletes/OwnPostEditorModal";
 import { rememberRecentAthlete } from "@/lib/athlete-recent";
 
 type Tab = "publicaciones" | "palmares" | "torneos";
@@ -47,6 +51,7 @@ export default function AthleteProfilePage({
   const [disciplineFilter, setDisciplineFilter] = useState<string | null>(null);
   const [openPost, setOpenPost] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
+  const [postEditor, setPostEditor] = useState<{ editing: AthleteOwnPost | null } | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -84,7 +89,11 @@ export default function AthleteProfilePage({
     }
   }, [full, ringColor]);
 
-  const allPosts = useMemo(() => (full ? buildAchievementPosts(full) : []), [full]);
+  const pinnedKeys = useMemo(() => full?.profile.pinned_posts ?? [], [full]);
+  const allPosts = useMemo(
+    () => (full ? orderWithPinned(buildAchievementPosts(full), pinnedKeys) : []),
+    [full, pinnedKeys]
+  );
   const posts = useMemo(() => {
     if (!disciplineFilter) return allPosts;
     return allPosts.filter((p) => p.discipline === disciplineFilter);
@@ -178,9 +187,48 @@ export default function AthleteProfilePage({
   }
 
   const { profile } = data;
-  const stats = computeAthleteStats(data.podiums, data.trophies);
+  const ownPosts = data.posts ?? [];
+  const stats = computeAthleteStats(data.podiums, data.trophies, ownPosts);
   const years = yearsSince(profile.member_since, getChileToday());
-  const tournaments = groupTournaments(data.podiums);
+  const tournaments = groupTournaments(data.podiums, ownPosts);
+  const medalPosts = allPosts.filter((p) => p.kind === "campeonato" || p.kind === "podio" || p.kind === "trofeo");
+
+  // Fijar/desfijar (máx. 3). Mantiene abierto el mismo post aunque cambie el orden.
+  const togglePin = async (post: AchievementPost): Promise<string | null> => {
+    const next = pinnedKeys.includes(post.key)
+      ? pinnedKeys.filter((k) => k !== post.key)
+      : [post.key, ...pinnedKeys];
+    if (next.length > 3) return "Puedes fijar hasta 3 publicaciones. Desfija una primero.";
+    const { error } = await createClient().rpc("set_my_pinned_posts", { p_keys: next });
+    if (error) return "No se pudo fijar la publicación.";
+    const updated = { ...data, profile: { ...profile, pinned_posts: next } };
+    setData(updated);
+    const reordered = orderWithPinned(buildAchievementPosts(updated), next).filter(
+      (p) => !disciplineFilter || p.discipline === disciplineFilter
+    );
+    setOpenPost(Math.max(0, reordered.findIndex((p) => p.key === post.key)));
+    return null;
+  };
+
+  const deletePost = async (post: AchievementPost): Promise<string | null> => {
+    if (!post.ownPostId) return null;
+    const supabase = createClient();
+    const { error } = await supabase.from("athlete_posts").delete().eq("id", post.ownPostId);
+    if (error) return "No se pudo eliminar la publicación.";
+    if (profile.is_owner && pinnedKeys.includes(post.key)) {
+      await supabase.rpc("set_my_pinned_posts", { p_keys: pinnedKeys.filter((k) => k !== post.key) });
+    }
+    setOpenPost(null);
+    load();
+    return null;
+  };
+
+  const editPost = (post: AchievementPost) => {
+    const own = ownPosts.find((o) => o.id === post.ownPostId);
+    if (!own) return;
+    setOpenPost(null);
+    setPostEditor({ editing: own });
+  };
   const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/atletas/${profile.alias}` : "";
 
   const share = async () => {
@@ -286,6 +334,16 @@ export default function AthleteProfilePage({
               Editar perfil
             </button>
           )}
+          {profile.is_owner && (
+            <button
+              onClick={() => setPostEditor({ editing: null })}
+              className="px-3 py-2 rounded-lg btn-fire text-white transition-colors cursor-pointer"
+              aria-label="Nueva publicación"
+              title="Nueva publicación"
+            >
+              <span className="material-symbols-outlined text-[20px] align-middle">add</span>
+            </button>
+          )}
           <button
             onClick={share}
             className="flex-1 md:flex-none md:px-8 py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-[family-name:var(--font-body-md)] text-[14px] font-semibold transition-colors cursor-pointer"
@@ -369,17 +427,32 @@ export default function AthleteProfilePage({
           {posts.length === 0 ? (
             <EmptyState
               icon="emoji_events"
-              title={profile.is_owner ? "Tu primer logro te espera" : "Aún no hay logros"}
+              title={profile.is_owner ? "Comparte tu trayectoria" : "Aún no hay publicaciones"}
               text={
                 profile.is_owner
-                  ? "Cuando la academia registre tus cinturones, podios o trofeos, aparecerán aquí como publicaciones."
-                  : "Los cinturones, podios y trofeos de este atleta aparecerán aquí."
+                  ? "Publica tus torneos, cinturones, trofeos e hitos, o escribe una publicación. Lo que registre la academia aparecerá con la insignia de verificado."
+                  : "Los logros y publicaciones de este atleta aparecerán aquí."
+              }
+              action={
+                profile.is_owner ? (
+                  <button
+                    onClick={() => setPostEditor({ editing: null })}
+                    className="mt-5 px-5 py-2.5 rounded-lg btn-fire text-white font-[family-name:var(--font-headline-md)] text-[13px] uppercase cursor-pointer"
+                  >
+                    Crear publicación
+                  </button>
+                ) : null
               }
             />
           ) : (
             <div className="grid grid-cols-3 gap-[3px] md:gap-1">
               {posts.map((post, i) => (
-                <AchievementPostCard key={post.key} post={post} onOpen={() => setOpenPost(i)} />
+                <AchievementPostCard
+                  key={post.key}
+                  post={post}
+                  pinned={pinnedKeys.includes(post.key)}
+                  onOpen={() => setOpenPost(i)}
+                />
               ))}
             </div>
           )}
@@ -403,39 +476,32 @@ export default function AthleteProfilePage({
             ))}
           </div>
 
-          {data.trophies.length === 0 && stats.medals === 0 ? (
-            <EmptyState icon="military_tech" title="Sin medallas ni trofeos todavía" text="Las medallas de torneos y los trofeos de la academia se mostrarán aquí." />
+          {medalPosts.length === 0 ? (
+            <EmptyState icon="military_tech" title="Sin medallas ni trofeos todavía" text="Las medallas de torneos y los trofeos se mostrarán aquí." />
           ) : (
             <ul className="space-y-2">
-              {data.trophies.map((t) => (
-                <li key={t.id} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container border border-on-surface/5">
-                  <span className="text-[26px]">🏆</span>
-                  <div className="min-w-0">
-                    <p className="text-[14px] text-on-surface truncate">{t.title}</p>
-                    <p className="text-[12px] text-on-surface-variant truncate">
-                      {formatPodiumDate(t.awarded_on)}{t.discipline ? ` · ${t.discipline}` : ""}
-                    </p>
-                  </div>
+              {medalPosts.map((m) => (
+                <li key={m.key}>
+                  <button
+                    onClick={() => {
+                      setDisciplineFilter(null);
+                      setTab("publicaciones");
+                      setOpenPost(allPosts.findIndex((p) => p.key === m.key));
+                    }}
+                    className="w-full text-left flex items-center gap-3 p-3 rounded-xl bg-surface-container border border-on-surface/5 hover:border-on-surface/15 transition-colors cursor-pointer"
+                  >
+                    <span className="text-[26px]">{m.emoji}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14px] text-on-surface truncate">{m.title}</p>
+                      <p className="text-[12px] text-on-surface-variant truncate">
+                        {formatPodiumDate(m.date)}
+                        {m.subtitle ? ` · ${m.subtitle}` : ""}
+                      </p>
+                    </div>
+                    <VerifiedMark verified={m.verified} />
+                  </button>
                 </li>
               ))}
-              {data.podiums
-                .filter((p) => p.position !== "participacion")
-                .map((p) => {
-                  const meta = podiumPositionMeta(p.position);
-                  return (
-                    <li key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container border border-on-surface/5">
-                      <span className="text-[26px]">{meta.emoji}</span>
-                      <div className="min-w-0">
-                        <p className="text-[14px] text-on-surface truncate">{p.tournament}</p>
-                        <p className="text-[12px] text-on-surface-variant truncate">
-                          {meta.label} · {formatPodiumDate(p.event_date)}
-                          {p.discipline ? ` · ${p.discipline}` : ""}
-                          {p.category ? ` · ${p.category}` : ""}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
             </ul>
           )}
         </section>
@@ -456,14 +522,17 @@ export default function AthleteProfilePage({
                   <p className="font-[family-name:var(--font-headline-md)] text-[16px] uppercase text-on-surface">
                     {t.tournament}
                   </p>
-                  <ul className="mt-1 space-y-0.5">
+                  <ul className="mt-1 space-y-1">
                     {t.results.map((r) => {
                       const meta = podiumPositionMeta(r.position);
                       return (
-                        <li key={r.id} className="text-[13px] text-on-surface-variant">
-                          {meta.emoji} {meta.label}
-                          {r.discipline ? ` · ${r.discipline}` : ""}
-                          {r.category ? ` · ${r.category}` : ""}
+                        <li key={r.id} className="flex items-center gap-2 text-[13px] text-on-surface-variant">
+                          <span>
+                            {meta.emoji} {meta.label}
+                            {r.discipline ? ` · ${r.discipline}` : ""}
+                            {r.category ? ` · ${r.category}` : ""}
+                          </span>
+                          <VerifiedMark verified={r.verified} />
                         </li>
                       );
                     })}
@@ -476,6 +545,7 @@ export default function AthleteProfilePage({
       )}
 
       <AchievementPostModal
+        key={openPost !== null ? posts[openPost]?.key : "cerrado"}
         posts={posts}
         index={openPost}
         onIndexChange={setOpenPost}
@@ -483,7 +553,27 @@ export default function AthleteProfilePage({
         athleteName={profile.full_name}
         athleteAlias={profile.alias}
         ringColor={ringColor}
+        pinnedKeys={pinnedKeys}
+        canManage={profile.is_owner}
+        canModerate={!!data.viewer_is_admin}
+        onTogglePin={togglePin}
+        onEdit={editPost}
+        onDelete={deletePost}
       />
+
+      {profile.is_owner && postEditor && (
+        <OwnPostEditorModal
+          profileId={profile.id}
+          editing={postEditor.editing}
+          disciplineSuggestions={data.disciplines.map((d) => d.name)}
+          onClose={() => setPostEditor(null)}
+          onSaved={() => {
+            setPostEditor(null);
+            setTab("publicaciones");
+            load();
+          }}
+        />
+      )}
 
       {profile.is_owner && editing && (
         <EditAthleteProfileModal
@@ -505,7 +595,33 @@ export default function AthleteProfilePage({
   );
 }
 
-function EmptyState({ icon, title, text }: { icon: string; title: string; text: string }) {
+function VerifiedMark({ verified }: { verified: boolean }) {
+  return verified ? (
+    <span
+      className="shrink-0 inline-flex items-center gap-0.5 text-[10px] uppercase tracking-wider text-gold"
+      title="Verificado por ZonaElite"
+    >
+      <span className="material-symbols-outlined text-[14px]">verified</span>
+      <span className="hidden sm:inline">Verificado</span>
+    </span>
+  ) : (
+    <span className="shrink-0 text-[10px] uppercase tracking-wider text-on-surface-variant/70" title="Publicado por el atleta">
+      Declarado
+    </span>
+  );
+}
+
+function EmptyState({
+  icon,
+  title,
+  text,
+  action,
+}: {
+  icon: string;
+  title: string;
+  text: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="py-14 px-6 text-center">
       <span className="inline-flex w-16 h-16 rounded-full border-2 border-on-surface/30 items-center justify-center">
@@ -513,6 +629,7 @@ function EmptyState({ icon, title, text }: { icon: string; title: string; text: 
       </span>
       <p className="mt-3 font-[family-name:var(--font-headline-md)] text-[18px] uppercase text-on-surface">{title}</p>
       <p className="mt-1 text-[13px] text-on-surface-variant max-w-sm mx-auto">{text}</p>
+      {action}
     </div>
   );
 }

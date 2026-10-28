@@ -395,3 +395,17 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - `/atletas/[handle]` (perfil): portada, avatar con anillo, contadores (Torneos · Medallas · Trofeos · Años), biografía, botones Editar y Compartir, destacados por disciplina (filtran las publicaciones) y pestañas **Publicaciones** (cuadrícula 3×N de logros + visor `AchievementPostModal` con ← →), **Palmarés** y **Torneos** (línea de tiempo). `/atletas/yo` = el perfil propio. El layout `src/app/atletas/layout.tsx` exige sesión.
 - Lógica pura en `src/lib/athlete-profile.ts` (`buildAchievementPosts`, `computeAthleteStats`, `groupTournaments`, `featuredDiscipline`, validación del alias). Componentes en `src/components/athletes/`.
 - Accesos: ícono de lupa en el navbar (3 variantes), pestaña "Perfil de atleta" en el panel del alumno, "Ver perfil de atleta" en la ficha rápida del admin (`UserQuickView`) y, en `SportProfileModal`, las secciones **Trofeos** (otorgar y eliminar) y **Perfil de atleta** (ocultar o mostrar).
+
+---
+
+## 24. Publicaciones del Atleta (IMPLEMENTADO - v1.18.0)
+
+> Estado: **implementado en código (2026-10-28)**. Suite A-AO: 688 OK; siguen los 2 fallos preexistentes. `npx tsc --noEmit` limpio. Migraciones `050_athlete_posts.sql` (esquema, requiere la 048) y `051_changelog_v1_18_0.sql` (seed), **pendientes de aplicar después de la 048/049**. La 050 se probó en un PostgreSQL 18 local: se aplica dos veces sin errores y las RLS, CHECK, fijadas y contadores funcionan. Esa prueba detectó y corrigió un CHECK que aceptaba torneos sin resultado (un `NULL` en la condición).
+
+**Problema**: el contenido del perfil dependía del admin (podios, cinturones y trofeos). El usuario pidió que el alumno lo personalice a su gusto.
+
+**Solución**:
+- **`athlete_posts`** (dueño = `profile_id`): `kind` `torneo|cinturon|trofeo|hito|publicacion`, `title` ≤ 80 (obligatorio salvo en publicación), `body` ≤ 1000 (obligatorio en publicación), `event_date`, `position` (solo torneo y obligatorio), `discipline` en texto libre ≤ 60 y `color` del cinturón (`#rrggbb`). RLS: el dueño hace insert/update/delete de lo suyo; el admin `FOR ALL` (moderación); la lectura de la comunidad va por RPC.
+- **Fijadas**: `athlete_profiles.pinned_posts text[]` (CHECK ≤ 3) + RPC `set_my_pinned_posts` (`PIN_LIMIT`, `PIN_INVALID`). Las claves son las de `buildAchievementPosts` (`podio-`, `cinturon-`, `trofeo-`, `propio-<uuid>`).
+- `get_athlete_profile` (reemplazada) agrega `posts`, `pinned_posts` y `viewer_is_admin`; `search_athletes` (reemplazada) suma los torneos 1°–3° y los trofeos propios.
+- **UI**: botón **+** en el perfil propio → `OwnPostEditorModal` (selector de tipo, resultado con medallas, colores de cinturón, disciplina con sugerencias). La cuadrícula muestra ✔ en lo verificado, 📌 en lo fijado y las publicaciones de texto como tarjeta de texto. El visor tiene Fijar/Desfijar, Editar y Eliminar (dueño), y Eliminar como moderación (admin). Palmarés y Torneos marcan "Verificado" o "Declarado".

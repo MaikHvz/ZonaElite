@@ -249,7 +249,8 @@ export default function EditAthleteProfileModal({
           )}
 
           <p className="text-[11px] text-on-surface-variant">
-            Tus cinturones, podios y trofeos los registra la academia. Si falta alguno, pídelo a tu profesor.
+            Publica tus torneos, cinturones, trofeos e hitos con el botón + de tu perfil. Los que registra la academia
+            llevan la insignia ✔ Verificado por ZonaElite.
           </p>
         </div>
       </div>

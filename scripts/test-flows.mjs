@@ -1653,7 +1653,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 22);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 23);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -3023,7 +3023,7 @@ ok("AN: el espejo refleja la 048 (tablas, RPC y trigger) una sola vez",
   (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.athlete_profiles \(/g) || []).length === 1 &&
   (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.athlete_trophies \(/g) || []).length === 1 &&
   (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.belt_promotions \(/g) || []).length === 1 &&
-  (schemaAl.match(/CREATE OR REPLACE FUNCTION public\.get_athlete_profile\(/g) || []).length === 1 &&
+  (schemaAl.match(/CREATE OR REPLACE FUNCTION public\.get_athlete_profile\(/g) || []).length === 2 &&
   (schemaAl.match(/CREATE TRIGGER trg_sport_profiles_belt_promotion/g) || []).length === 1);
 ok("AN: RLS en las tres tablas; el alumno no tiene policies de escritura (solo admin)",
   ["athlete_profiles", "athlete_trophies", "belt_promotions"].every((t) =>
@@ -3097,6 +3097,81 @@ ok("AN: accesos — lupa en el navbar, pestaña en el panel, ficha rápida y mod
   /href: "\/atletas\/yo"/.test(dashNavAn) &&
   /href=\{`\/atletas\/\$\{profile\.id\}`\}/.test(quickViewAn) &&
   /from\("athlete_trophies"\)/.test(sportModalAn) && /hidden_by_admin: !athleteProfile\.hidden_by_admin/.test(sportModalAn));
+
+// ============================================================
+// AO. El alumno publica en su perfil por su cuenta (v1.18.0)
+// ============================================================
+section("AO. Publicaciones del atleta");
+
+const migration050 = readFileSync(join(ROOT, "contexto", "migrations", "050_athlete_posts.sql"), "utf8");
+const migration051 = readFileSync(join(ROOT, "contexto", "migrations", "051_changelog_v1_18_0.sql"), "utf8");
+const editorAo = srcAj("components", "athletes", "OwnPostEditorModal.tsx");
+const postModalAo = srcAj("components", "athletes", "AchievementPostModal.tsx");
+const cardAo = srcAj("components", "athletes", "AchievementPostCard.tsx");
+const { validateOwnPost, orderWithPinned } = await import("../src/lib/athlete-profile.ts");
+
+ok("AO: 051 es seed v1.18.0 y el espejo refleja la 050 y el seed una sola vez",
+  /'v1\.18\.0'/.test(migration051) && /ON CONFLICT \(version\) DO NOTHING/.test(migration051) &&
+  (schemaAl.match(/'v1\.18\.0'/g) || []).length === 1 &&
+  (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.athlete_posts \(/g) || []).length === 1 &&
+  (schemaAl.match(/CREATE OR REPLACE FUNCTION public\.set_my_pinned_posts\(/g) || []).length === 1);
+ok("AO: el alumno escribe solo lo suyo (RLS dueño en insert/update/delete) y el admin modera",
+  /CREATE POLICY "athlete_posts_owner_insert" ON public\.athlete_posts\s+FOR INSERT WITH CHECK \(profile_id = auth\.uid\(\)\)/.test(migration050) &&
+  /CREATE POLICY "athlete_posts_owner_update" ON public\.athlete_posts\s+FOR UPDATE USING \(profile_id = auth\.uid\(\)\) WITH CHECK \(profile_id = auth\.uid\(\)\)/.test(migration050) &&
+  /CREATE POLICY "athlete_posts_owner_delete" ON public\.athlete_posts\s+FOR DELETE USING \(profile_id = auth\.uid\(\)\)/.test(migration050) &&
+  /CREATE POLICY "athlete_posts_admin_write" ON public\.athlete_posts\s+FOR ALL USING \(public\.is_admin\(\)\)/.test(migration050));
+ok("AO: CHECKs de athlete_posts (tipos, torneo con resultado no nulo, sin imágenes)",
+  /kind IN \('torneo', 'cinturon', 'trofeo', 'hito', 'publicacion'\)/.test(migration050) &&
+  /kind = 'torneo' AND position IS NOT NULL AND position IN/.test(migration050) &&
+  !/image|photo|foto_url/i.test(migration050.slice(migration050.indexOf("CREATE TABLE"))));
+ok("AO: máximo 3 fijadas (CHECK + RPC) y set_my_pinned_posts sin anon",
+  /CHECK \(cardinality\(pinned_posts\) <= 3\)/.test(migration050) &&
+  /RAISE EXCEPTION 'PIN_LIMIT'/.test(migration050) &&
+  /REVOKE ALL ON FUNCTION public\.set_my_pinned_posts\(text\[\]\) FROM anon;/.test(migration050));
+const getProfile050 = migration050.slice(migration050.indexOf("CREATE OR REPLACE FUNCTION public.get_athlete_profile("));
+ok("AO: get_athlete_profile (050) agrega posts y fijadas sin exponer datos sensibles",
+  /'posts', coalesce\(/.test(getProfile050) && /'pinned_posts', to_jsonb\(v_ap\.pinned_posts\)/.test(getProfile050) &&
+  !/'(rut|email|phone|birth_date|address|weight|height)'/.test(getProfile050) &&
+  /v_ap\.hidden_by_admin OR v_ap\.visibility = 'privado'/.test(getProfile050));
+ok("AO: las publicaciones propias suman medallas y trofeos en el buscador",
+  /po\.kind = 'torneo' AND po\.position IN \('1', '2', '3'\)/.test(migration050) &&
+  /po\.kind = 'trofeo'\) AS a_trophies/.test(migration050));
+ok("AO: validateOwnPost replica los CHECK (texto obligatorio, torneo con resultado, largos)",
+  (() => {
+    const base = { kind: "torneo", title: "Copa", body: "", event_date: "2026-01-01", position: "1", discipline: "", color: "" };
+    return validateOwnPost(base) === null &&
+      validateOwnPost({ ...base, position: "" }) !== null &&
+      validateOwnPost({ ...base, title: " " }) !== null &&
+      validateOwnPost({ ...base, kind: "publicacion", title: "", body: "" }) !== null &&
+      validateOwnPost({ ...base, kind: "publicacion", title: "", body: "Hola" }) === null &&
+      validateOwnPost({ ...base, kind: "cinturon", color: "rojo" }) !== null &&
+      validateOwnPost({ ...base, body: "x".repeat(1001) }) !== null;
+  })());
+ok("AO: propias = no verificadas (clave propio-<id>) y las fijadas van primero",
+  (() => {
+    const posts = buildAchievementPosts({
+      podiums: [{ id: "p1", tournament: "Copa", event_date: "2026-03-10", discipline: null, category: null, position: "2", description: null }],
+      trophies: [], promotions: [],
+      posts: [
+        { id: "o1", kind: "torneo", title: "Open", body: null, event_date: "2026-05-01", position: "1", discipline: "Kenpo", color: null, created_at: "" },
+        { id: "o2", kind: "publicacion", title: null, body: "Hoy entrené", event_date: "2026-06-01", position: null, discipline: null, color: null, created_at: "" },
+      ],
+    });
+    const ordered = orderWithPinned(posts, ["podio-p1", "no-existe"]);
+    const s = computeAthleteStats(
+      [{ tournament: "Copa", event_date: "2026-03-10", position: "2" }], [],
+      [{ kind: "torneo", title: "Open", event_date: "2026-05-01", position: "1" }, { kind: "trofeo", title: "T", event_date: "2026-01-01", position: null }]);
+    return posts.find((p) => p.key === "propio-o1")?.verified === false &&
+      posts.find((p) => p.key === "podio-p1")?.verified === true &&
+      posts.find((p) => p.key === "propio-o2")?.title === "Hoy entrené" &&
+      ordered[0].key === "podio-p1" && ordered.length === 3 &&
+      s.medals === 2 && s.gold === 1 && s.trophies === 1 && s.tournaments === 2;
+  })());
+ok("AO: UI — editor del alumno (athlete_posts), insignia verificado, fijar y moderación admin",
+  /from\("athlete_posts"\)\.insert\(\{ \.\.\.row, profile_id: profileId \}\)/.test(editorAo) &&
+  /Verificado por ZonaElite/.test(postModalAo) && /Publicado por el atleta/.test(postModalAo) &&
+  /canModerate && isOwn/.test(postModalAo) && /push_pin/.test(cardAo) &&
+  /rpc\("set_my_pinned_posts"/.test(profilePageAn) && /canModerate=\{!!data\.viewer_is_admin\}/.test(profilePageAn));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {
