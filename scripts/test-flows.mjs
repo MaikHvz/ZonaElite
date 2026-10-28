@@ -3023,7 +3023,7 @@ ok("AN: el espejo refleja la 048 (tablas, RPC y trigger) una sola vez",
   (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.athlete_profiles \(/g) || []).length === 1 &&
   (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.athlete_trophies \(/g) || []).length === 1 &&
   (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.belt_promotions \(/g) || []).length === 1 &&
-  (schemaAl.match(/CREATE OR REPLACE FUNCTION public\.get_athlete_profile\(/g) || []).length === 3 &&
+  (schemaAl.match(/CREATE OR REPLACE FUNCTION public\.get_athlete_profile\(/g) || []).length === 4 &&
   (schemaAl.match(/CREATE TRIGGER trg_sport_profiles_belt_promotion/g) || []).length === 1);
 ok("AN: RLS en las tres tablas; el alumno no tiene policies de escritura (solo admin)",
   ["athlete_profiles", "athlete_trophies", "belt_promotions"].every((t) =>
@@ -3217,6 +3217,19 @@ ok("AP: \"Perfil\" del navbar abre el perfil de atleta; Editar perfil tiene pest
 ok("AP: /perfil reutiliza AccountSettings y conserva los anclajes de la guía",
   /<AccountSettings \/>/.test(perfilPageAp) && /data-guide="perfil-header"/.test(perfilPageAp) &&
   ["perfil-info", "perfil-fisico", "perfil-seguridad", "perfil-sesion"].every((g) => accountAp.includes(`data-guide="${g}"`)));
+
+const migration054 = readFileSync(join(ROOT, "contexto", "migrations", "054_athlete_ring_color.sql"), "utf8");
+const avatarAp = srcAj("components", "athletes", "AthleteAvatar.tsx");
+ok("AP: el borde del avatar es siempre el color del cinturón (blanco sin cinturón), en todas las vistas",
+  /export const NO_BELT_RING_COLOR = "#ffffff";/.test(avatarAp) &&
+  /background: ringColor \|\| NO_BELT_RING_COLOR/.test(avatarAp) && !/linear-gradient/.test(avatarAp) &&
+  [profilePageAn, searchPageAn, editModalAp, postModalAo].every((src) =>
+    (src.match(/<AthleteAvatar[\s\S]*?\/>/g) || []).every((tag) => /ringColor=/.test(tag))));
+ok("AP: 054 agrega solo ring_color a la respuesta restringida (espejo 1:1, sin datos sensibles)",
+  /'ring_color', v_ring_color/.test(migration054) &&
+  /JOIN public\.belt_grades g ON g\.id = sp\.grade_id/.test(migration054) &&
+  !/'(rut|email|phone|birth_date|address|weight|height)'/.test(migration054) &&
+  (schemaAl.match(/'ring_color', v_ring_color/g) || []).length === 1);
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

@@ -204,7 +204,7 @@ export default function EditAthleteProfileModal({
                 ))}
               </div>
               <p className="mt-2 text-[11px] text-on-surface-variant">
-                El anillo toma el color de tu cinturón. No se suben fotos.
+                El borde es siempre el color de tu cinturón (blanco si aún no tienes). No se suben fotos.
               </p>
             </div>
 

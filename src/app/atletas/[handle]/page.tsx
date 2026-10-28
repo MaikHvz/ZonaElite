@@ -174,7 +174,12 @@ export default function AthleteProfilePage({
           style={{ background: coverBackground(data.profile.cover_image, data.profile.cover_theme) }}
         />
         <div className="flex flex-col items-center -mt-12 text-center">
-          <AthleteAvatar name={data.profile.full_name} avatarKey={data.profile.avatar_key} size="xl" />
+          <AthleteAvatar
+            name={data.profile.full_name}
+            ringColor={data.profile.ring_color}
+            avatarKey={data.profile.avatar_key}
+            size="xl"
+          />
           <p className="mt-3 font-[family-name:var(--font-body-md)] text-[18px] font-semibold text-on-surface">
             {data.profile.alias}
           </p>

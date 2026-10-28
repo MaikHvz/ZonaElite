@@ -8,8 +8,10 @@ const SIZES = {
 } as const;
 
 // Avatar sin foto: el avatar ilustrado que eligió el alumno o sus
-// iniciales, dentro de un anillo con el color del cinturón (o el
-// degradado fuego→oro si no tiene grado).
+// iniciales, dentro de un anillo SIEMPRE del color de su cinturón
+// (blanco si no tiene cinturón asignado).
+export const NO_BELT_RING_COLOR = "#ffffff";
+
 export default function AthleteAvatar({
   name,
   ringColor,
@@ -26,11 +28,7 @@ export default function AthleteAvatar({
   return (
     <div
       className={`${s.box} ${s.ring} rounded-full shrink-0`}
-      style={{
-        background: ringColor
-          ? ringColor
-          : "linear-gradient(135deg, #f9d27a 0%, #f2552a 55%, #b9230f 100%)",
-      }}
+      style={{ background: ringColor || NO_BELT_RING_COLOR }}
       aria-hidden
     >
       <div className="w-full h-full rounded-full p-[2px] bg-background">

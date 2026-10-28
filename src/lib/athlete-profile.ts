@@ -89,7 +89,7 @@ export type AthleteProfileResponse =
       profile: Pick<
         AthleteProfileHeader,
         "alias" | "full_name" | "nickname" | "cover_theme" | "avatar_key" | "cover_image"
-      >;
+      > & { ring_color?: string | null };
     }
   | {
       restricted: false;
