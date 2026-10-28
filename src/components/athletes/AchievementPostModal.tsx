@@ -21,6 +21,7 @@ export default function AchievementPostModal({
   athleteName,
   athleteAlias,
   ringColor,
+  avatarKey,
   pinnedKeys,
   canManage,
   canModerate,
@@ -35,6 +36,7 @@ export default function AchievementPostModal({
   athleteName: string;
   athleteAlias: string;
   ringColor: string | null;
+  avatarKey: string | null;
   pinnedKeys: string[];
   canManage: boolean;
   canModerate: boolean;
@@ -142,7 +144,7 @@ export default function AchievementPostModal({
 
         <div className="md:w-[42%] flex flex-col">
           <div className="flex items-center gap-3 px-4 py-3 border-b border-on-surface/10">
-            <AthleteAvatar name={athleteName} ringColor={ringColor} size="sm" />
+            <AthleteAvatar name={athleteName} ringColor={ringColor} avatarKey={avatarKey} size="sm" />
             <div className="min-w-0 flex-1">
               <p className="font-[family-name:var(--font-body-md)] text-[14px] font-semibold text-on-surface truncate">
                 {athleteAlias}

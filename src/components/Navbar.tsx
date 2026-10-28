@@ -186,7 +186,7 @@ export default function Navbar() {
                   </Link>
                 )}
                 <Link
-                  href="/perfil"
+                  href="/atletas/yo"
                   className="flex items-center gap-2 btn-gold font-[family-name:var(--font-headline-md)] text-sm px-6 py-2 rounded-[0.25rem] uppercase tracking-wider"
                 >
                   <span className="material-symbols-outlined text-lg">person</span>
@@ -424,7 +424,7 @@ export default function Navbar() {
                 <div className="w-16 h-px bg-on-surface/10 my-1" />
 
                 <Link
-                  href="/perfil"
+                  href="/atletas/yo"
                   onClick={closeMobile}
                   className={`flex items-center gap-2 btn-gold font-[family-name:var(--font-headline-md)] text-lg px-8 py-3 rounded-xl uppercase tracking-wider ${
                     mobileOpen ? "menu-item-animate" : ""

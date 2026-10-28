@@ -68,6 +68,10 @@ export interface AthleteProfileHeader {
   nickname: string | null;
   bio: string | null;
   cover_theme: CoverTheme;
+  /** Avatar ilustrado (ATHLETE_AVATARS); null = iniciales. */
+  avatar_key?: string | null;
+  /** Portada ilustrada (COVER_IMAGES); null = degradado de cover_theme. */
+  cover_image?: string | null;
   visibility: AthleteVisibility;
   hidden_by_admin: boolean;
   primary_discipline_id: string | null;
@@ -82,7 +86,10 @@ export interface AthleteProfileHeader {
 export type AthleteProfileResponse =
   | {
       restricted: true;
-      profile: Pick<AthleteProfileHeader, "alias" | "full_name" | "nickname" | "cover_theme">;
+      profile: Pick<
+        AthleteProfileHeader,
+        "alias" | "full_name" | "nickname" | "cover_theme" | "avatar_key" | "cover_image"
+      >;
     }
   | {
       restricted: false;
@@ -104,6 +111,7 @@ export interface AthleteSearchResult {
   discipline_name: string | null;
   grade_name: string | null;
   grade_color: string | null;
+  avatar_key?: string | null;
   medals: number;
   trophies: number;
 }
@@ -120,6 +128,59 @@ export const COVER_THEMES: { value: CoverTheme; label: string; gradient: string 
 
 export function coverGradient(theme: string | null | undefined): string {
   return (COVER_THEMES.find((c) => c.value === theme) || COVER_THEMES[0]).gradient;
+}
+
+/** Portadas ilustradas (SVG en public/athletes/banners). */
+export const COVER_IMAGES: { value: string; label: string; src: string }[] = [
+  { value: "dojo", label: "Dojo al atardecer", src: "/athletes/banners/dojo.svg" },
+  { value: "montana", label: "Montañas", src: "/athletes/banners/montana.svg" },
+  { value: "olas", label: "Olas", src: "/athletes/banners/olas.svg" },
+  { value: "brasas", label: "Brasas", src: "/athletes/banners/brasas.svg" },
+  { value: "bambu", label: "Bambú", src: "/athletes/banners/bambu.svg" },
+  { value: "tatami", label: "Tatami", src: "/athletes/banners/tatami.svg" },
+  { value: "energia", label: "Energía", src: "/athletes/banners/energia.svg" },
+  { value: "sakura", label: "Sakura", src: "/athletes/banners/sakura.svg" },
+  { value: "ring", label: "Ring", src: "/athletes/banners/ring.svg" },
+];
+
+/** Fondo CSS de la portada: la ilustración elegida o el degradado. */
+export function coverBackground(coverImage: string | null | undefined, theme: string | null | undefined): string {
+  const image = COVER_IMAGES.find((c) => c.value === coverImage);
+  return image ? `url("${image.src}") center / cover no-repeat, ${coverGradient(theme)}` : coverGradient(theme);
+}
+
+// ---- Avatares ilustrados (sin fotos) ------------------------
+
+export interface AthleteAvatarOption {
+  value: string;
+  label: string;
+  /** Ícono de Material Symbols (relleno). */
+  icon: string;
+  background: string;
+  color: string;
+}
+
+export const ATHLETE_AVATARS: AthleteAvatarOption[] = [
+  { value: "patada", label: "Patada", icon: "sports_martial_arts", background: "linear-gradient(135deg, #f2552a, #7a1a0c)", color: "#fff1c9" },
+  { value: "guante", label: "Guante", icon: "sports_mma", background: "linear-gradient(135deg, #d93418, #3a0d06)", color: "#ffffff" },
+  { value: "combate", label: "Combate", icon: "sports_kabaddi", background: "linear-gradient(135deg, #e6a53a, #6e3a08)", color: "#1a0d02" },
+  { value: "meditacion", label: "Meditación", icon: "self_improvement", background: "linear-gradient(135deg, #3c5a8a, #10141f)", color: "#e8f0ff" },
+  { value: "fuego", label: "Fuego", icon: "local_fire_department", background: "linear-gradient(135deg, #ff9a3c, #b9230f)", color: "#fff1c9" },
+  { value: "rayo", label: "Rayo", icon: "bolt", background: "linear-gradient(135deg, #2a1a06, #b9781e)", color: "#f9d27a" },
+  { value: "escudo", label: "Escudo", icon: "shield", background: "linear-gradient(135deg, #5b6470, #1c1f24)", color: "#e6e9ee" },
+  { value: "espadas", label: "Espadas", icon: "swords", background: "linear-gradient(135deg, #3a3939, #0e0e0e)", color: "#f9d27a" },
+  { value: "medalla", label: "Medalla", icon: "military_tech", background: "linear-gradient(135deg, #f9d27a, #b9781e)", color: "#3a2306" },
+  { value: "copa", label: "Copa", icon: "emoji_events", background: "linear-gradient(135deg, #6e1a0c, #e6a53a)", color: "#fff1c9" },
+  { value: "loto", label: "Loto", icon: "spa", background: "linear-gradient(135deg, #f4a7b9, #7a2a45)", color: "#2a0f1a" },
+  { value: "montana", label: "Montaña", icon: "landscape", background: "linear-gradient(135deg, #2f6b3f, #0b1f12)", color: "#d8f5e0" },
+  { value: "garra", label: "Garra", icon: "pets", background: "linear-gradient(135deg, #f28c28, #3a1a06)", color: "#1a0d02" },
+  { value: "mente", label: "Mente", icon: "psychology", background: "linear-gradient(135deg, #7c3aed, #1e1033)", color: "#efe6ff" },
+  { value: "fuerza", label: "Fuerza", icon: "fitness_center", background: "linear-gradient(135deg, #2563eb, #0b1a3a)", color: "#e8f0ff" },
+  { value: "diamante", label: "Diamante", icon: "diamond", background: "linear-gradient(135deg, #5ad1e6, #0b3a44)", color: "#062a31" },
+];
+
+export function findAthleteAvatar(key: string | null | undefined): AthleteAvatarOption | null {
+  return ATHLETE_AVATARS.find((a) => a.value === key) || null;
 }
 
 // ---- Alias --------------------------------------------------
@@ -149,6 +210,7 @@ export function athleteProfileErrorMessage(raw: string | null | undefined): stri
   if (msg.includes("NICKNAME_TOO_LONG")) return "El apodo puede tener hasta 40 caracteres.";
   if (msg.includes("BIO_TOO_LONG")) return "La biografía puede tener hasta 150 caracteres.";
   if (msg.includes("DISCIPLINE_INVALID")) return "La disciplina principal debe ser una de tus disciplinas.";
+  if (msg.includes("AVATAR_INVALID")) return "El avatar elegido no es válido.";
   return "No se pudo guardar el perfil. Inténtalo de nuevo.";
 }
 

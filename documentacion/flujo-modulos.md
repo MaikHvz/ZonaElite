@@ -409,3 +409,17 @@ Este documento detalla **cada módulo** de la aplicación web ZonaElite, su fluj
 - **Fijadas**: `athlete_profiles.pinned_posts text[]` (CHECK ≤ 3) + RPC `set_my_pinned_posts` (`PIN_LIMIT`, `PIN_INVALID`). Las claves son las de `buildAchievementPosts` (`podio-`, `cinturon-`, `trofeo-`, `propio-<uuid>`).
 - `get_athlete_profile` (reemplazada) agrega `posts`, `pinned_posts` y `viewer_is_admin`; `search_athletes` (reemplazada) suma los torneos 1°–3° y los trofeos propios.
 - **UI**: botón **+** en el perfil propio → `OwnPostEditorModal` (selector de tipo, resultado con medallas, colores de cinturón, disciplina con sugerencias). La cuadrícula muestra ✔ en lo verificado, 📌 en lo fijado y las publicaciones de texto como tarjeta de texto. El visor tiene Fijar/Desfijar, Editar y Eliminar (dueño), y Eliminar como moderación (admin). Palmarés y Torneos marcan "Verificado" o "Declarado".
+
+---
+
+## 25. Avatares, Portadas y "Perfil" Unificado (IMPLEMENTADO - v1.19.0)
+
+> Estado: **implementado en código (2026-10-28)**. Suite A-AP: 694 OK; siguen los 2 fallos preexistentes. `npx tsc --noEmit` limpio. Migraciones `052_athlete_avatar_cover.sql` (requiere la 048 y la 050) y `053_changelog_v1_19_0.sql`, **pendientes de aplicar en ese orden**. La 052 se probó en un PostgreSQL 18 local (dos aplicaciones seguidas, validaciones, firma nueva y permisos). Avatares, portadas y el modal revisados con capturas de una vista previa temporal (ya eliminada).
+
+**Problema**: el usuario pidió que el botón "Perfil" del navbar lleve al perfil de atleta y que desde ahí se edite todo el perfil, con una serie de avatares y portadas.
+
+**Solución**:
+- **BD (052)**: `athlete_profiles.avatar_key` y `cover_image` (CHECK `^[a-z0-9-]{1,30}$`, NULL = iniciales o degradado). `update_my_athlete_profile` pasa a tener 8 parámetros (`p_avatar_key`, `p_cover_image` con DEFAULT NULL; se elimina la firma de 6) y valida `AVATAR_INVALID` / `COVER_INVALID`. `get_athlete_profile` devuelve ambas claves (también en la respuesta restringida) y `search_athletes` agrega `avatar_key` (cambia el tipo de retorno: DROP + CREATE).
+- **Catálogos** en `src/lib/athlete-profile.ts`: `ATHLETE_AVATARS` (16 íconos rellenos de Material Symbols sobre degradados de la paleta) y `COVER_IMAGES` (9 SVG en `public/athletes/banners/`: dojo, montaña, olas, brasas, bambú, tatami, energía, sakura, ring), más `coverBackground()` y `findAthleteAvatar()`. Sin subida de imágenes; la app ignora las claves que no conoce.
+- **UI**: `AthleteAvatar` acepta `avatarKey` (el tamaño del ícono va en línea porque la hoja de Material Symbols fija 24px). "Editar perfil" tiene las pestañas **Perfil** (selector de avatar y de portada + datos públicos) y **Cuenta** (`AccountSettings`). `/atletas/[handle]?editar=perfil|cuenta` abre el modal directamente.
+- **Navegación**: "Perfil" del navbar (escritorio y móvil) → `/atletas/yo`. `/perfil` sigue existiendo (cabecera + `AccountSettings`, con los anclajes `data-guide` de la guía) y vuelve al perfil de atleta.

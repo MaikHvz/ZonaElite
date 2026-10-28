@@ -1401,7 +1401,7 @@ const transferStepT = readFileSync(join(ROOT, "src", "components", "TransferPaym
 const paymentRowT = readFileSync(join(ROOT, "src", "components", "dashboard", "PaymentRow.tsx"), "utf8");
 const adminVentasT = readFileSync(join(ROOT, "src", "app", "admin", "ventas", "page.tsx"), "utf8");
 const adminConfigT = readFileSync(join(ROOT, "src", "app", "admin", "configuracion", "page.tsx"), "utf8");
-const perfilT = readFileSync(join(ROOT, "src", "app", "perfil", "page.tsx"), "utf8");
+const perfilT = readFileSync(join(ROOT, "src", "components", "athletes", "AccountSettings.tsx"), "utf8"); // formulario de /perfil (v1.19.0)
 const adminUsuariosT = readFileSync(join(ROOT, "src", "app", "admin", "usuarios", "page.tsx"), "utf8");
 const dataTableT = readFileSync(join(ROOT, "src", "components", "admin", "DataTable.tsx"), "utf8");
 // Fase 6 (una cuenta por alumno): create/update-dependent, CreateDependentModal,
@@ -1653,7 +1653,7 @@ ok("T: 014 resumen cubre los 3 tipos de producto y la revisión admin",
 ok("T: esquema documentado refleja el seed v1.1.0",
   /'v1\.1\.0'/.test(schemaSqlT) &&
   /'Pago por Transferencia'/.test(schemaSqlT) &&
-  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 23);
+  (schemaSqlT.match(/INSERT INTO public\.changelog \(version, title, summary\)/g) || []).length === 24);
 
 // T14. Feedback admin: badge en sidebar + banner con solicitudes pendientes
 const pendingTransferProviderT = readFileSync(join(ROOT, "src", "components", "admin", "PendingTransferProvider.tsx"), "utf8");
@@ -2570,7 +2570,7 @@ const authPageAg = readFileSync(join(ROOT, "src", "app", "auth", "page.tsx"), "u
 const authLibAg = readFileSync(join(ROOT, "src", "lib", "supabase", "auth.ts"), "utf8");
 const createUserAg = readFileSync(join(ROOT, "src", "app", "api", "admin", "create-user", "route.ts"), "utf8");
 const usuariosAg = readFileSync(join(ROOT, "src", "app", "admin", "usuarios", "page.tsx"), "utf8");
-const perfilAg = readFileSync(join(ROOT, "src", "app", "perfil", "page.tsx"), "utf8");
+const perfilAg = readFileSync(join(ROOT, "src", "components", "athletes", "AccountSettings.tsx"), "utf8"); // formulario de /perfil (v1.19.0)
 const dashboardLibAg = readFileSync(join(ROOT, "src", "lib", "supabase", "dashboard.ts"), "utf8");
 const dashboardPageAg = readFileSync(join(ROOT, "src", "app", "dashboard", "page.tsx"), "utf8");
 
@@ -2679,7 +2679,7 @@ const schemaAi = readFileSync(join(ROOT, "documentacion", "squema-sql-actualizad
 const migrationPageAi = readFileSync(join(ROOT, "src", "app", "admin", "migracion-cargas", "page.tsx"), "utf8");
 const sidebarAi = readFileSync(join(ROOT, "src", "components", "admin", "AdminSidebar.tsx"), "utf8");
 const cargasPageAi = readFileSync(join(ROOT, "src", "app", "dashboard", "cargas", "page.tsx"), "utf8");
-const perfilAi = readFileSync(join(ROOT, "src", "app", "perfil", "page.tsx"), "utf8");
+const perfilAi = readFileSync(join(ROOT, "src", "components", "athletes", "AccountSettings.tsx"), "utf8"); // formulario de /perfil (v1.19.0)
 const migrateFnAi = (migration040.match(/CREATE OR REPLACE FUNCTION public\.migrate_dependent_to_profile[\s\S]*?\n\$\$;/) || [""])[0];
 const revertFnAi = (migration040.match(/CREATE OR REPLACE FUNCTION public\.revert_dependent_migration[\s\S]*?\n\$\$;/) || [""])[0];
 
@@ -3023,7 +3023,7 @@ ok("AN: el espejo refleja la 048 (tablas, RPC y trigger) una sola vez",
   (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.athlete_profiles \(/g) || []).length === 1 &&
   (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.athlete_trophies \(/g) || []).length === 1 &&
   (schemaAl.match(/CREATE TABLE IF NOT EXISTS public\.belt_promotions \(/g) || []).length === 1 &&
-  (schemaAl.match(/CREATE OR REPLACE FUNCTION public\.get_athlete_profile\(/g) || []).length === 2 &&
+  (schemaAl.match(/CREATE OR REPLACE FUNCTION public\.get_athlete_profile\(/g) || []).length === 3 &&
   (schemaAl.match(/CREATE TRIGGER trg_sport_profiles_belt_promotion/g) || []).length === 1);
 ok("AN: RLS en las tres tablas; el alumno no tiene policies de escritura (solo admin)",
   ["athlete_profiles", "athlete_trophies", "belt_promotions"].every((t) =>
@@ -3172,6 +3172,51 @@ ok("AO: UI — editor del alumno (athlete_posts), insignia verificado, fijar y m
   /Verificado por ZonaElite/.test(postModalAo) && /Publicado por el atleta/.test(postModalAo) &&
   /canModerate && isOwn/.test(postModalAo) && /push_pin/.test(cardAo) &&
   /rpc\("set_my_pinned_posts"/.test(profilePageAn) && /canModerate=\{!!data\.viewer_is_admin\}/.test(profilePageAn));
+
+// ============================================================
+// AP. Avatares, portadas y "Perfil" → perfil de atleta (v1.19.0)
+// ============================================================
+section("AP. Avatares y portadas del atleta");
+
+const migration052 = readFileSync(join(ROOT, "contexto", "migrations", "052_athlete_avatar_cover.sql"), "utf8");
+const migration053 = readFileSync(join(ROOT, "contexto", "migrations", "053_changelog_v1_19_0.sql"), "utf8");
+const editModalAp = srcAj("components", "athletes", "EditAthleteProfileModal.tsx");
+const accountAp = srcAj("components", "athletes", "AccountSettings.tsx");
+const perfilPageAp = srcAj("app", "perfil", "page.tsx");
+const { ATHLETE_AVATARS, COVER_IMAGES, coverBackground, findAthleteAvatar } = await import("../src/lib/athlete-profile.ts");
+
+ok("AP: 053 es seed v1.19.0 y el espejo refleja la 052 y el seed una sola vez",
+  /'v1\.19\.0'/.test(migration053) && /ON CONFLICT \(version\) DO NOTHING/.test(migration053) &&
+  (schemaAl.match(/'v1\.19\.0'/g) || []).length === 1 &&
+  (schemaAl.match(/ADD COLUMN IF NOT EXISTS avatar_key text;/g) || []).length === 1);
+ok("AP: columnas con CHECK de formato y RPC con la firma nueva (sin la de 6 parámetros ni anon)",
+  /CHECK \(avatar_key IS NULL OR avatar_key ~ '\^\[a-z0-9-\]\{1,30\}\$'\)/.test(migration052) &&
+  /CHECK \(cover_image IS NULL OR cover_image ~ '\^\[a-z0-9-\]\{1,30\}\$'\)/.test(migration052) &&
+  /DROP FUNCTION IF EXISTS public\.update_my_athlete_profile\(text, text, text, uuid, text, text\);/.test(migration052) &&
+  /DROP FUNCTION IF EXISTS public\.search_athletes\(text, uuid, text, integer\);/.test(migration052) &&
+  /REVOKE ALL ON FUNCTION public\.update_my_athlete_profile\(text, text, text, uuid, text, text, text, text\) FROM anon;/.test(migration052) &&
+  /RAISE EXCEPTION 'AVATAR_INVALID'/.test(migration052));
+const getProfile052 = migration052.slice(migration052.indexOf("CREATE OR REPLACE FUNCTION public.get_athlete_profile("));
+ok("AP: get_athlete_profile (052) devuelve avatar y portada (también restringido) sin datos sensibles",
+  (getProfile052.match(/'avatar_key', v_ap\.avatar_key/g) || []).length === 2 &&
+  (getProfile052.match(/'cover_image', v_ap\.cover_image/g) || []).length === 2 &&
+  /'posts', coalesce\(/.test(getProfile052) &&
+  !/'(rut|email|phone|birth_date|address|weight|height)'/.test(getProfile052));
+ok("AP: catálogos válidos (claves únicas con el formato de la BD) y las portadas existen en public/",
+  new Set(ATHLETE_AVATARS.map((a) => a.value)).size === ATHLETE_AVATARS.length && ATHLETE_AVATARS.length >= 12 &&
+  [...ATHLETE_AVATARS, ...COVER_IMAGES].every((x) => /^[a-z0-9-]{1,30}$/.test(x.value)) &&
+  COVER_IMAGES.every((c) => existsSync(join(ROOT, "public", ...c.src.split("/").filter(Boolean)))) &&
+  coverBackground("dojo", "oro").startsWith('url("/athletes/banners/dojo.svg")') &&
+  !coverBackground("no-existe", "oro").includes("url(") &&
+  findAthleteAvatar("patada")?.icon === "sports_martial_arts" && findAthleteAvatar("x") === null);
+ok("AP: \"Perfil\" del navbar abre el perfil de atleta; Editar perfil tiene pestañas Perfil y Cuenta",
+  !/href="\/perfil"/.test(navbarAn) && (navbarAn.match(/href="\/atletas\/yo"/g) || []).length === 2 &&
+  /<AccountSettings \/>/.test(editModalAp) && /p_avatar_key: avatarKey \|\| null/.test(editModalAp) &&
+  /p_cover_image: coverImage \|\| null/.test(editModalAp) &&
+  /get\("editar"\)/.test(profilePageAn));
+ok("AP: /perfil reutiliza AccountSettings y conserva los anclajes de la guía",
+  /<AccountSettings \/>/.test(perfilPageAp) && /data-guide="perfil-header"/.test(perfilPageAp) &&
+  ["perfil-info", "perfil-fisico", "perfil-seguridad", "perfil-sesion"].every((g) => accountAp.includes(`data-guide="${g}"`)));
 
 console.log(`\n=== RESULTADO: ${pass} passed, ${fail} failed ===`);
 if (fail > 0) {

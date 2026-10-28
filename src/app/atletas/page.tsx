@@ -154,7 +154,7 @@ export default function AtletasSearchPage() {
             {recent.map((a) => (
               <li key={a.alias} className="flex items-center gap-3 py-2">
                 <Link href={`/atletas/${a.alias}`} className="flex items-center gap-3 flex-1 min-w-0">
-                  <AthleteAvatar name={a.full_name} ringColor={a.grade_color} size="sm" />
+                  <AthleteAvatar name={a.full_name} ringColor={a.grade_color} avatarKey={a.avatar_key} size="sm" />
                   <span className="min-w-0">
                     <span className="block text-[14px] font-semibold text-on-surface truncate">{a.alias}</span>
                     <span className="block text-[13px] text-on-surface-variant truncate">{a.full_name}</span>
@@ -209,7 +209,7 @@ export default function AtletasSearchPage() {
                   href={`/atletas/${a.alias}`}
                   className="flex items-center gap-3 py-3 hover:bg-on-surface/[0.03] -mx-2 px-2 rounded-lg transition-colors"
                 >
-                  <AthleteAvatar name={a.full_name} ringColor={a.grade_color} size="md" />
+                  <AthleteAvatar name={a.full_name} ringColor={a.grade_color} avatarKey={a.avatar_key} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="text-[14px] font-semibold text-on-surface truncate">
                       {a.alias}

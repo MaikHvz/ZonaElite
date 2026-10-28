@@ -10,7 +10,7 @@ import {
   athleteCategoryLabel,
   buildAchievementPosts,
   computeAthleteStats,
-  coverGradient,
+  coverBackground,
   featuredDiscipline,
   groupTournaments,
   orderWithPinned,
@@ -22,7 +22,7 @@ import {
 import AthleteAvatar from "@/components/athletes/AthleteAvatar";
 import AchievementPostCard from "@/components/athletes/AchievementPostCard";
 import AchievementPostModal from "@/components/athletes/AchievementPostModal";
-import EditAthleteProfileModal from "@/components/athletes/EditAthleteProfileModal";
+import EditAthleteProfileModal, { type EditProfileTab } from "@/components/athletes/EditAthleteProfileModal";
 import OwnPostEditorModal from "@/components/athletes/OwnPostEditorModal";
 import { rememberRecentAthlete } from "@/lib/athlete-recent";
 
@@ -50,7 +50,12 @@ export default function AthleteProfilePage({
   const [tab, setTab] = useState<Tab>("publicaciones");
   const [disciplineFilter, setDisciplineFilter] = useState<string | null>(null);
   const [openPost, setOpenPost] = useState<number | null>(null);
-  const [editing, setEditing] = useState(false);
+  // "Editar perfil" abierto (y en qué pestaña). ?editar=perfil|cuenta lo abre al llegar
+  // (el navbar y /perfil enlazan aquí). El layout solo renderiza en el cliente.
+  const [editing, setEditing] = useState<EditProfileTab | null>(() => {
+    const param = new URLSearchParams(window.location.search).get("editar");
+    return param === "perfil" || param === "cuenta" ? param : null;
+  });
   const [postEditor, setPostEditor] = useState<{ editing: AthleteOwnPost | null } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -85,6 +90,7 @@ export default function AthleteProfilePage({
         alias: full.profile.alias,
         full_name: full.profile.full_name,
         grade_color: ringColor,
+        avatar_key: full.profile.avatar_key ?? null,
       });
     }
   }, [full, ringColor]);
@@ -163,9 +169,12 @@ export default function AthleteProfilePage({
   if (data.restricted) {
     return (
       <div className="px-4">
-        <div className="h-28 md:h-40 rounded-xl" style={{ background: coverGradient(data.profile.cover_theme) }} />
+        <div
+          className="h-28 md:h-40 rounded-xl"
+          style={{ background: coverBackground(data.profile.cover_image, data.profile.cover_theme) }}
+        />
         <div className="flex flex-col items-center -mt-12 text-center">
-          <AthleteAvatar name={data.profile.full_name} size="xl" />
+          <AthleteAvatar name={data.profile.full_name} avatarKey={data.profile.avatar_key} size="xl" />
           <p className="mt-3 font-[family-name:var(--font-body-md)] text-[18px] font-semibold text-on-surface">
             {data.profile.alias}
           </p>
@@ -269,12 +278,15 @@ export default function AthleteProfilePage({
 
       {/* Portada + cabecera */}
       <div className="px-4">
-        <div className="h-28 md:h-40 rounded-xl" style={{ background: coverGradient(profile.cover_theme) }} />
+        <div
+          className="h-28 md:h-40 rounded-xl"
+          style={{ background: coverBackground(profile.cover_image, profile.cover_theme) }}
+        />
       </div>
 
       <header className="px-4 md:px-8">
         <div className="flex items-end gap-5 md:gap-10 -mt-12 md:-mt-16">
-          <AthleteAvatar name={profile.full_name} ringColor={ringColor} size="xl" />
+          <AthleteAvatar name={profile.full_name} ringColor={ringColor} avatarKey={profile.avatar_key} size="xl" />
           <ul className="flex-1 grid grid-cols-4 gap-1 pb-1 md:pb-3">
             {counters.map((c) => (
               <li key={c.label} className="text-center">
@@ -316,7 +328,7 @@ export default function AthleteProfilePage({
           ) : (
             profile.is_owner && (
               <button
-                onClick={() => setEditing(true)}
+                onClick={() => setEditing("perfil")}
                 className="mt-2 text-[13px] text-gold hover:text-gold-light cursor-pointer"
               >
                 + Agrega una biografía
@@ -328,7 +340,7 @@ export default function AthleteProfilePage({
         <div className="mt-4 flex gap-2">
           {profile.is_owner && (
             <button
-              onClick={() => setEditing(true)}
+              onClick={() => setEditing("perfil")}
               className="flex-1 md:flex-none md:px-8 py-2 rounded-lg bg-surface-container-high hover:bg-surface-bright text-on-surface font-[family-name:var(--font-body-md)] text-[14px] font-semibold transition-colors cursor-pointer"
             >
               Editar perfil
@@ -553,6 +565,7 @@ export default function AthleteProfilePage({
         athleteName={profile.full_name}
         athleteAlias={profile.alias}
         ringColor={ringColor}
+        avatarKey={profile.avatar_key ?? null}
         pinnedKeys={pinnedKeys}
         canManage={profile.is_owner}
         canModerate={!!data.viewer_is_admin}
@@ -580,9 +593,10 @@ export default function AthleteProfilePage({
           profile={profile}
           disciplines={data.disciplines}
           ringColor={ringColor}
-          onClose={() => setEditing(false)}
+          initialTab={editing}
+          onClose={() => setEditing(null)}
           onSaved={(alias) => {
-            setEditing(false);
+            setEditing(null);
             if (alias !== decodeURIComponent(handle) && handle !== "yo") {
               router.replace(`/atletas/${alias}`);
             } else {

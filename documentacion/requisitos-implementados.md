@@ -409,3 +409,11 @@ Este documento contiene un desglose exhaustivo de los requisitos de negocio y fu
 - **Código**: `src/components/athletes/OwnPostEditorModal.tsx` (nuevo), `AchievementPostCard` (✔ y 📌), `AchievementPostModal` (fijar, editar, eliminar y moderación), `src/app/atletas/[handle]/page.tsx`, `src/lib/athlete-profile.ts` (`AthleteOwnPost`, `validateOwnPost`, `orderWithPinned` y contadores con publicaciones propias).
 - **Changelog**: entrada **v1.18.0** (`contexto/migrations/051_changelog_v1_18_0.sql`).
 - **Verificación**: suite sección **AO** (9 asserts); conteo de seeds 22 → 23; `npx tsc --noEmit` limpio; lint sin errores nuevos; 050 probada en un PostgreSQL 18 local.
+
+## 41. Avatares, Portadas y "Perfil" Unificado (2026-10-28)
+**Requisito**: que el botón "Perfil" del navbar lleve al perfil de atleta y que ahí se editen los datos del perfil; agregar una serie de avatares y de portadas.
+- **Requisito**: `contexto/requisitos/perfil-atleta-rankings.md` (§0).
+- **BD**: `052_athlete_avatar_cover.sql` (`avatar_key`, `cover_image`, RPC con firma nueva).
+- **Código**: `src/lib/athlete-profile.ts` (`ATHLETE_AVATARS`, `COVER_IMAGES`, `coverBackground`), `public/athletes/banners/*.svg` (9 portadas), `AthleteAvatar`, `EditAthleteProfileModal` (pestañas Perfil y Cuenta), `src/components/athletes/AccountSettings.tsx` (extraído de `/perfil`), `src/app/perfil/page.tsx`, `Navbar` y el perfil, el buscador y los recientes con el avatar.
+- **Changelog**: entrada **v1.19.0** (`contexto/migrations/053_changelog_v1_19_0.sql`).
+- **Verificación**: suite sección **AP** (6 asserts) y las secciones T, Y, Z, AG y AI ahora leen `AccountSettings.tsx`; conteo de seeds 23 → 24; `npx tsc --noEmit` limpio; lint sin errores nuevos; 052 probada en un PostgreSQL 18 local.

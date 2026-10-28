@@ -6,6 +6,7 @@ export interface RecentAthlete {
   alias: string;
   full_name: string;
   grade_color: string | null;
+  avatar_key?: string | null;
 }
 
 const KEY = "zonaelite:atletas-recientes";
